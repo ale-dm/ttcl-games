@@ -8,7 +8,7 @@ Tres servicios; el navegador solo habla con la API Java y la API pasa resúmenes
 - `duende/` — Python, FastAPI. Recomendaciones por reglas (`app/insights.py`) y chat con Gemini o, sin clave, con reglas.
 
 **Hoja de ruta**: `docs/propuestas.md` (P1–P12) — lo siguiente que hay que construir para dar mejores datos al Duende.
-Al terminar una propuesta, marcarla allí.
+Al terminar una propuesta, marcarla allí (con lo aprendido) y anotar la entrega en `CHANGELOG.md`. Hecha: P1.
 
 ## Comandos
 
@@ -21,13 +21,17 @@ Al terminar una propuesta, marcarla allí.
 | Todo con Docker | `docker compose up --build` |
 
 En la app de Claude, `.claude/launch.json` tiene las tres configuraciones (`duende`, `api`, `web`). Parar la API antes
-de `./mvnw package`: el jar en uso no se puede sobrescribir.
+de `./mvnw package`: el jar en uso no se puede sobrescribir (ni `./mvnw clean` lo puede borrar; `./mvnw test` sí
+funciona con la API arrancada).
 
 ## Convenciones
 
 - Nombres, comentarios y commits en español; el código sigue el estilo de lo que ya hay.
 - Contrato compartido en camelCase: `api/.../duende/DuendeModelos.java` ↔ `duende/app/modelos.py` ↔
   `frontend/src/app/core/modelos.ts`. Si cambia uno, cambian los tres.
+- Roles por juego (P1): `Juego.java` (`roles`) ↔ `duende/app/metricas.py` (`AJUSTES_ROL`) y `textos.py`
+  (`NOMBRES_ROL`) ↔ `textos.ts` (`rol.*`), y la tabla del README sale de `AJUSTES_ROL`. Ningún rol se llama igual en
+  dos juegos: la web los traduce sin mirar el juego.
 - Todo texto visible, en los dos idiomas (web y `duende/app/textos.py`).
 - El Duende no inventa números: todo dato sale de la API.
 - Migraciones nuevas como `V{n}__*.sql`, válidas en PostgreSQL y en H2 (modo PostgreSQL).

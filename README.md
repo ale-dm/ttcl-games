@@ -97,8 +97,31 @@ no se convierten en victorias, rachas, tendencia de las últimas partidas y mapa
 recomendación lleva nivel (*mejorar ya*, *a vigilar*, *lo haces bien*), los números comparados en barras y un consejo
 concreto. Textos en español e inglés (`textos.py`).
 
-**Chat** (`chat.py`): con `GOOGLE_API_KEY` contesta Gemini, que recibe los resúmenes del equipo y las recomendaciones ya
-calculadas. Caché por petición, límite diario (`DUENDE_DAILY_LIMIT`) y modelos de respaldo si el principal ya no
+**Rol** (`AJUSTES_ROL` en `metricas.py`, la fuente de verdad de esta tabla): si el jugador ha dicho su rol en
+`config/equipo.json`, cada métrica cuenta lo que pide ese rol. *No se le juzga*: nunca sale como algo a mejorar.
+*Se le tolera*: hace falta ir el doble de lejos de lo normal para que avise (tolerar no es un pase libre). *Pesa más*:
+avisa antes, lo reconoce antes como fortaleza y lo pone primero. La recomendación lo explica con una coletilla
+("Justo lo que pide tu rol de soporte"). Sin rol, todo cuenta igual.
+
+| CS2 | No se le juzga | Se le tolera | Pesa más |
+|---|---|---|---|
+| `entry` | — | Muertes / partida, K/D, clutches | Éxito de entrada |
+| `awp` | % headshot | Asistencias / partida, daño de utilidad | Kills / ronda, éxito de entrada |
+| `soporte` | Kills / partida | K/D, ADR, kills / ronda, éxito de entrada | Asistencias / partida, daño de utilidad |
+| `lurker` | Asistencias / partida, éxito de entrada | Daño de utilidad | Clutches, kills / ronda |
+| `igl` | — | Kills / partida, K/D, ADR, kills / ronda, % headshot | Winrate, daño de utilidad |
+| `rifler` | — | — | ADR, kills / ronda |
+
+| SMITE 2 | No se le juzga | Se le tolera | Pesa más |
+|---|---|---|---|
+| `solo` | — | Asistencias / partida | Daño mitigado |
+| `jungla` | Daño mitigado | — | Kills / partida |
+| `mid` | Daño mitigado | — | Daño / min |
+| `guardian` | Kills / partida, daño / min, oro / min | K/D | Asistencias / partida, daño mitigado |
+| `carry` | Daño mitigado | — | Daño / min, oro / min |
+
+**Chat** (`chat.py`): con `GOOGLE_API_KEY` contesta Gemini, que recibe los resúmenes del equipo (con el rol de cada uno)
+y las recomendaciones ya calculadas. Caché por petición, límite diario (`DUENDE_DAILY_LIMIT`) y modelos de respaldo si el principal ya no
 existe. Sin clave, sin cuota o si Gemini falla, contestan las reglas (`reglas_chat.py`): en qué mejorar, qué haces
 bien, cómo vas últimamente, peor mapa o dios, comparar a dos, quién es el mejor del equipo. La web indica bajo cada
 respuesta si la escribió Gemini o las reglas.
@@ -124,8 +147,9 @@ Parte del prototipo `TTCL Stats.html` y lo lleva a una web de estadísticas comp
 - **Accesibilidad**: foco visible, etiquetas para lectores de pantalla, `prefers-reduced-motion` y textos del Duende
   pintados como texto (nunca como HTML).
 
-Siguientes pasos: la hoja de ruta está en [docs/propuestas.md](docs/propuestas.md) (rol del jugador, sinergias, tilt,
-objetivos, percentiles por nivel de FACEIT, Duende en Discord, análisis de demos…).
+Siguientes pasos: la hoja de ruta está en [docs/propuestas.md](docs/propuestas.md) (sinergias, tilt, objetivos,
+percentiles por nivel de FACEIT, Duende en Discord, análisis de demos…). Lo ya entregado, con lo que cambia en cada
+servicio y cómo actualizar, está en [CHANGELOG.md](CHANGELOG.md).
 
 ## Fuentes de datos: estado
 

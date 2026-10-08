@@ -1,8 +1,8 @@
 # Propuestas para mejorar los datos y el Duende
 
 Hoja de ruta para que el Duende dé consejos más útiles. Hoy su límite son los datos, no la IA: cada propuesta dice qué
-dato añade, qué cambia en cada servicio y cómo lo aprovecha el Duende. Al terminar una, marcarla en la tabla y anotar
-lo que se aprendió en su apartado.
+dato añade, qué cambia en cada servicio y cómo lo aprovecha el Duende. Al terminar una, marcarla en la tabla, anotar
+lo que se aprendió en su apartado y apuntar la entrega en [CHANGELOG.md](../CHANGELOG.md).
 
 ## Estado
 
@@ -245,4 +245,6 @@ rendimiento de CT frente a T, economía y mapa de calor de dónde mueres por map
 - **Migraciones**: siempre una nueva `V{n}__*.sql`, compatible con PostgreSQL y con H2 en modo PostgreSQL.
 - **Datos de ejemplo**: ampliar `DemoSeeder` para que la propuesta se vea sin claves.
 - **Tests** en los tres servicios: `pytest` (duende), `./mvnw test` (api), `npm test` (frontend).
+- **Registro**: al terminar, la entrega en `CHANGELOG.md` (qué se nota, cómo se configura, cambios por servicio, tests y
+  cómo actualizar).
 - **Privacidad**: los datos de rivales (P8) se guardan sin nick y solo agregados; nada personal en los prompts.
