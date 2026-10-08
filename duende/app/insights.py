@@ -1,0 +1,287 @@
+"""Motor de recomendaciones: a partir del resumen de un jugador, decide en qué tiene que mejorar y qué hace bien.
+
+Es determinista y no necesita Gemini: compara cada métrica con la media del resto del equipo y con una referencia,
+y añade reglas con más contexto (kills que no dan victorias, rachas, tendencia reciente, mapas o dioses flojos).
+"""
+
+from dataclasses import dataclass
+
+from .metricas import METRICAS, NOMBRE_JUEGO, Metrica, formatear
+from .modelos import Barra, Idioma, Insight, Nivel, PeticionInsights, Resumen
+from .textos import DEBILIDADES, ESPECIALES, FORTALEZAS, FRASES, consejo_para
+
+MUESTRA_MINIMA = 5
+MAX_DEBILIDADES = 4
+MAX_FORTALEZAS = 2
+LONGITUD_RACHA = 5
+MIN_PARTIDAS_DESGLOSE = 3
+
+ORDEN_NIVEL: dict[Nivel, int] = {"info": 0, "alto": 1, "medio": 2, "bien": 3}
+
+
+@dataclass
+class Candidato:
+    insight: Insight
+    # Lo lejos que está de lo normal (en valor absoluto). Ordena dentro de cada nivel.
+    peso: float
+
+
+def _desviacion(metrica: Metrica, tu: float, otro: float | None) -> float | None:
+    """Cuánto mejor (+) o peor (-) es `tu` que `otro`. En porcentajes, puntos / 50; en el resto, relativo."""
+    if otro is None:
+        return None
+    if metrica.formato == "pct":
+        d = (tu - otro) / 50
+    elif otro == 0:
+        return None
+    else:
+        d = (tu - otro) / abs(otro)
+    return -d if metrica.mejor == "bajo" else d
+
+
+def _nivel_debilidad(d: float) -> Nivel | None:
+    if d <= -0.2:
+        return "alto"
+    if d <= -0.1:
+        return "medio"
+    return None
+
+
+def _barras(metrica: Metrica, tu: float, equipo: float | None, lang: Idioma) -> list[Barra]:
+    f = FRASES[lang]
+    barras = [Barra(etiqueta=f["tu"], valor=round(tu, 2), tuyo=True)]
+    if equipo is not None:
+        barras.append(Barra(etiqueta=f["equipo"], valor=round(equipo, 2)))
+    if metrica.referencia is not None:
+        barras.append(Barra(etiqueta=f["referencia"], valor=metrica.referencia))
+    return barras
+
+
+def _comparativa(metrica: Metrica, tu: float, equipo: float | None, lang: Idioma) -> str:
+    f = FRASES[lang]
+    v = {
+        "tu": formatear(tu, metrica.formato, lang),
+        "equipo": formatear(equipo, metrica.formato, lang),
+        "ref": formatear(metrica.referencia, metrica.formato, lang),
+    }
+    if equipo is not None and metrica.referencia is not None:
+        return f["cmp_equipo_ref"].format(**v)
+    if equipo is not None:
+        return f["cmp_equipo"].format(**v)
+    if metrica.referencia is not None:
+        return f["cmp_ref"].format(**v)
+    return f["cmp_solo"].format(**v)
+
+
+def _por_metrica(p: PeticionInsights, ocupadas: set[str]) -> list[Candidato]:
+    """Debilidades y fortalezas métrica a métrica, frente al equipo y la referencia."""
+    lang, juego = p.lang, p.juego
+    candidatos: list[Candidato] = []
+    for metrica in METRICAS[juego]:
+        if metrica.clave in ocupadas:
+            continue
+        tu = metrica.valor(p.resumen)
+        if tu is None:
+            continue
+        equipo = metrica.valor(p.equipo)
+        d_equipo = _desviacion(metrica, tu, equipo)
+        d_ref = _desviacion(metrica, tu, metrica.referencia)
+        disponibles = [d for d in (d_equipo, d_ref) if d is not None]
+        if not disponibles:
+            continue
+
+        peor = min(disponibles)
+        nivel = _nivel_debilidad(peor)
+        if nivel:
+            textos = DEBILIDADES.get(metrica.clave, {}).get(lang)
+            if textos:
+                titulo = str(textos["titulo"])
+                frase = f"{textos['frase']} "
+            else:
+                titulo = metrica.nombre(lang)
+                frase = ""
+            candidatos.append(
+                Candidato(
+                    Insight(
+                        id=f"debil_{metrica.clave}",
+                        nivel=nivel,
+                        metrica=metrica.clave,
+                        titulo=titulo,
+                        texto=frase + _comparativa(metrica, tu, equipo, lang),
+                        consejo=consejo_para(textos, juego) if textos else None,
+                        barras=_barras(metrica, tu, equipo, lang),
+                        formato=metrica.formato,
+                    ),
+                    abs(peor),
+                )
+            )
+            continue
+
+        # Fortaleza: claramente por encima del equipo y sin estar por debajo de la referencia.
+        # Sin equipo con quien comparar, vale con superar bien la referencia.
+        fuerte = (d_equipo is not None and d_equipo >= 0.1 and (d_ref is None or d_ref >= 0)) or (
+            d_equipo is None and d_ref is not None and d_ref >= 0.15
+        )
+        textos_f = FORTALEZAS.get(metrica.clave, {}).get(lang)
+        if fuerte and textos_f:
+            candidatos.append(
+                Candidato(
+                    Insight(
+                        id=f"fuerte_{metrica.clave}",
+                        nivel="bien",
+                        metrica=metrica.clave,
+                        titulo=textos_f["titulo"],
+                        texto=_comparativa(metrica, tu, equipo, lang),
+                        consejo=textos_f["consejo"],
+                        barras=_barras(metrica, tu, equipo, lang),
+                        formato=metrica.formato,
+                    ),
+                    max(disponibles),
+                )
+            )
+    return candidatos
+
+
+def _especial(regla: str, lang: Idioma, juego: str, nivel: Nivel, /, **valores: object) -> Insight:
+    """Insight de una regla especial. Los parámetros van por posición: `juego` o `clave` pueden ser valores del texto."""
+    textos = ESPECIALES[regla][lang]
+    return Insight(
+        id=regla,
+        nivel=nivel,
+        titulo=str(textos["titulo"]).format(**valores),
+        texto=str(textos["frase"]).format(**valores),
+        consejo=consejo_para(textos, juego),  # type: ignore[arg-type]
+    )
+
+
+def _kd_sin_victorias(p: PeticionInsights) -> Candidato | None:
+    r = p.resumen
+    if r.kd is None or r.winrate is None:
+        return None
+    kd_equipo = p.equipo.kd if p.equipo else None
+    umbral_kd = max(1.05, kd_equipo or 0)
+    if r.kd < umbral_kd or r.winrate > 45:
+        return None
+    lang = p.lang
+    insight = _especial(
+        "kd_sin_victorias",
+        lang,
+        p.juego,
+        "alto",
+        kd=formatear(r.kd, "dec", lang),
+        winrate=formatear(r.winrate, "pct", lang),
+    )
+    insight.metrica = "winrate"
+    insight.formato = "pct"
+    metrica_wr = next(m for m in METRICAS[p.juego] if m.clave == "winrate")
+    insight.barras = _barras(metrica_wr, r.winrate, p.equipo.winrate if p.equipo else None, lang)
+    # Es la recomendación con más miga: va la primera entre las graves.
+    return Candidato(insight, (50 - r.winrate) / 50 + 1)
+
+
+def _rachas(p: PeticionInsights) -> Candidato | None:
+    ultimas = p.resumen.forma[:LONGITUD_RACHA]
+    if len(ultimas) < LONGITUD_RACHA:
+        return None
+    derrotas, victorias = ultimas.count("D"), ultimas.count("V")
+    n = len(ultimas)
+    if derrotas >= 4:
+        return Candidato(_especial("racha_mala", p.lang, p.juego, "alto", derrotas=derrotas, n=n), derrotas / n)
+    if victorias >= 4:
+        return Candidato(_especial("racha_buena", p.lang, p.juego, "bien", victorias=victorias, n=n), victorias / n)
+    return None
+
+
+def _tendencia(p: PeticionInsights) -> Candidato | None:
+    reciente: Resumen | None = p.reciente
+    if not reciente or reciente.partidas < MUESTRA_MINIMA or p.resumen.partidas <= reciente.partidas:
+        return None
+    if reciente.kd is None or p.resumen.kd is None or p.resumen.kd == 0:
+        return None
+    cambio = (reciente.kd - p.resumen.kd) / p.resumen.kd
+    if abs(cambio) < 0.15:
+        return None
+    lang = p.lang
+    clave, nivel = ("tendencia_sube", "bien") if cambio > 0 else ("tendencia_baja", "medio")
+    insight = _especial(
+        clave,
+        lang,
+        p.juego,
+        nivel,
+        n=reciente.partidas,
+        reciente=formatear(reciente.kd, "dec", lang),
+        **{"global": formatear(p.resumen.kd, "dec", lang)},
+    )
+    f = FRASES[lang]
+    insight.metrica = "kd"
+    insight.formato = "dec"
+    insight.barras = [
+        Barra(etiqueta=f["ultimas"].format(n=reciente.partidas), valor=reciente.kd, tuyo=True),
+        Barra(etiqueta=f["global"], valor=p.resumen.kd),
+    ]
+    return Candidato(insight, abs(cambio))
+
+
+def _desglose(p: PeticionInsights) -> list[Candidato]:
+    validos = [d for d in p.desglose if d.partidas >= MIN_PARTIDAS_DESGLOSE and d.winrate is not None]
+    if not validos:
+        return []
+    lang = p.lang
+    candidatos: list[Candidato] = []
+    peor = min(validos, key=lambda d: (d.winrate, -d.partidas))
+    if peor.winrate <= 35:
+        insight = _especial(
+            "desglose_malo",
+            lang,
+            p.juego,
+            "medio",
+            clave=peor.clave,
+            victorias=peor.victorias,
+            partidas=peor.partidas,
+            winrate=formatear(peor.winrate, "pct", lang),
+        )
+        candidatos.append(Candidato(insight, (50 - peor.winrate) / 50))
+    mejor = max(validos, key=lambda d: (d.winrate, d.partidas))
+    if mejor.winrate >= 65 and mejor is not peor:
+        insight = _especial(
+            "desglose_bueno",
+            lang,
+            p.juego,
+            "bien",
+            clave=mejor.clave,
+            victorias=mejor.victorias,
+            partidas=mejor.partidas,
+            winrate=formatear(mejor.winrate, "pct", lang),
+        )
+        candidatos.append(Candidato(insight, (mejor.winrate - 50) / 50))
+    return candidatos
+
+
+def generar_insights(p: PeticionInsights) -> list[Insight]:
+    """Recomendaciones ordenadas: aviso de muestra, debilidades graves, medias y, al final, lo que hace bien."""
+    if p.resumen.partidas == 0:
+        return []
+
+    muestra: list[Insight] = []
+    if p.resumen.partidas < MUESTRA_MINIMA:
+        muestra.append(
+            _especial(
+                "muestra", p.lang, p.juego, "info", partidas=p.resumen.partidas, juego=NOMBRE_JUEGO[p.juego]
+            )
+        )
+
+    especiales = [c for c in (_kd_sin_victorias(p), _rachas(p), _tendencia(p)) if c] + _desglose(p)
+    # Si una regla especial ya habla del winrate, la genérica del winrate sobra.
+    ocupadas = {c.insight.metrica for c in especiales if c.insight.id == "kd_sin_victorias"}
+    candidatos = especiales + _por_metrica(p, {m for m in ocupadas if m})
+
+    debiles = sorted(
+        (c for c in candidatos if c.insight.nivel in ("alto", "medio")),
+        key=lambda c: (ORDEN_NIVEL[c.insight.nivel], -c.peso),
+    )[:MAX_DEBILIDADES]
+    fuertes = sorted((c for c in candidatos if c.insight.nivel == "bien"), key=lambda c: -c.peso)[:MAX_FORTALEZAS]
+
+    if muestra:
+        # Con pocas partidas no se exagera: el aviso y, como mucho, lo más claro de cada lado.
+        return muestra + [c.insight for c in debiles[:1] + fuertes[:1]]
+    return [c.insight for c in debiles + fuertes]

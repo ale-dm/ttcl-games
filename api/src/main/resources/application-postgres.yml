@@ -1,0 +1,9 @@
+# Perfil para producción / docker compose: PostgreSQL y sin datos de ejemplo salvo que se pidan.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/ttcl}
+    username: ${DB_USER:ttcl}
+    password: ${DB_PASSWORD:ttcl}
+
+ttcl:
+  demo: ${TTCL_DEMO:false}

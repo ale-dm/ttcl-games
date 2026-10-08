@@ -1,0 +1,31 @@
+{
+  "name": "ttcl-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Web de TTCL Games: estadísticas de CS2 y SMITE 2 con el Duende",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test --watch=false"
+  },
+  "dependencies": {
+    "@angular/common": "^21.2.25",
+    "@angular/compiler": "^21.2.25",
+    "@angular/core": "^21.2.25",
+    "@angular/forms": "^21.2.25",
+    "@angular/platform-browser": "^21.2.25",
+    "@angular/router": "^21.2.25",
+    "rxjs": "~7.8.2",
+    "tslib": "^2.8.1"
+  },
+  "devDependencies": {
+    "@angular/build": "^21.2.25",
+    "@angular/cli": "^21.2.25",
+    "@angular/compiler-cli": "^21.2.25",
+    "jsdom": "^30.1.2",
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.8"
+  }
+}

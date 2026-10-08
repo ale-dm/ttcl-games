@@ -1,0 +1,221 @@
+<div class="wrap page">
+  <a class="crumb" routerLink="/">{{ t('jugador.volver') }}</a>
+
+  @let carga = perfil.estado();
+  @if (carga.error === 404) {
+    <div class="aviso">{{ t('jugador.noExiste') }}</div>
+  } @else if (carga.error !== null) {
+    <div class="aviso">
+      <p>{{ t('comun.errorApi') }}</p>
+      <button class="btn sm" type="button" (click)="perfil.recargar()">{{ t('comun.reintentar') }}</button>
+    </div>
+  } @else if (carga.datos; as p) {
+    <!-- Cabecera del jugador -->
+    <section class="hero">
+      <app-avatar [slug]="p.slug" [nombre]="p.nombre" [tam]="64" />
+      <div class="hero-t">
+        <h1>
+          {{ p.nombre }}
+          @if (p.demo) {
+            <span class="tag">{{ t('comun.demo') }}</span>
+          }
+        </h1>
+        <div class="accounts">
+          @for (c of p.cuentas; track c.juego) {
+            <span class="acct">{{ juegoCorto[c.juego] }} <b class="mono">{{ c.nick }}</b></span>
+          }
+          @if (detalle.estado().datos?.resumen; as r) {
+            <span class="small muted">{{ t('comun.ultima', { fecha: i18n.fecha(r.ultimaPartida) }) }}</span>
+          }
+        </div>
+      </div>
+      <div class="hero-a">
+        <a class="btn" routerLink="/comparar" [queryParams]="{ a: p.slug, juego: juegoActivo() }">{{ t('jugador.comparar') }}</a>
+        <button class="btn primary" type="button" (click)="duende.abrir()">
+          <app-marca-duende [tam]="20" />
+          {{ t('jugador.preguntar') }}
+        </button>
+      </div>
+    </section>
+
+    @if (!juegos().length) {
+      <div class="aviso" style="margin-top: 24px">{{ t('jugador.sinPartidas', { nombre: p.nombre }) }}</div>
+    } @else {
+      @let j = juegoActivo()!;
+      <!-- Pestañas y juego -->
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" type="button" [class.on]="pestana() === 'resumen'" (click)="irA({ tab: 'resumen' })">
+          {{ t('jugador.tabResumen') }}
+        </button>
+        <button class="tab" role="tab" type="button" [class.on]="pestana() === 'partidas'" (click)="irA({ tab: 'partidas' })">
+          {{ t('jugador.tabPartidas') }}
+        </button>
+        <button class="tab" role="tab" type="button" [class.on]="pestana() === 'desglose'" (click)="irA({ tab: 'desglose' })">
+          {{ j === 'cs2' ? t('jugador.tabMapas') : t('jugador.tabDioses') }}
+        </button>
+        @if (juegos().length > 1) {
+          <div class="seg sm" role="group">
+            @for (g of juegos(); track g) {
+              <button type="button" [class.on]="g === j" (click)="irA({ juego: g })">{{ juegoCorto[g] }}</button>
+            }
+          </div>
+        }
+      </div>
+
+      @let d = detalle.estado().datos;
+      @if (detalle.estado().error !== null) {
+        <div class="aviso">
+          <p>{{ t('comun.errorApi') }}</p>
+          <button class="btn sm" type="button" (click)="detalle.recargar()">{{ t('comun.reintentar') }}</button>
+        </div>
+      } @else if (!d || d.juego !== j) {
+        <div class="skel" style="height: 360px"></div>
+      } @else {
+        @switch (pestana()) {
+          @case ('resumen') {
+            <!-- ─── Resumen ─────────────────────────────────────────── -->
+            <div class="pl side">
+              <section class="card pl-kpi">
+                <div class="kpis">
+                  @for (k of kpis(); track k.clave) {
+                    <div class="kpi">
+                      <div class="v num">{{ i18n.valor(k.valor, k.formato) }}</div>
+                      <div class="l">{{ t(claveTexto(k.clave)) }}</div>
+                      @if (k.diff !== null) {
+                        <span class="delta" [class.up]="k.mejora > 0" [class.down]="k.mejora < 0" [class.even]="k.mejora === 0">
+                          {{ t('jugador.delta', { n: k.n, delta: i18n.delta(k.diff, k.formato) }) }}
+                        </span>
+                      }
+                    </div>
+                  }
+                </div>
+                <div class="kpi-foot">
+                  <span class="eyebrow">{{ t('jugador.forma') }}</span>
+                  <app-forma [forma]="d.resumen.forma" [grande]="true" />
+                  <span class="small muted" style="margin-left: auto">
+                    {{ d.resumen.partidas }} {{ t('comun.partidas') }} · {{ d.resumen.victorias }}{{ t('comun.formaV') }} ·
+                    {{ d.resumen.derrotas }}{{ t('comun.formaD') }}
+                  </span>
+                </div>
+              </section>
+
+              <aside class="pl-aside">
+                <app-panel-consejos
+                  [insights]="consejos.estado().datos?.insights ?? []"
+                  [cargando]="consejos.estado().cargando && !consejos.estado().datos"
+                  [disponible]="consejos.estado().error === null && (consejos.estado().datos?.disponible ?? true)"
+                />
+              </aside>
+
+              <div class="pl-main">
+                <section class="card">
+                  <div class="card-h">
+                    <div>
+                      <div class="card-t">{{ t('jugador.grafica') }}</div>
+                      <div class="small muted">{{ t('jugador.ultimas', { n: d.serie.length }) }}</div>
+                    </div>
+                    <div class="legend">
+                      <span><i class="dot k"></i>{{ t('jugador.kills') }}</span>
+                      <span><i class="dot d"></i>{{ t('jugador.muertes') }}</span>
+                      <label class="switch">
+                        <input type="checkbox" [checked]="asistencias()" (change)="asistencias.set(!asistencias())" />
+                        <span></span>{{ t('jugador.asistencias') }}
+                      </label>
+                    </div>
+                  </div>
+                  <div class="card-b">
+                    @if (d.serie.length > 1) {
+                      <app-grafica [serie]="d.serie" [asistencias]="asistencias()" />
+                    } @else {
+                      <p class="muted">{{ t('jugador.pocasParaGrafica') }}</p>
+                    }
+                  </div>
+                </section>
+
+                @if (desglose().length) {
+                  <section class="card">
+                    <div class="card-h">
+                      <div class="card-t">{{ j === 'cs2' ? t('jugador.porMapa') : t('jugador.porDios') }}</div>
+                      <button class="btn ghost sm" type="button" (click)="irA({ tab: 'desglose' })">{{ t('comun.verTodas') }}</button>
+                    </div>
+                    <div class="card-b">
+                      <ng-container *ngTemplateOutlet="filasDesglose; context: { $implicit: desglose().slice(0, 6) }" />
+                    </div>
+                  </section>
+                }
+
+                <section class="card">
+                  <div class="card-h">
+                    <div class="card-t">{{ t('jugador.recientes') }}</div>
+                    <button class="btn ghost sm" type="button" (click)="irA({ tab: 'partidas' })">{{ t('comun.verTodas') }}</button>
+                  </div>
+                  <app-tabla-partidas [partidas]="partidas().slice(0, 6)" [juego]="j" />
+                </section>
+              </div>
+            </div>
+          }
+
+          @case ('partidas') {
+            <!-- ─── Partidas ────────────────────────────────────────── -->
+            <section class="card">
+              <div class="card-h">
+                <div class="card-t">{{ t('jugador.historial', { total: totalPartidas() }) }}</div>
+              </div>
+              <app-tabla-partidas [partidas]="partidas()" [juego]="j" />
+              @if (partidas().length < totalPartidas()) {
+                <div class="tbl-more">
+                  <button class="btn sm" type="button" [disabled]="cargandoMas()" (click)="cargarMas()">
+                    {{ t('comun.cargarMas') }}
+                  </button>
+                </div>
+              }
+            </section>
+          }
+
+          @case ('desglose') {
+            <!-- ─── Mapas / dioses ──────────────────────────────────── -->
+            <section class="card">
+              <div class="card-h">
+                <div class="card-t">{{ j === 'cs2' ? t('jugador.porMapa') : t('jugador.porDios') }}</div>
+              </div>
+              <div class="card-b">
+                <ng-container *ngTemplateOutlet="filasDesglose; context: { $implicit: desglose() }" />
+              </div>
+            </section>
+          }
+        }
+      }
+    }
+  } @else {
+    <div class="skel" style="height: 96px; margin-bottom: 24px"></div>
+    <div class="skel" style="height: 360px"></div>
+  }
+</div>
+
+<ng-template #filasDesglose let-filas>
+  <div class="mb">
+    @for (f of filas; track f.clave) {
+      <div class="mb-row">
+        <div class="mb-name">
+          <span class="mono">{{ f.clave }}</span>
+          @if (f.mejor) {
+            <span class="flag">{{ t('jugador.mejor') }}</span>
+          }
+          @if (f.peor) {
+            <span class="flag malo">{{ t('jugador.peor') }}</span>
+          }
+        </div>
+        <div class="mb-track">
+          <div class="mb-bar" [attr.aria-label]="i18n.pct(f.winrate)">
+            <i class="w" [style.width.%]="porcentaje(f.victorias, f.partidas)"></i>
+            <i class="l" [style.width.%]="100 - porcentaje(f.victorias, f.partidas)"></i>
+          </div>
+        </div>
+        <div class="mb-v num">
+          <b>{{ i18n.pct(f.winrate, 0) }}</b>
+          <small>{{ f.partidas }} {{ t('comun.partidas') }} · K/D {{ i18n.num(f.kd) }}</small>
+        </div>
+      </div>
+    }
+  </div>
+</ng-template>

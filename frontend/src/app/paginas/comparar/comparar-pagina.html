@@ -1,0 +1,135 @@
+<div class="wrap page">
+  <div class="ph">
+    <div>
+      <h1>{{ t('comparar.titulo') }}</h1>
+      <p class="sub">{{ t('comparar.sub') }}</p>
+    </div>
+  </div>
+
+  @if (lista.estado().error !== null) {
+    <div class="aviso">
+      <p>{{ t('comun.errorApi') }}</p>
+      <button class="btn sm" type="button" (click)="lista.recargar()">{{ t('comun.reintentar') }}</button>
+    </div>
+  } @else if (lista.estado().datos && jugadores().length < 2) {
+    <div class="aviso">{{ t('comparar.faltan') }}</div>
+  } @else {
+    <div class="cmp-ctrl">
+      <label class="field">
+        <span>{{ t('comparar.jugadorA') }}</span>
+        <select #selA [value]="slugA()" (change)="cambiar({ a: selA.value })">
+          @for (j of jugadores(); track j.slug) {
+            <option [value]="j.slug" [selected]="j.slug === slugA()">{{ j.nombre }}</option>
+          }
+        </select>
+      </label>
+      <button class="btn swap" type="button" (click)="intercambiar()" [attr.aria-label]="t('comparar.intercambiar')" [attr.title]="t('comparar.intercambiar')">⇄</button>
+      <label class="field">
+        <span>{{ t('comparar.jugadorB') }}</span>
+        <select #selB [value]="slugB()" (change)="cambiar({ b: selB.value })">
+          @for (j of jugadores(); track j.slug) {
+            <option [value]="j.slug" [selected]="j.slug === slugB()" [disabled]="j.slug === slugA()">{{ j.nombre }}</option>
+          }
+        </select>
+      </label>
+      <div class="field">
+        <span>{{ t('comparar.juego') }}</span>
+        <div class="seg" role="group">
+          @for (g of juegos; track g) {
+            <button type="button" [class.on]="g === juegoSel()" (click)="cambiar({ juego: g })">{{ juegoCorto[g] }}</button>
+          }
+        </div>
+      </div>
+    </div>
+
+    @let c = comparacion.estado().datos;
+    @if (comparacion.estado().error !== null) {
+      <div class="aviso">
+        <p>{{ t('comun.errorApi') }}</p>
+        <button class="btn sm" type="button" (click)="comparacion.recargar()">{{ t('comun.reintentar') }}</button>
+      </div>
+    } @else if (!c) {
+      <div class="skel" style="height: 420px"></div>
+    } @else {
+      <div class="cmp-grid">
+        <section class="card h2h">
+          <div class="h2h-head">
+            <a class="side-h" [routerLink]="['/jugador', c.a.slug]" [queryParams]="{ juego: c.juego }">
+              <app-avatar [slug]="c.a.slug" [nombre]="c.a.nombre" />
+              <div>
+                <b>{{ c.a.nombre }}</b>
+                @if (c.resumenA) {
+                  <app-forma [forma]="c.resumenA.forma.slice(0, 5)" />
+                }
+              </div>
+            </a>
+            <div class="score">
+              <b class="num" [class.lead]="marcador().a > marcador().b">{{ marcador().a }}</b>
+              <span>–</span>
+              <b class="num" [class.lead]="marcador().b > marcador().a">{{ marcador().b }}</b>
+              <small>{{ t('comparar.metricas') }}</small>
+            </div>
+            <a class="side-h b" [routerLink]="['/jugador', c.b.slug]" [queryParams]="{ juego: c.juego }">
+              <div>
+                <b>{{ c.b.nombre }}</b>
+                @if (c.resumenB) {
+                  <app-forma [forma]="c.resumenB.forma.slice(0, 5)" />
+                }
+              </div>
+              <app-avatar [slug]="c.b.slug" [nombre]="c.b.nombre" />
+            </a>
+          </div>
+
+          @if (!c.resumenA || !c.resumenB) {
+            <div class="empty">
+              {{ t('comparar.sinDatos', { nombre: !c.resumenA ? c.a.nombre : c.b.nombre, juego: nombreJuego(c.juego) }) }}
+            </div>
+          } @else {
+            @for (f of filas(); track f.metrica) {
+              <div class="h2h-row">
+                <div class="hv a" [class.win]="f.ventaja === 'a'">
+                  <span class="hb"><i [style.width.%]="f.anchoA"></i></span>
+                  <span class="num">{{ i18n.valor(f.a, f.formato) }}</span>
+                </div>
+                <div class="hl-l">{{ t(claveTexto(f.metrica)) }}</div>
+                <div class="hv b" [class.win]="f.ventaja === 'b'">
+                  <span class="num">{{ i18n.valor(f.b, f.formato) }}</span>
+                  <span class="hb"><i [style.width.%]="f.anchoB"></i></span>
+                </div>
+              </div>
+            }
+            @if (pocas()) {
+              <div class="h2h-note small muted">{{ t('comparar.pocas') }}</div>
+            }
+          }
+        </section>
+
+        <aside class="cmp-d">
+          <section class="card dp">
+            <div class="dp-h">
+              <app-marca-duende [tam]="34" />
+              <div class="dp-ht">
+                <div class="dp-t">{{ t('comparar.duendeT') }}</div>
+                <div class="small muted">{{ t('comparar.duendeSub') }}</div>
+              </div>
+            </div>
+            @if (veredicto(); as v) {
+              <div class="cmp-txt"><p>{{ v }}</p></div>
+            }
+            <div class="dp-f">
+              <div class="sugg inline">
+                <button type="button" (click)="duende.abrir(t('comparar.preguntaQuien'))">{{ t('comparar.preguntaQuien') }}</button>
+                <button type="button" (click)="duende.abrir(t('comparar.preguntaMejorar', { nombre: c.a.nombre }))">
+                  {{ t('comparar.preguntaMejorar', { nombre: c.a.nombre }) }}
+                </button>
+                <button type="button" (click)="duende.abrir(t('comparar.preguntaMejorar', { nombre: c.b.nombre }))">
+                  {{ t('comparar.preguntaMejorar', { nombre: c.b.nombre }) }}
+                </button>
+              </div>
+            </div>
+          </section>
+        </aside>
+      </div>
+    }
+  }
+</div>

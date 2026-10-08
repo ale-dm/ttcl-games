@@ -1,9 +1,12 @@
 # dependencias y builds
 node_modules/
-.next/
-out/
-next-env.d.ts
+.angular/
+dist/
 *.tsbuildinfo
+api/target/
+duende/.venv/
+__pycache__/
+.pytest_cache/
 
 # entorno y secretos (las claves nunca van al repo)
 .env

@@ -1,0 +1,58 @@
+# Todo el proyecto con un comando: docker compose up --build  →  http://localhost:4200
+# Las claves van en .env (copia de .env.example). Solo la web publica puerto; la API y el Duende quedan dentro.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ttcl
+      POSTGRES_USER: ttcl
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ttcl}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ttcl -d ttcl"]
+      interval: 5s
+      retries: 10
+
+  duende:
+    build: ./duende
+    environment:
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GEMINI_FALLBACK_MODELS: ${GEMINI_FALLBACK_MODELS:-gemini-2.5-pro}
+      GEMINI_TIMEOUT_MS: ${GEMINI_TIMEOUT_MS:-20000}
+      DUENDE_MAX_TOKENS: ${DUENDE_MAX_TOKENS:-1024}
+      DUENDE_DAILY_LIMIT: ${DUENDE_DAILY_LIMIT:-200}
+
+  api:
+    build: ./api
+    depends_on:
+      db:
+        condition: service_healthy
+      duende:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      DB_URL: jdbc:postgresql://db:5432/ttcl
+      DB_USER: ttcl
+      DB_PASSWORD: ${DB_PASSWORD:-ttcl}
+      DUENDE_URL: http://duende:8000
+      TTCL_DEMO: ${TTCL_DEMO:-true}
+      TTCL_EQUIPO_JSON: /config/equipo.json
+      FACEIT_API_KEY: ${FACEIT_API_KEY:-}
+      SMITE2_API_BASE: ${SMITE2_API_BASE:-}
+      SMITE2_DEV_ID: ${SMITE2_DEV_ID:-}
+      SMITE2_AUTH_KEY: ${SMITE2_AUTH_KEY:-}
+      SYNC_INTERVAL_MIN: ${SYNC_INTERVAL_MIN:-60}
+    volumes:
+      - ./config:/config:ro
+
+  web:
+    build: ./frontend
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-4200}:80"
+
+volumes:
+  pgdata:

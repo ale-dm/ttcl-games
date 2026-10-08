@@ -1,0 +1,99 @@
+<div class="wrap page">
+  <div class="ph">
+    <div>
+      <h1>{{ t('equipo.titulo') }}</h1>
+      <p class="sub">{{ t('equipo.sub') }}</p>
+      <a class="small" routerLink="/comparar">{{ t('equipo.comparar') }}</a>
+    </div>
+    <div class="ph-r">
+      @if (estado.estado().datos; as e) {
+        @if (e.ultimaSync) {
+          <span class="sync"><i></i>{{ t('comun.sincronizado', { hace: i18n.relativo(e.ultimaSync) }) }}</span>
+        } @else {
+          <span class="sync off"><i></i>{{ t('comun.sinSync') }}</span>
+        }
+        @if (e.demo) {
+          <span class="tag">{{ t('comun.datosEjemplo') }}</span>
+        }
+      }
+      <div class="seg" role="group">
+        <button type="button" [class.on]="!filtro()" (click)="filtrar(null)">{{ t('comun.todos') }}</button>
+        @for (j of juegos; track j) {
+          <button type="button" [class.on]="filtro() === j" (click)="filtrar(j)">{{ juegoCorto[j] }}</button>
+        }
+      </div>
+    </div>
+  </div>
+
+  @let carga = equipo.estado();
+  @if (carga.error !== null) {
+    <div class="aviso">
+      <p>{{ t('comun.errorApi') }}</p>
+      <button class="btn sm" type="button" (click)="equipo.recargar()">{{ t('comun.reintentar') }}</button>
+    </div>
+  } @else if (carga.datos; as tarjetas) {
+    @if (!tarjetas.length) {
+      <div class="aviso">{{ filtro() ? t('equipo.vacioJuego', { juego: nombreJuego[filtro()!] }) : t('equipo.vacio') }}</div>
+    }
+    <div class="team-grid">
+      @for (tj of tarjetas; track tj.slug) {
+        <article class="card pc">
+          <a class="pc-h" [routerLink]="['/jugador', tj.slug]">
+            <app-avatar [slug]="tj.slug" [nombre]="tj.nombre" />
+            <span class="pc-name">
+              {{ tj.nombre }}
+              @if (tj.demo) {
+                <span class="tag">{{ t('comun.demo') }}</span>
+              }
+            </span>
+            <span class="pc-go" aria-hidden="true">→</span>
+          </a>
+
+          @for (r of tj.resumenes; track r.juego) {
+            <a class="pc-game" [routerLink]="['/jugador', tj.slug]" [queryParams]="{ juego: r.juego }">
+              <div class="pc-gh">
+                <span>{{ nombreJuego[r.juego] }}</span>
+                <span class="mono">{{ nick(tj, r.juego) }}</span>
+              </div>
+              <div class="pc-stats">
+                <div class="stat">
+                  <div class="v num">{{ i18n.pct(r.winrate) }}</div>
+                  <div class="l">{{ t('comun.winrate') }}</div>
+                  <div class="wrbar"><i [style.width.%]="anchoWinrate(r.winrate)"></i></div>
+                </div>
+                <div class="stat">
+                  <div class="v num">{{ i18n.num(r.kd) }}</div>
+                  <div class="l">K/D</div>
+                </div>
+                <div class="stat">
+                  <div class="v num">{{ r.partidas }}</div>
+                  <div class="l">{{ t('comun.partidas') }}</div>
+                </div>
+              </div>
+              <div class="pc-form">
+                <app-forma [forma]="r.forma" />
+                <span class="small muted">{{ t('comun.ultima', { fecha: i18n.fecha(r.ultimaPartida) }) }}</span>
+              </div>
+            </a>
+          }
+
+          @if (tj.consejo; as c) {
+            <a class="pc-tip" [routerLink]="['/jugador', tj.slug]" [queryParams]="{ juego: c.juego }">
+              <app-marca-duende [tam]="26" />
+              <div>
+                <div class="eyebrow">{{ t('equipo.duende', { juego: juegoCorto[c.juego] }) }}</div>
+                <div class="pc-tip-t">{{ c.titulo }}</div>
+              </div>
+            </a>
+          }
+        </article>
+      }
+    </div>
+  } @else {
+    <div class="team-grid">
+      @for (i of [1, 2, 3]; track i) {
+        <div class="card" style="padding: 18px"><div class="skel" style="height: 240px"></div></div>
+      }
+    </div>
+  }
+</div>

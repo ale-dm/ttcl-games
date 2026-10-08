@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "duende",
+      "runtimeExecutable": "duende/.venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--app-dir", "duende", "--port", "8000"],
+      "port": 8000
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "java",
+      "runtimeArgs": ["-jar", "api/target/ttcl-api-0.1.0.jar", "--ttcl.equipo-json=config/equipo.json"],
+      "port": 8080
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "frontend", "run", "start"],
+      "port": 4200
+    }
+  ]
+}

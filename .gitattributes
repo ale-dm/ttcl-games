@@ -1,0 +1,4 @@
+# Los scripts de shell se usan dentro de Docker (Linux): siempre con LF.
+mvnw text eol=lf
+*.sh text eol=lf
+mvnw.cmd text eol=crlf

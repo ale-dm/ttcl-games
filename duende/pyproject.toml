@@ -1,0 +1,21 @@
+[project]
+name = "ttcl-duende"
+version = "0.1.0"
+description = "El Duende de TTCL Games: recomendaciones a partir de estadísticas y chatbot (Gemini con respaldo por reglas)"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.140,<1",
+  "uvicorn[standard]>=0.50,<1",
+  "pydantic>=2.12,<3",
+  "google-genai>=2.20,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=9,<10",
+  "httpx2>=2.13,<3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

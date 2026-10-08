@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <title>TTCL Games</title>
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="description" content="Estadísticas del equipo TTCL en CS2 y SMITE 2, con el Duende para saber en qué mejorar." />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <!-- Tema e idioma antes de pintar, para que no parpadee. Mismas claves que core/preferencias.ts. -->
+    <script>
+      try {
+        var p = JSON.parse(localStorage.getItem('ttcl.prefs') || '{}');
+        var tema = p.theme || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.dataset.theme = tema;
+        document.documentElement.lang = p.lang || ((navigator.language || 'es').slice(0, 2) === 'en' ? 'en' : 'es');
+      } catch (e) {}
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <app-root></app-root>
+  </body>
+</html>
