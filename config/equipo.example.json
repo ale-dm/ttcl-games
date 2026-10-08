@@ -1,0 +1,17 @@
+[
+  {
+    "slug": "ale",
+    "nombre": "Ale",
+    "cuentas": {
+      "cs2": { "nick": "NICK_FACEIT" },
+      "smite2": { "nick": "NICK_SMITE2" }
+    }
+  },
+  {
+    "slug": "amigo1",
+    "nombre": "Amigo 1",
+    "cuentas": {
+      "cs2": { "nick": "NICK_FACEIT" }
+    }
+  }
+]

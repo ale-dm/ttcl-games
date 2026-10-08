@@ -1,0 +1,18 @@
+# dependencias y builds
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# entorno y secretos (las claves nunca van al repo)
+.env
+.env.*
+!.env.example
+
+# configuración local del equipo (nombres e IDs de cuentas reales)
+config/equipo.json
+
+# logs
+npm-debug.log*
+*.log
