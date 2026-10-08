@@ -121,8 +121,8 @@ Parte del prototipo `TTCL Stats.html` y lo lleva a una web de estadísticas comp
 - **Accesibilidad**: foco visible, etiquetas para lectores de pantalla, `prefers-reduced-motion` y textos del Duende
   pintados como texto (nunca como HTML).
 
-Siguientes pasos que encajarían: nivel/ELO de FACEIT en el perfil, filtros por periodo (30 días, temporada), detalle de
-cada partida y un "rating" propio cuando haya datos por ronda.
+Siguientes pasos: la hoja de ruta está en [docs/propuestas.md](docs/propuestas.md) (rol del jugador, sinergias, tilt,
+objetivos, percentiles por nivel de FACEIT, Duende en Discord, análisis de demos…).
 
 ## Fuentes de datos: estado
 
