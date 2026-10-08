@@ -36,6 +36,15 @@ describe('I18n', () => {
     expect(i18n.delta(-3.4, 'pct')).toBe('−3.4 pp');
     expect(i18n.valor(null, 'pct')).toBe('—');
   });
+
+  it('traduce los roles y deja tal cual uno que no conoce', () => {
+    expect(i18n.rol('soporte')).toBe('Soporte');
+    expect(i18n.rol('guardian')).toBe('Guardián');
+    i18n.cambiar('en');
+    expect(i18n.rol('soporte')).toBe('Support');
+    expect(i18n.rol('jungla')).toBe('Jungle');
+    expect(i18n.rol('francotirador')).toBe('francotirador');
+  });
 });
 
 describe('valorDe', () => {

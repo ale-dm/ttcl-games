@@ -22,7 +22,15 @@
         </h1>
         <div class="accounts">
           @for (c of p.cuentas; track c.juego) {
-            <span class="acct">{{ juegoCorto[c.juego] }} <b class="mono">{{ c.nick }}</b></span>
+            <span class="acct">
+              {{ juegoCorto[c.juego] }} <b class="mono">{{ c.nick }}</b>
+              @if (c.rol) {
+                <span class="acct-rol" [title]="t('jugador.rol', { juego: nombreJuego[c.juego] })">
+                  <span class="sr-only">{{ t('jugador.rol', { juego: nombreJuego[c.juego] }) }}:</span>
+                  {{ i18n.rol(c.rol) }}
+                </span>
+              }
+            </span>
           }
           @if (detalle.estado().datos?.resumen; as r) {
             <span class="small muted">{{ t('comun.ultima', { fecha: i18n.fecha(r.ultimaPartida) }) }}</span>

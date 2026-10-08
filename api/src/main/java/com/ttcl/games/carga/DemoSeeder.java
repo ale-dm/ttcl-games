@@ -51,26 +51,32 @@ public class DemoSeeder implements ApplicationRunner {
             double kills, double muertes, double asist, double danoMin, double oroMin, double mitigado,
             double curacion, double ganar, List<String> dioses, String diosMalo) {}
 
-    record Demo(String slug, String nombre, String nickCs2, PerfilCs2 cs2, String nickSmite, PerfilSmite smite) {}
+    record Demo(
+            String slug, String nombre, String nickCs2, String rolCs2, PerfilCs2 cs2, String nickSmite,
+            String rolSmite, PerfilSmite smite) {}
 
     private static final List<Demo> EQUIPO = List.of(
-            // Mata mucho y gana poco; buena puntería; Nuke se le atraganta.
+            // Rifler que mata mucho y gana poco; buena puntería; Nuke se le atraganta. En SMITE juega magos (mid).
             new Demo("j1", "Jugador 1",
-                    "demo_uno", new PerfilCs2(0.84, 0.66, 0.12, 88, 53, 3.0, 0.55, 1.4, 0.28, 110, 0.22, "de_nuke", null),
-                    "DemoUno", new PerfilSmite(7.5, 4.2, 8, 930, 540, 11000, 1500, 0.6,
+                    "demo_uno", "rifler",
+                    new PerfilCs2(0.84, 0.66, 0.12, 88, 53, 3.0, 0.55, 1.4, 0.28, 110, 0.22, "de_nuke", null),
+                    "DemoUno", "mid", new PerfilSmite(7.5, 4.2, 8, 930, 540, 11000, 1500, 0.6,
                             List.of("Zeus", "Ra", "Agni", "Poseidon"), null)),
-            // Poca kill, muchas asistencias y mucha utilidad; en SMITE es el guardián.
+            // Soporte: poca kill, muchas asistencias y mucha utilidad; en SMITE es el guardián. Con su rol, el
+            // Duende no le regaña por las kills.
             new Demo("j2", "Jugador 2",
-                    "demo_dos", new PerfilCs2(0.6, 0.66, 0.24, 69, 44, 1.2, 0.47, 1.1, 0.22, 215, 0.5, null, "de_mirage"),
-                    "DemoDos", new PerfilSmite(3.5, 3.6, 15, 610, 470, 26000, 5200, 0.56,
+                    "demo_dos", "soporte",
+                    new PerfilCs2(0.6, 0.66, 0.24, 69, 44, 1.2, 0.47, 1.1, 0.22, 215, 0.5, null, "de_mirage"),
+                    "DemoDos", "guardian", new PerfilSmite(3.5, 3.6, 15, 610, 470, 26000, 5200, 0.56,
                             List.of("Ymir", "Athena", "Geb", "Khepri"), null)),
             // Entry que abre mucho pero con poco éxito y poca cabeza; buenos clutches; viene mejorando.
             new Demo("j3", "Jugador 3",
-                    "demo_tres", new PerfilCs2(0.72, 0.64, 0.14, 78, 34, 4.6, 0.36, 1.3, 0.42, 85, 0.57, null, "de_ancient"),
-                    null, null),
-            // Solo SMITE: muere demasiado y farmea poco.
-            new Demo("j4", "Jugador 4", null, null,
-                    "DemoCuatro", new PerfilSmite(5.5, 7.6, 6, 720, 395, 9000, 700, 0.44,
+                    "demo_tres", "entry",
+                    new PerfilCs2(0.72, 0.64, 0.14, 78, 34, 4.6, 0.36, 1.3, 0.42, 85, 0.57, null, "de_ancient"),
+                    null, null, null),
+            // Solo SMITE, de jungla con asesinos: muere demasiado y farmea poco.
+            new Demo("j4", "Jugador 4", null, null, null,
+                    "DemoCuatro", "jungla", new PerfilSmite(5.5, 7.6, 6, 720, 395, 9000, 700, 0.44,
                             List.of("Loki", "Thanatos", "Fenrir", "Susano"), "Loki")));
 
     private final TtclProperties props;
@@ -105,10 +111,10 @@ public class DemoSeeder implements ApplicationRunner {
             Jugador j = jugadores.save(new Jugador(d.slug(), d.nombre(), true));
             porSlug.put(d.slug(), j);
             if (d.nickCs2() != null) {
-                cuenta(j, Juego.CS2, d.nickCs2(), ahora);
+                cuenta(j, Juego.CS2, d.nickCs2(), d.rolCs2(), ahora);
             }
             if (d.nickSmite() != null) {
-                cuenta(j, Juego.SMITE2, d.nickSmite(), ahora);
+                cuenta(j, Juego.SMITE2, d.nickSmite(), d.rolSmite(), ahora);
             }
         }
         int cs2 = generarCs2(porSlug, ahora);
@@ -116,8 +122,9 @@ public class DemoSeeder implements ApplicationRunner {
         log.info("Datos de ejemplo creados: {} jugadores, {} partidas de CS2 y {} de SMITE 2", EQUIPO.size(), cs2, smite);
     }
 
-    private void cuenta(Jugador j, Juego juego, String nick, Instant ahora) {
+    private void cuenta(Jugador j, Juego juego, String nick, String rol, Instant ahora) {
         Cuenta c = new Cuenta(j, juego, nick);
+        c.setRol(rol);
         c.setExternalId("demo-" + j.getSlug() + "-" + juego.codigo());
         c.setUltimaSync(ahora.minus(Duration.ofMinutes(12)));
         cuentas.save(c);

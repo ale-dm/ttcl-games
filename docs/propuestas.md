@@ -8,7 +8,7 @@ lo que se aprendió en su apartado.
 
 | ID | Propuesta | Fase | Esfuerzo | Datos | Estado |
 |---|---|---|---|---|---|
-| P1 | Rol del jugador | 1 | Bajo | Nuevos (los da el jugador) | Pendiente |
+| P1 | Rol del jugador | 1 | Bajo | Nuevos (los da el jugador) | Hecho |
 | P2 | Con quién juegas mejor (sinergias) | 1 | Bajo | Ya guardados | Pendiente |
 | P3 | Sesiones y tilt | 1 | Bajo | Ya guardados | Pendiente |
 | P4 | Filtros por periodo | 1 | Bajo | Ya guardados | Pendiente |
@@ -71,6 +71,24 @@ haciendo su trabajo.
 
 **Hecho cuando**: un soporte con asistencias altas y kills bajas no recibe "Kills / partida: por debajo del equipo" y sí
 un "bien" por asistencias; tests en `duende/tests/test_insights.py`.
+
+**Hecho** (8 de octubre de 2026). Lo que quedó y lo que se aprendió:
+- Cada rol da a cada métrica un factor (`AJUSTES_ROL` en `metricas.py`): `NO_SE_JUZGA` (0), `TOLERA` (0,5) o
+  `PESA_MAS` (1,5); las demás cuentan 1. La desviación frente al equipo y la referencia se multiplica por el factor
+  antes de decidir el nivel, así que tolerar no es un pase libre: un entry que muere un 50 % más que el equipo sigue
+  recibiendo "alto". Lo que pesa más también se reconoce antes como fortaleza y va primero dentro de su nivel.
+- El texto lo explica con una coletilla ("Justo lo que pide tu rol de soporte", "En tu rol de entry se perdona algo,
+  pero no tanto"). El chat por reglas pone el rol en "en qué mejorar" y Gemini recibe el rol y la instrucción de no
+  reprochar lo que el rol no pide.
+- Efecto secundario buscado: con el tope de dos fortalezas, las del rol desplazan a otras (al soporte de ejemplo ya no
+  le sale "Estás on fire" porque asistencias y utilidad pesan más). Y al quitar avisos que no tocaban, entran otros que
+  antes se quedaban fuera del tope de cuatro (su winrate, su peor mapa).
+- La API valida el rol al leer `config/equipo.json` sin distinguir mayúsculas ni tildes ("Guardián" → `guardian`). Uno
+  que no es del juego deja la cuenta sin rol y lo avisa en el log; el Duende, por si acaso, trata igual un rol que no
+  conoce. Ningún rol se llama igual en los dos juegos: la web los traduce sin mirar el juego (hay test que lo vigila).
+- Datos de ejemplo: Jugador 1 rifler y mid, Jugador 2 soporte y guardián, Jugador 3 entry, Jugador 4 jungla.
+- **Queda pendiente**: deducir el rol de SMITE 2 por la clase del dios más jugado (hace falta una tabla dios → clase
+  que hoy no da ninguna fuente verificada) y poder editar el rol desde la web (necesita la autenticación de P5).
 
 ### P2 · Con quién juegas mejor (sinergias)
 

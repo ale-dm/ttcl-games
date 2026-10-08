@@ -34,12 +34,18 @@ _CABECERA_DATOS: dict[Idioma, str] = {
     "es": (
         "Datos disponibles (JSON). «foco» son los jugadores de los que va la conversación; «equipo», todo el grupo. "
         "«recomendaciones» ya están calculadas comparando con el resto del equipo y con referencias: úsalas como base. "
-        "Porcentajes de 0 a 100. «forma» va de la partida más reciente a la más antigua (V victoria, D derrota)."
+        "Porcentajes de 0 a 100. «forma» va de la partida más reciente a la más antigua (V victoria, D derrota). "
+        "«rol» es el rol que juega en ese juego, si lo ha dicho; las recomendaciones ya lo tienen en cuenta. No le "
+        "reproches lo que su rol no pide (a un soporte o un guardián no le pidas kills; a un entry, que muera poco) y "
+        "júzgale sobre todo por lo que sí pide."
     ),
     "en": (
         "Available data (JSON). 'foco' are the players this conversation is about; 'equipo' is the whole group. "
         "'recomendaciones' are already computed against the rest of the team and benchmarks: build on them. "
-        "Percentages go from 0 to 100. 'forma' runs from most recent to oldest match (V win, D loss)."
+        "Percentages go from 0 to 100. 'forma' runs from most recent to oldest match (V win, D loss). "
+        "'rol' is the role they play in that game, if they told us; the recommendations already account for it. "
+        "Don't blame them for what their role doesn't ask for (don't ask a support or guardian for kills, or an entry "
+        "to die less) and judge them mainly on what it does ask for."
     ),
 }
 

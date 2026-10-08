@@ -37,6 +37,23 @@ def test_insights_camel_case():
     assert {"id", "nivel", "titulo", "texto", "consejo", "barras", "formato", "metrica"} <= insights[0].keys()
 
 
+def test_insights_con_rol():
+    resumen = {**RESUMEN, "winrate": 50.0, "kd": 1.0, "killsMedia": 12.0, "asistenciasMedia": 9.0}
+    equipo = {"jugadores": 2, "winrate": 50.0, "kd": 1.0, "killsMedia": 18.0, "asistenciasMedia": 5.0}
+    cuerpo = {"lang": "es", "jugador": {"slug": "j2", "nombre": "J2"}, "juego": "cs2", "resumen": resumen, "equipo": equipo}
+
+    def ids(peticion: dict) -> list[str]:
+        r = cliente.post("/v1/insights", json=peticion)
+        assert r.status_code == 200
+        return [i["id"] for i in r.json()["insights"]]
+
+    assert "debil_kills_media" in ids(cuerpo)
+    assert ids({**cuerpo, "rol": None}) == ids(cuerpo)  # la API manda null si no lo ha dicho
+    con_rol = ids({**cuerpo, "rol": "soporte"})
+    assert "debil_kills_media" not in con_rol
+    assert "fuerte_asistencias_media" in con_rol
+
+
 def test_insights_lote():
     item = {"lang": "en", "jugador": {"slug": "j1", "nombre": "Jugador 1"}, "juego": "cs2", "resumen": RESUMEN}
     r = cliente.post("/v1/insights/lote", json={"items": [item, {**item, "jugador": {"slug": "j2", "nombre": "J2"}}]})

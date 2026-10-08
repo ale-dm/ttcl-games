@@ -73,6 +73,16 @@ public class EquipoServicio {
             return filas.getOrDefault(j.getId(), Map.of()).values().stream().flatMap(List::stream).toList();
         }
 
+        /** Rol del jugador en ese juego, o null si no lo ha dicho. */
+        String rol(Jugador j, Juego juego) {
+            return cuentas.getOrDefault(j.getId(), List.of()).stream()
+                    .filter(c -> c.getJuego() == juego)
+                    .map(Cuenta::getRol)
+                    .filter(Objects::nonNull)
+                    .findFirst()
+                    .orElse(null);
+        }
+
         Jugador porSlug(String slug) {
             return jugadores.stream()
                     .filter(j -> j.getSlug().equals(slug))
@@ -102,7 +112,7 @@ public class EquipoServicio {
 
     private static List<CuentaVista> cuentasVista(Instantanea foto, Jugador j) {
         return foto.cuentas().getOrDefault(j.getId(), List.of()).stream()
-                .map(c -> new CuentaVista(c.getJuego(), c.getNombreExterno(), c.getUltimaSync()))
+                .map(c -> new CuentaVista(c.getJuego(), c.getNombreExterno(), c.getRol(), c.getUltimaSync()))
                 .toList();
     }
 
@@ -174,6 +184,7 @@ public class EquipoServicio {
         List<FilaParticipacion> filas = foto.filas(j, juego);
         return new JuegoContexto(
                 juego,
+                foto.rol(j, juego),
                 Estadisticas.resumir(juego, filas),
                 Estadisticas.resumir(juego, Estadisticas.recientes(filas, Estadisticas.PARTIDAS_RECIENTES)),
                 mediasSin(foto, j, juego),
@@ -255,7 +266,7 @@ public class EquipoServicio {
 
     private static PeticionInsights peticion(Instantanea foto, Jugador j, Juego juego, String lang) {
         JuegoContexto c = contexto(foto, j, juego);
-        return new PeticionInsights(lang, new JugadorRef(j.getSlug(), j.getNombre()), juego, c.resumen(),
+        return new PeticionInsights(lang, new JugadorRef(j.getSlug(), j.getNombre()), juego, c.rol(), c.resumen(),
                 c.reciente(), c.equipo(), c.desglose());
     }
 

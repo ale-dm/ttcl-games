@@ -215,6 +215,7 @@ h1 { font-size: 34px; letter-spacing: -0.03em; margin: 0; font-weight: 700; line
 .accounts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
 .acct { display: inline-flex; gap: 8px; font-size: 12.5px; padding: 5px 9px; border-radius: 7px; background: var(--surface2); border: 1px solid var(--line); color: var(--muted); }
 .acct b { color: var(--text); font-weight: 600; }
+.acct-rol { padding-left: 8px; border-left: 1px solid var(--line); color: var(--text); }
 .hero-a { display: flex; gap: 8px; flex-wrap: wrap; }
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 26px 0 22px; overflow-x: auto; overflow-y: hidden; align-items: center; }
 .tabs .seg { margin-left: auto; margin-bottom: 6px; flex: none; }

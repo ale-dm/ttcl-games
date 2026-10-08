@@ -76,6 +76,7 @@ export const ES = {
   'jugador.recientes': 'Partidas recientes',
   'jugador.historial': 'Historial · {total} partidas',
   'jugador.pocasParaGrafica': 'Hacen falta al menos 2 partidas para dibujar la gráfica.',
+  'jugador.rol': 'Rol en {juego}',
 
   // Tablas
   'tabla.resultado': 'Resultado',
@@ -176,6 +177,19 @@ export const ES = {
   'metrica.dano': 'Daño / partida',
   'metrica.mitigado': 'Mitigado / partida',
   'metrica.curacion': 'Curación / partida',
+
+  // Roles (los mismos que acepta la API en config/equipo.json)
+  'rol.entry': 'Entry',
+  'rol.awp': 'AWP',
+  'rol.soporte': 'Soporte',
+  'rol.lurker': 'Lurker',
+  'rol.igl': 'IGL',
+  'rol.rifler': 'Rifler',
+  'rol.solo': 'Solo',
+  'rol.jungla': 'Jungla',
+  'rol.mid': 'Mid',
+  'rol.guardian': 'Guardián',
+  'rol.carry': 'Carry',
 } as const;
 
 export type Clave = keyof typeof ES;
@@ -250,6 +264,7 @@ export const EN: Record<Clave, string> = {
   'jugador.recientes': 'Recent matches',
   'jugador.historial': 'History · {total} matches',
   'jugador.pocasParaGrafica': 'At least 2 matches are needed to draw the chart.',
+  'jugador.rol': 'Role in {juego}',
 
   'tabla.resultado': 'Result',
   'tabla.mapa': 'Map',
@@ -342,4 +357,16 @@ export const EN: Record<Clave, string> = {
   'metrica.dano': 'Damage / match',
   'metrica.mitigado': 'Mitigated / match',
   'metrica.curacion': 'Healing / match',
+
+  'rol.entry': 'Entry',
+  'rol.awp': 'AWP',
+  'rol.soporte': 'Support',
+  'rol.lurker': 'Lurker',
+  'rol.igl': 'IGL',
+  'rol.rifler': 'Rifler',
+  'rol.solo': 'Solo',
+  'rol.jungla': 'Jungle',
+  'rol.mid': 'Mid',
+  'rol.guardian': 'Guardian',
+  'rol.carry': 'Carry',
 };

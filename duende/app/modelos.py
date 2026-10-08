@@ -83,6 +83,8 @@ class PeticionInsights(Base):
     lang: Idioma = "es"
     jugador: JugadorRef
     juego: Juego
+    # Rol declarado en ese juego (entry, soporte... o solo, guardian...). Uno que no es del juego cuenta como ninguno.
+    rol: str | None = None
     resumen: Resumen
     reciente: Resumen | None = None
     equipo: MediasEquipo | None = None
@@ -117,6 +119,7 @@ class Mensaje(Base):
 
 class JuegoContexto(Base):
     juego: Juego
+    rol: str | None = None
     resumen: Resumen
     reciente: Resumen | None = None
     equipo: MediasEquipo | None = None

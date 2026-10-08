@@ -3,8 +3,8 @@
     "slug": "ale",
     "nombre": "Ale",
     "cuentas": {
-      "cs2": { "nick": "NICK_FACEIT" },
-      "smite2": { "nick": "NICK_SMITE2" }
+      "cs2": { "nick": "NICK_FACEIT", "rol": "entry" },
+      "smite2": { "nick": "NICK_SMITE2", "rol": "mid" }
     }
   },
   {

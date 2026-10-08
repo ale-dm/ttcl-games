@@ -12,6 +12,7 @@ import com.ttcl.games.config.TtclProperties;
 import com.ttcl.games.duende.DuendeCliente;
 import com.ttcl.games.duende.DuendeModelos.Insight;
 import com.ttcl.games.duende.DuendeModelos.ItemLote;
+import com.ttcl.games.duende.DuendeModelos.JuegoContexto;
 import com.ttcl.games.duende.DuendeModelos.PeticionChat;
 import com.ttcl.games.duende.DuendeModelos.PeticionInsights;
 import com.ttcl.games.duende.DuendeModelos.RespuestaChat;
@@ -53,6 +54,8 @@ class ApiTest {
         RespuestaChat respuesta;
         RuntimeException fallo;
         PeticionChat ultimaChat;
+        PeticionInsights ultimaInsights;
+        List<PeticionInsights> ultimoLote;
 
         DuendeFalso(TtclProperties props) {
             super(props);
@@ -60,6 +63,7 @@ class ApiTest {
 
         @Override
         public List<ItemLote> lote(List<PeticionInsights> peticiones) {
+            ultimoLote = peticiones;
             if (fallo != null) {
                 throw fallo;
             }
@@ -68,6 +72,7 @@ class ApiTest {
 
         @Override
         public List<Insight> insights(PeticionInsights peticion) {
+            ultimaInsights = peticion;
             if (fallo != null) {
                 throw fallo;
             }
@@ -105,6 +110,8 @@ class ApiTest {
         duende.respuesta = null;
         duende.fallo = null;
         duende.ultimaChat = null;
+        duende.ultimaInsights = null;
+        duende.ultimoLote = null;
     }
 
     private static Insight insight(String nivel, String titulo) {
@@ -160,6 +167,35 @@ class ApiTest {
         mvc.perform(get("/api/jugadores/j4/juegos/cs2")).andExpect(status().isNotFound());
         mvc.perform(get("/api/jugadores/nadie")).andExpect(status().isNotFound());
         mvc.perform(get("/api/jugadores/j1/juegos/fortnite")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rolDeCadaCuentaEnElPerfilYParaElDuende() throws Exception {
+        mvc.perform(get("/api/jugadores/j2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cuentas[0].juego").value("cs2"))
+                .andExpect(jsonPath("$.cuentas[0].rol").value("soporte"))
+                .andExpect(jsonPath("$.cuentas[1].juego").value("smite2"))
+                .andExpect(jsonPath("$.cuentas[1].rol").value("guardian"));
+
+        mvc.perform(get("/api/jugadores/j2/consejos?juego=smite2")).andExpect(status().isOk());
+        assertThat(duende.ultimaInsights.juego()).isEqualTo(Juego.SMITE2);
+        assertThat(duende.ultimaInsights.rol()).isEqualTo("guardian");
+
+        mvc.perform(get("/api/equipo?juego=cs2")).andExpect(status().isOk());
+        assertThat(duende.ultimoLote)
+                .extracting(p -> p.jugador().slug() + ":" + p.rol())
+                .containsExactly("j1:rifler", "j2:soporte", "j3:entry");
+
+        duende.respuesta = new RespuestaChat("Hola", "reglas", null, List.of());
+        mvc.perform(post("/api/duende/chat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mensajes\": [{\"rol\": \"usuario\", \"texto\": \"¿Quién es el mejor?\"}]}"))
+                .andExpect(status().isOk());
+        assertThat(duende.ultimaChat.equipo())
+                .filteredOn(j -> j.slug().equals("j4"))
+                .singleElement()
+                .satisfies(j -> assertThat(j.juegos()).extracting(JuegoContexto::rol).containsExactly("jungla"));
     }
 
     @Test

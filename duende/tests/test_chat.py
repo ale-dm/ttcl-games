@@ -70,6 +70,42 @@ def test_racha_en_ingles():
     assert "Last 10" in r.respuesta and "L L L L W" in r.respuesta
 
 
+def test_mejorar_tiene_en_cuenta_el_rol():
+    r = resumen_cs2(kills_media=12.0, asistencias_media=4.0)
+
+    def mejorar(rol):
+        bea = jugador("j2", "Bea", r, equipo_cs2(), rol=rol)
+        mensajes = [Mensaje(rol="usuario", texto="¿En qué tengo que mejorar?")]
+        return chat.responder(PeticionChat(lang="es", mensajes=mensajes, foco=["j2"], equipo=[bea])).respuesta
+
+    assert "Kills / partida" in mejorar(None)
+    respuesta = mejorar("soporte")
+    assert "en Counter-Strike 2 (rol de soporte), Bea:" in respuesta
+    assert "Asistencias / partida" in respuesta
+    assert "Kills / partida" not in respuesta
+
+
+def test_el_rol_llega_a_gemini(monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "clave-de-prueba")
+    get_config.cache_clear()
+    sistemas = []
+
+    def falso(sistema, contenidos, temperatura=0.8):
+        sistemas.append(sistema)
+        return "Respuesta de Gemini", "gemini-falso"
+
+    monkeypatch.setattr(gemini, "generar", falso)
+    ana = jugador("j1", "Ana", resumen_cs2(), equipo_cs2(), rol="awp")
+    bea = jugador("j2", "Bea", resumen_cs2(kills_media=12.0), equipo_cs2(), rol="soporte")
+    chat.responder(
+        PeticionChat(lang="es", mensajes=[Mensaje(rol="usuario", texto="¿Qué tal mi rol?")], foco=["j1"], equipo=[ana, bea])
+    )
+    sistema = sistemas[0]
+    assert '"rol":"awp"' in sistema  # el del foco
+    assert '"rol":"soporte"' in sistema  # y el del resto del equipo
+    assert "a un soporte o un guardián no le pidas kills" in sistema
+
+
 def test_con_gemini_usa_gemini_y_cachea(monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "clave-de-prueba")
     get_config.cache_clear()

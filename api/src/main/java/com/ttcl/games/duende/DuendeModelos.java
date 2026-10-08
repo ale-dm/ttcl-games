@@ -34,10 +34,12 @@ public final class DuendeModelos {
             List<Barra> barras,
             String formato) {}
 
+    /** @param rol rol declarado en ese juego, o null: el Duende juzga cada métrica según lo que pide el rol */
     public record PeticionInsights(
             String lang,
             JugadorRef jugador,
             Juego juego,
+            String rol,
             ResumenJuego resumen,
             ResumenJuego reciente,
             MediasEquipo equipo,
@@ -58,7 +60,7 @@ public final class DuendeModelos {
     public record Mensaje(String rol, String texto) {}
 
     public record JuegoContexto(
-            Juego juego, ResumenJuego resumen, ResumenJuego reciente, MediasEquipo equipo,
+            Juego juego, String rol, ResumenJuego resumen, ResumenJuego reciente, MediasEquipo equipo,
             List<FilaDesglose> desglose) {}
 
     public record JugadorContexto(String slug, String nombre, List<JuegoContexto> juegos) {}

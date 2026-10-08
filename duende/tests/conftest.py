@@ -45,11 +45,11 @@ def equipo_cs2(**cambios) -> MediasEquipo:
     return MediasEquipo(**base)
 
 
-def jugador(slug: str, nombre: str, resumen: Resumen, equipo: MediasEquipo | None = None, desglose=None):
+def jugador(slug: str, nombre: str, resumen: Resumen, equipo: MediasEquipo | None = None, desglose=None, rol=None):
     return JugadorContexto(
         slug=slug,
         nombre=nombre,
-        juegos=[JuegoContexto(juego=resumen.juego, resumen=resumen, equipo=equipo, desglose=desglose or [])],
+        juegos=[JuegoContexto(juego=resumen.juego, rol=rol, resumen=resumen, equipo=equipo, desglose=desglose or [])],
     )
 
 

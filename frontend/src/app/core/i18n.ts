@@ -111,6 +111,12 @@ export class I18n {
     return this.fecha(iso);
   };
 
+  /** Nombre del rol de un jugador. Si la web no lo conoce, el rol tal cual. */
+  readonly rol = (rol: string): string => {
+    const clave = `rol.${rol}`;
+    return clave in ES ? this.t(clave as Clave) : rol;
+  };
+
   /** V/D en español, W/L en inglés. */
   readonly letraForma = (c: string): string => (c === 'V' ? this.t('comun.formaV') : c === 'D' ? this.t('comun.formaD') : '?');
 }

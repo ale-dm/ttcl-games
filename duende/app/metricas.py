@@ -61,9 +61,80 @@ METRICAS: dict[Juego, list[Metrica]] = {
 
 NOMBRE_JUEGO: dict[Juego, str] = {"cs2": "Counter-Strike 2", "smite2": "SMITE 2"}
 
+# ─── Roles ───────────────────────────────────────────────────────────────────
+# Cuánto cuenta cada métrica según el rol. Las que no aparecen cuentan lo normal (1). Los roles son los mismos que
+# acepta la API (Juego.java) y que traduce la web (textos.ts).
+
+NO_SE_JUZGA = 0.0  # Puede tenerla baja y estar haciendo su trabajo: nunca es una debilidad.
+TOLERA = 0.5  # Se acepta que vaya algo por debajo: hace falta el doble de distancia para avisar.
+PESA_MAS = 1.5  # Es lo suyo: se avisa antes, se reconoce antes y va primero.
+
+AJUSTES_ROL: dict[Juego, dict[str, dict[str, float]]] = {
+    "cs2": {
+        "entry": {"muertes_media": TOLERA, "kd": TOLERA, "clutch_pct": TOLERA, "entry_pct": PESA_MAS},
+        "awp": {
+            "hs_pct": NO_SE_JUZGA,
+            "asistencias_media": TOLERA,
+            "dano_utilidad": TOLERA,
+            "kr": PESA_MAS,
+            "entry_pct": PESA_MAS,
+        },
+        "soporte": {
+            "kills_media": NO_SE_JUZGA,
+            "kd": TOLERA,
+            "adr": TOLERA,
+            "kr": TOLERA,
+            "entry_pct": TOLERA,
+            "asistencias_media": PESA_MAS,
+            "dano_utilidad": PESA_MAS,
+        },
+        "lurker": {
+            "asistencias_media": NO_SE_JUZGA,
+            "entry_pct": NO_SE_JUZGA,
+            "dano_utilidad": TOLERA,
+            "clutch_pct": PESA_MAS,
+            "kr": PESA_MAS,
+        },
+        "igl": {
+            "kills_media": TOLERA,
+            "kd": TOLERA,
+            "adr": TOLERA,
+            "kr": TOLERA,
+            "hs_pct": TOLERA,
+            "winrate": PESA_MAS,
+            "dano_utilidad": PESA_MAS,
+        },
+        "rifler": {"adr": PESA_MAS, "kr": PESA_MAS},
+    },
+    "smite2": {
+        "solo": {"asistencias_media": TOLERA, "mitigado": PESA_MAS},
+        "jungla": {"mitigado": NO_SE_JUZGA, "kills_media": PESA_MAS},
+        "mid": {"mitigado": NO_SE_JUZGA, "dano_min": PESA_MAS},
+        "guardian": {
+            "kills_media": NO_SE_JUZGA,
+            "dano_min": NO_SE_JUZGA,
+            "oro_min": NO_SE_JUZGA,
+            "kd": TOLERA,
+            "asistencias_media": PESA_MAS,
+            "mitigado": PESA_MAS,
+        },
+        "carry": {"mitigado": NO_SE_JUZGA, "dano_min": PESA_MAS, "oro_min": PESA_MAS},
+    },
+}
+
 
 def metrica(juego: Juego, clave: str) -> Metrica | None:
     return next((m for m in METRICAS[juego] if m.clave == clave), None)
+
+
+def rol_de(juego: Juego, rol: str | None) -> str | None:
+    """El rol si es uno de los de ese juego; si no se ha dicho o no es de ese juego, None."""
+    return rol if rol in AJUSTES_ROL[juego] else None
+
+
+def factor_rol(juego: Juego, rol: str | None, clave: str) -> float:
+    """Cuánto cuenta la métrica `clave` para ese rol (1 si no hay rol o no la ajusta)."""
+    return AJUSTES_ROL[juego].get(rol or "", {}).get(clave, 1.0)
 
 
 def formatear(valor: float | None, formato: Formato | None, lang: Idioma) -> str:

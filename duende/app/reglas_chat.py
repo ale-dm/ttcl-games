@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from .insights import generar_insights
-from .metricas import METRICAS, NOMBRE_JUEGO, formatear, metrica
+from .metricas import METRICAS, NOMBRE_JUEGO, formatear, metrica, rol_de
 from .modelos import (
     Idioma,
     Insight,
@@ -20,8 +20,9 @@ from .modelos import (
     PeticionChat,
     PeticionInsights,
 )
+from .textos import NOMBRES_ROL
 
-Intencion = Literal["hola", "ranking", "comparar", "racha", "desglose", "fuerte", "mejorar", "stats", "ayuda"]
+Intencion =Literal["hola", "ranking", "comparar", "racha", "desglose", "fuerte", "mejorar", "stats", "ayuda"]
 
 
 def normalizar(texto: str) -> str:
@@ -121,6 +122,7 @@ def insights_de(j: JugadorContexto, g: JuegoContexto, lang: Idioma) -> list[Insi
             lang=lang,
             jugador=JugadorRef(slug=j.slug, nombre=j.nombre),
             juego=g.juego,
+            rol=g.rol,
             resumen=g.resumen,
             reciente=g.reciente,
             equipo=g.equipo,
@@ -143,6 +145,9 @@ def _fmt(clave: str, juego: Juego, valor: float | None, lang: Idioma) -> str:
 
 def _mejorar(f: Foco, lang: Idioma) -> str:
     nombre, juego = f.jugador.nombre, NOMBRE_JUEGO[f.juego.juego]
+    if rol := rol_de(f.juego.juego, f.juego.rol):
+        nombre_rol = NOMBRES_ROL[rol][lang]
+        juego += _t(lang, f" (rol de {nombre_rol})", f" ({nombre_rol} role)")
     ins = insights_de(f.jugador, f.juego, lang)
     debiles = [i for i in ins if i.nivel in ("alto", "medio")][:3]
     aviso = next((i for i in ins if i.nivel == "info"), None)

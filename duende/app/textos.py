@@ -420,6 +420,9 @@ FRASES: dict[Idioma, dict[str, str]] = {
         "cmp_equipo": "Tienes {tu}; el resto del equipo, {equipo}.",
         "cmp_ref": "Tienes {tu}; un jugador medio anda por {ref}.",
         "cmp_solo": "Tienes {tu}.",
+        "rol_pesa_debil": "Y en tu rol de {rol}, esto es lo que más cuenta.",
+        "rol_pesa_fuerte": "Justo lo que pide tu rol de {rol}.",
+        "rol_tolera": "En tu rol de {rol} se perdona algo, pero no tanto.",
     },
     "en": {
         "tu": "You",
@@ -431,7 +434,25 @@ FRASES: dict[Idioma, dict[str, str]] = {
         "cmp_equipo": "You have {tu}; the rest of the team, {equipo}.",
         "cmp_ref": "You have {tu}; an average player sits around {ref}.",
         "cmp_solo": "You have {tu}.",
+        "rol_pesa_debil": "And in your {rol} role, this is what counts most.",
+        "rol_pesa_fuerte": "Exactly what your {rol} role calls for.",
+        "rol_tolera": "Your {rol} role buys you some slack, but not this much.",
     },
+}
+
+# Nombre de cada rol para meterlo en una frase ("tu rol de {rol}" / "your {rol} role").
+NOMBRES_ROL: dict[str, dict[Idioma, str]] = {
+    "entry": {"es": "entry", "en": "entry"},
+    "awp": {"es": "AWP", "en": "AWP"},
+    "soporte": {"es": "soporte", "en": "support"},
+    "lurker": {"es": "lurker", "en": "lurker"},
+    "igl": {"es": "IGL", "en": "IGL"},
+    "rifler": {"es": "rifler", "en": "rifler"},
+    "solo": {"es": "solo", "en": "solo"},
+    "jungla": {"es": "jungla", "en": "jungle"},
+    "mid": {"es": "mid", "en": "mid"},
+    "guardian": {"es": "guardián", "en": "guardian"},
+    "carry": {"es": "carry", "en": "carry"},
 }
 
 

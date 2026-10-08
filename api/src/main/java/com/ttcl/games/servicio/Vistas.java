@@ -17,7 +17,8 @@ public final class Vistas {
 
     private Vistas() {}
 
-    public record CuentaVista(Juego juego, String nick, Instant ultimaSync) {}
+    /** @param rol rol declarado en ese juego ("entry", "soporte", "guardian"...) o null si no lo ha dicho */
+    public record CuentaVista(Juego juego, String nick, String rol, Instant ultimaSync) {}
 
     public record JugadorVista(
             String slug, String nombre, boolean demo, List<CuentaVista> cuentas, List<ResumenJuego> resumenes) {}

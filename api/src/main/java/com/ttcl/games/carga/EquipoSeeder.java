@@ -23,6 +23,7 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Carga el equipo real desde {@code config/equipo.json} (copia de equipo.example.json, que no va al repo). Es
  * idempotente: se ejecuta en cada arranque. Si cambia el nick de una cuenta, se borra su ID para volver a resolverlo.
+ * El rol de cada cuenta se vuelve a leer en cada arranque; si no es uno de los del juego, se avisa y queda sin rol.
  */
 @Component
 @Order(1)
@@ -75,9 +76,21 @@ public class EquipoSeeder implements ApplicationRunner {
                     cuenta.setNombreExterno(nick);
                     cuenta.setExternalId(null);
                 }
+                cuenta.setRol(rol(juego, entrada.getValue().get("rol"), miembro.slug()));
                 cuentas.save(cuenta);
             }
         }
         log.info("Equipo cargado desde {}: {} miembros", ruta, equipo.size());
+    }
+
+    private static String rol(Juego juego, String texto, String slug) {
+        if (texto == null || texto.isBlank()) {
+            return null;
+        }
+        return juego.rol(texto).orElseGet(() -> {
+            log.warn("El rol \"{}\" de {} no es de {} (valen {}): se queda sin rol", texto, slug, juego.nombre(),
+                    juego.roles());
+            return null;
+        });
     }
 }

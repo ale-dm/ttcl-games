@@ -2,13 +2,14 @@
 
 Es determinista y no necesita Gemini: compara cada métrica con la media del resto del equipo y con una referencia,
 y añade reglas con más contexto (kills que no dan victorias, rachas, tendencia reciente, mapas o dioses flojos).
+Si se conoce el rol del jugador, cada métrica pesa lo que pide ese rol (metricas.AJUSTES_ROL).
 """
 
 from dataclasses import dataclass
 
-from .metricas import METRICAS, NOMBRE_JUEGO, Metrica, formatear
+from .metricas import METRICAS, NOMBRE_JUEGO, Metrica, factor_rol, formatear, rol_de
 from .modelos import Barra, Idioma, Insight, Nivel, PeticionInsights, Resumen
-from .textos import DEBILIDADES, ESPECIALES, FORTALEZAS, FRASES, consejo_para
+from .textos import DEBILIDADES, ESPECIALES, FORTALEZAS, FRASES, NOMBRES_ROL, consejo_para
 
 MUESTRA_MINIMA = 5
 MAX_DEBILIDADES = 4
@@ -73,9 +74,23 @@ def _comparativa(metrica: Metrica, tu: float, equipo: float | None, lang: Idioma
     return f["cmp_solo"].format(**v)
 
 
+def _nota_rol(rol: str | None, factor: float, debilidad: bool, lang: Idioma) -> str:
+    """Coletilla que explica que el rol ha contado: es lo suyo, o se le ha perdonado algo y aun así no llega."""
+    if rol is None or factor == 1:
+        return ""
+    if factor > 1:
+        clave = "rol_pesa_debil" if debilidad else "rol_pesa_fuerte"
+    elif debilidad:
+        clave = "rol_tolera"
+    else:
+        return ""
+    return " " + FRASES[lang][clave].format(rol=NOMBRES_ROL[rol][lang])
+
+
 def _por_metrica(p: PeticionInsights, ocupadas: set[str]) -> list[Candidato]:
-    """Debilidades y fortalezas métrica a métrica, frente al equipo y la referencia."""
+    """Debilidades y fortalezas métrica a métrica, frente al equipo y la referencia, según lo que pide su rol."""
     lang, juego = p.lang, p.juego
+    rol = rol_de(juego, p.rol)
     candidatos: list[Candidato] = []
     for metrica in METRICAS[juego]:
         if metrica.clave in ocupadas:
@@ -90,7 +105,9 @@ def _por_metrica(p: PeticionInsights, ocupadas: set[str]) -> list[Candidato]:
         if not disponibles:
             continue
 
-        peor = min(disponibles)
+        # Con el rol, lo que no le toca no cuenta (o cuenta menos) y lo suyo, más.
+        factor = factor_rol(juego, rol, metrica.clave)
+        peor = min(disponibles) * factor
         nivel = _nivel_debilidad(peor)
         if nivel:
             textos = DEBILIDADES.get(metrica.clave, {}).get(lang)
@@ -107,7 +124,7 @@ def _por_metrica(p: PeticionInsights, ocupadas: set[str]) -> list[Candidato]:
                         nivel=nivel,
                         metrica=metrica.clave,
                         titulo=titulo,
-                        texto=frase + _comparativa(metrica, tu, equipo, lang),
+                        texto=frase + _comparativa(metrica, tu, equipo, lang) + _nota_rol(rol, factor, True, lang),
                         consejo=consejo_para(textos, juego) if textos else None,
                         barras=_barras(metrica, tu, equipo, lang),
                         formato=metrica.formato,
@@ -118,9 +135,10 @@ def _por_metrica(p: PeticionInsights, ocupadas: set[str]) -> list[Candidato]:
             continue
 
         # Fortaleza: claramente por encima del equipo y sin estar por debajo de la referencia.
-        # Sin equipo con quien comparar, vale con superar bien la referencia.
-        fuerte = (d_equipo is not None and d_equipo >= 0.1 and (d_ref is None or d_ref >= 0)) or (
-            d_equipo is None and d_ref is not None and d_ref >= 0.15
+        # Sin equipo con quien comparar, vale con superar bien la referencia. Si es lo suyo, se reconoce antes.
+        refuerzo = max(factor, 1.0)
+        fuerte = (d_equipo is not None and d_equipo * refuerzo >= 0.1 and (d_ref is None or d_ref >= 0)) or (
+            d_equipo is None and d_ref is not None and d_ref * refuerzo >= 0.15
         )
         textos_f = FORTALEZAS.get(metrica.clave, {}).get(lang)
         if fuerte and textos_f:
@@ -131,12 +149,12 @@ def _por_metrica(p: PeticionInsights, ocupadas: set[str]) -> list[Candidato]:
                         nivel="bien",
                         metrica=metrica.clave,
                         titulo=textos_f["titulo"],
-                        texto=_comparativa(metrica, tu, equipo, lang),
+                        texto=_comparativa(metrica, tu, equipo, lang) + _nota_rol(rol, factor, False, lang),
                         consejo=textos_f["consejo"],
                         barras=_barras(metrica, tu, equipo, lang),
                         formato=metrica.formato,
                     ),
-                    max(disponibles),
+                    max(disponibles) * refuerzo,
                 )
             )
     return candidatos

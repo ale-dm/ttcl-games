@@ -75,6 +75,9 @@ Web en http://localhost:4200, con Postgres y datos de ejemplo (`TTCL_DEMO=true`;
 
 - **Equipo**: copia `config/equipo.example.json` a `config/equipo.json` con los nicks reales. La API lo carga al
   arrancar (es idempotente) y, si existe, no genera datos de ejemplo. Ese fichero no va al repo.
+- **Rol** (opcional, por juego): `"cs2": { "nick": "...", "rol": "soporte" }`. CS2: `entry`, `awp`, `soporte`,
+  `lurker`, `igl`, `rifler`. SMITE 2: `solo`, `jungla`, `mid`, `guardian`, `carry`. El Duende juzga cada métrica según
+  lo que pide el rol (a un soporte no le pide kills) y la web lo enseña junto al nick.
 - **Claves**: copia `.env.example` a `.env`. `GOOGLE_API_KEY` activa Gemini en el chat; `FACEIT_API_KEY` y las de
   Hi-Rez activan la sincronización (cada `SYNC_INTERVAL_MIN` minutos). Sin clave, ese juego simplemente no se toca.
 
@@ -82,9 +85,9 @@ Web en http://localhost:4200, con Postgres y datos de ejemplo (`TTCL_DEMO=true`;
 
 | Parte | Comando | Qué cubre |
 |---|---|---|
-| Duende | `cd duende && .venv/Scripts/python -m pytest` | Reglas de recomendación, chat por reglas, uso y caché de Gemini, API |
-| API | `cd api && ./mvnw test` | Estadísticas, mapeo de FACEIT y Hi-Rez, API completa contra H2 con datos de ejemplo |
-| Web | `cd frontend && npm test` | Texto del Duende, i18n y formatos, estado del chat |
+| Duende | `cd duende && .venv/Scripts/python -m pytest` | Reglas de recomendación (también por rol), chat por reglas, uso y caché de Gemini, API |
+| API | `cd api && ./mvnw test` | Estadísticas, mapeo de FACEIT y Hi-Rez, carga del equipo con roles, API completa contra H2 con datos de ejemplo |
+| Web | `cd frontend && npm test` | Texto del Duende, i18n y formatos, estado del chat, rol en el perfil |
 
 ## El Duende
 

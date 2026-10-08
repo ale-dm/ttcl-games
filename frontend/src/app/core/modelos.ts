@@ -33,6 +33,8 @@ export interface MediasEquipo {
 export interface CuentaVista {
   juego: Juego;
   nick: string;
+  /** Rol declarado en ese juego (entry, soporte... o solo, guardian...), o null si no lo ha dicho. */
+  rol: string | null;
   ultimaSync: string | null;
 }
 

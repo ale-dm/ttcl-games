@@ -70,7 +70,8 @@ def _datos_para_prompt(p: PeticionChat) -> dict:
     """Lo que ve Gemini: los jugadores del foco con todo y sus recomendaciones; del resto, solo lo básico."""
 
     def juego_basico(g) -> dict:
-        return g.resumen.model_dump(by_alias=True, exclude_none=True)
+        basico = g.resumen.model_dump(by_alias=True, exclude_none=True)
+        return {**basico, "rol": g.rol} if g.rol else basico
 
     def jugador_completo(j: JugadorContexto) -> dict:
         return {

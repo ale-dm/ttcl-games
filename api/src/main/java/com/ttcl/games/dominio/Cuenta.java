@@ -32,6 +32,9 @@ public class Cuenta {
     /** Nick en la fuente. */
     private String nombreExterno;
 
+    /** Rol que juega en ese juego (uno de {@link Juego#roles()}), si lo ha dicho en config/equipo.json. */
+    private String rol;
+
     private Instant ultimaSync;
 
     protected Cuenta() {}
@@ -68,6 +71,14 @@ public class Cuenta {
 
     public void setNombreExterno(String nombreExterno) {
         this.nombreExterno = nombreExterno;
+    }
+
+    public String getRol() {
+        return rol;
+    }
+
+    public void setRol(String rol) {
+        this.rol = rol;
     }
 
     public Instant getUltimaSync() {
