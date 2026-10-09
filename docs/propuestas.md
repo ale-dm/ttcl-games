@@ -11,7 +11,7 @@ lo que se aprendió en su apartado y apuntar la entrega en [CHANGELOG.md](../CHA
 | P1 | Rol del jugador | 1 | Bajo | Nuevos (los da el jugador) | Hecho |
 | P2 | Con quién juegas mejor (sinergias) | 1 | Bajo | Ya guardados | Hecho |
 | P3 | Sesiones y tilt | 1 | Bajo | Ya guardados | Hecho |
-| P4 | Filtros por periodo | 1 | Bajo | Ya guardados | Pendiente |
+| P4 | Filtros por periodo | 1 | Bajo | Ya guardados | Hecho |
 | P5 | Objetivos personales | 2 | Medio | Nuevos (los da el jugador) | Pendiente |
 | P6 | Memoria de consejos | 2 | Medio | Se generan | Pendiente |
 | P7 | Valoración de las respuestas | 2 | Bajo | Se generan | Pendiente |
@@ -169,6 +169,26 @@ partidas); el resto del día, el 40,0 %". Lo que quedó y lo que se aprendió:
   `Estadisticas` ya trabajan sobre listas: basta con filtrar antes.
 - Web: selector de periodo en perfil, comparar y ranking (en la URL, como el juego).
 - Duende: el chat reconoce "esta semana" o "este mes" en `reglas_chat.py`; con Gemini llega con P9.
+
+**Hecho** (9 de octubre de 2026). Con los datos de ejemplo, en los últimos 7 días Jugador 3 lleva 5 de 5 en CS2 y, a
+SMITE 2, solo ha jugado Jugador 4. Lo que quedó y lo que se aprendió:
+- **`?periodo=7d|30d|todo`** (no `desde`: con tres opciones basta y la URL se lee mejor). Periodos móviles: los últimos
+  7 o 30 días desde ahora, no la semana o el mes del calendario.
+- **El periodo recorta la foto entera**: en `EquipoServicio`, la foto del equipo se recorta antes de calcular nada, así
+  que todo sale ya del periodo, también la media del equipo con la que se compara (sería injusto comparar tu semana con
+  la temporada del resto). Lo admiten perfil, detalle, historial, sinergias, sesiones, consejos, cara a cara y ranking.
+  El equipo y los dúos, no (no lo pedía la propuesta).
+- **Sin partidas en el periodo no es un 404**: los datos vienen vacíos (0 partidas) y la web lo dice ("Jugador 1 no ha
+  jugado a SMITE 2 en los últimos 7 días"). El 404 queda para quien nunca ha jugado a ese juego. El perfil se pide
+  siempre con todas las partidas, para que las pestañas de juego no desaparezcan al cambiar de periodo.
+- **Todo lo de la página va con el periodo**, también las recomendaciones del Duende: con 7 días suele salir "aún es
+  pronto para juzgarte", y es lo honesto. Con quién y cuándo salen vacíos o casi (con pocos días no hay muestra).
+- **Chat**: el periodo no podía esperar a P9. La API manda, además de todo, un resumen de los últimos 7 y 30 días de
+  cada jugador y juego (con la media del equipo en esos días), y la web manda el periodo que se está viendo. Las reglas
+  reconocen "esta semana", "este mes", "en total"... (la pregunta manda sobre la página) y responden con los números de
+  esos días; "¿cómo voy esta semana?" los compara con los de siempre. Mapas, compañeros y sesiones se responden con
+  todas las partidas y lo avisan. Gemini recibe los mismos resúmenes.
+- Cambiar de periodo en la página empieza otra conversación con el Duende, como al cambiar de juego.
 
 ---
 

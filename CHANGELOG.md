@@ -3,6 +3,55 @@
 Lo que se ha entregado, de lo más reciente a lo más antiguo. Lo que falta por hacer está en
 [docs/propuestas.md](docs/propuestas.md) (P1–P12); al terminar una propuesta se marca allí y se anota aquí.
 
+## 2026-10-09 · P4: filtros por periodo
+
+Commit `3522cdd`. Ya se puede ver cómo va cada uno en los últimos 7 o 30 días, no solo con todas sus partidas.
+
+**Qué se nota**
+- Selector **7 días · 30 días · Todo** en el perfil, el cara a cara y el ranking. Va en la URL (`?periodo=7d`), así que
+  se puede compartir, y se conserva al saltar de una página a otra.
+- En el perfil, todo cuenta solo las partidas del periodo: cifras, gráfica, mapas o dioses, historial, con quién,
+  cuándo y las recomendaciones del Duende. La media del equipo con la que se compara también es la de esos días. La
+  fecha de la última partida es siempre la de verdad.
+- Si no jugó en esos días, se dice: "Jugador 1 no ha jugado a SMITE 2 en los últimos 7 días". Lo mismo en el ranking y
+  el cara a cara.
+- En el chat: "¿Cómo voy esta semana?" compara los números de esos días con los de siempre ("Jugador 3 en
+  Counter-Strike 2: 5 partidas (5 victorias y 0 derrotas)… Mejor que de costumbre"). "¿En qué tengo que mejorar este
+  mes?" o "¿Quién es el mejor esta semana?" responden con los números de esos días. Si en la página hay un periodo
+  elegido, el Duende lo usa salvo que la pregunta diga otro ("en total" vuelve a todas).
+
+**Cómo funciona**
+- Periodos móviles: los últimos 7 o 30 días desde ahora.
+- La API recorta las partidas antes de calcular, así que todo sale del periodo. Sin partidas en él, datos vacíos (no
+  404); el 404 queda para quien nunca ha jugado a ese juego.
+- El chat recibe, además de todo, un resumen de los últimos 7 y 30 días de cada uno (con la media del equipo en esos
+  días) y el periodo de la página. Mapas, compañeros y sesiones se responden con todas las partidas, y lo avisa.
+
+**Cambios por servicio**
+- **API**: `Periodo` (7d, 30d, todo) y `Estadisticas.desde`; la foto del equipo se recorta con `desde()`. Parámetro
+  `?periodo=` en `GET /api/jugadores/{slug}`, `/juegos/{juego}`, `/partidas`, `/sinergias`, `/sesiones`, `/consejos`,
+  `/api/comparar` y `/api/ranking`. Un periodo desconocido da 400.
+- **Contrato compartido**: `ResumenPeriodo` y `periodos` en `JuegoContexto`; `periodo` en `PeticionChat` (web → API →
+  Duende).
+- **Duende**: `detectar_periodo` y respuestas con los números de esos días en `reglas_chat.py` ("¿cómo voy esta
+  semana?" frente a siempre, plurales bien puestos); los periodos en el prompt de Gemini.
+- **Web**: componente `SelectorPeriodo`, `periodoDe()` en `modelos.ts`, `i18n.enPeriodo()`, textos `periodo.*`; el
+  periodo en el contexto del chat (y en su etiqueta: "Hablando de Ana · CS2 · 7 días").
+- Sin migración.
+
+**Tests**: Duende 67 → 76, API 40 → 46, web 20 → 24, todos en verde.
+- API: el código del periodo y su inicio; el recorte por fecha; con los datos de ejemplo, el mismo recorte en detalle,
+  historial, perfil, ranking y cara a cara; un periodo sin partidas (datos vacíos, no 404) y quien nunca jugó (404); lo
+  que recibe el chat (resúmenes de 7 y 30 días, el periodo de la página, 400 con uno desconocido).
+- Duende: detectar el periodo (la pregunta manda sobre la página), "¿cómo voy esta semana?" en los dos idiomas,
+  consejos de esos días, sin partidas en esos días, el equipo de la semana, mapas/compañeros/sesiones con todas, el
+  prompt de Gemini y la API HTTP.
+- Web: el perfil con periodo (pide todo con él, avisa si no hay partidas, la URL al cambiarlo), el ranking con periodo
+  y el periodo en el chat.
+
+**Para actualizar una instalación**: como siempre (parar la API, `./mvnw package -DskipTests`, arrancar; reiniciar el
+Duende). No hay migraciones.
+
 ## 2026-10-09 · P3: sesiones y tilt
 
 Commit `9e1b779`. El Duende ya sabe cuándo juega cada uno: cuántas partidas seguidas, qué pasa después de perder y a
