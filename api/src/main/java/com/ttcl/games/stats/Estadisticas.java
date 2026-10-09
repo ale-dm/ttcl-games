@@ -3,6 +3,7 @@ package com.ttcl.games.stats;
 import com.ttcl.games.juego.Juego;
 import com.ttcl.games.stats.Modelos.FilaComparacion;
 import com.ttcl.games.stats.Modelos.FilaDesglose;
+import com.ttcl.games.stats.Modelos.FilaMomento;
 import com.ttcl.games.stats.Modelos.FilaParticipacion;
 import com.ttcl.games.stats.Modelos.FilaSinergia;
 import com.ttcl.games.stats.Modelos.Grupo;
@@ -11,7 +12,10 @@ import com.ttcl.games.stats.Modelos.Miembro;
 import com.ttcl.games.stats.Modelos.Presencia;
 import com.ttcl.games.stats.Modelos.PuntoSerie;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
+import com.ttcl.games.stats.Modelos.Sesiones;
 import com.ttcl.games.stats.Modelos.Sinergias;
+import java.time.Duration;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -30,6 +34,8 @@ public final class Estadisticas {
     public static final int PARTIDAS_RECIENTES = 10;
     /** Partidas juntos para que un compañero, un dúo o un trío cuente (y "solo", para la fila de solo). */
     public static final int MIN_PARTIDAS_SINERGIA = 3;
+    /** Pausa a partir de la cual la siguiente partida ya es otra sesión. */
+    public static final Duration PAUSA_SESION = Duration.ofMinutes(45);
 
     /** Recuentos que no se promedian: con ellos se calculan porcentajes sobre el total (entry_pct, dano_min...). */
     private static final Set<String> RECUENTOS = Set.of(
@@ -312,6 +318,79 @@ public final class Estadisticas {
             }
         }
         return resultado;
+    }
+
+    // ─── Sesiones ───────────────────────────────────────────────────────────
+
+    /**
+     * Cómo le va según cuándo juega: la 1ª, la 2ª o de la 3ª en adelante de una sesión, después de ganar o de perder
+     * la anterior de la sesión, y por hora del día (en {@code zona}). Una sesión son partidas seguidas, con menos de
+     * {@link #PAUSA_SESION} entre el final de una (si no se sabe cuánto duró, su principio) y el principio de la
+     * siguiente. Cada fila va con el resto de partidas para comparar; las filas sin partidas no salen.
+     */
+    public static Sesiones sesiones(Juego juego, List<FilaParticipacion> filas, ZoneId zona) {
+        Map<String, List<FilaParticipacion>> porOrden = listas("1", "2", "3+");
+        Map<String, List<FilaParticipacion>> trasResultado = listas("victoria", "derrota");
+        Map<String, List<FilaParticipacion>> porFranja = listas("manana", "tarde", "noche", "madrugada");
+        int sesiones = 0;
+        int enSesion = 0;
+        FilaParticipacion anterior = null;
+        for (FilaParticipacion f : filas.stream().sorted(Comparator.comparing(FilaParticipacion::jugadaEn)).toList()) {
+            boolean seguida = anterior != null && pausa(anterior, f).compareTo(PAUSA_SESION) < 0;
+            if (!seguida) {
+                sesiones++;
+                enSesion = 0;
+            }
+            enSesion++;
+            porOrden.get(enSesion == 1 ? "1" : enSesion == 2 ? "2" : "3+").add(f);
+            if (seguida && anterior.gano() != null) {
+                trasResultado.get(anterior.gano() ? "victoria" : "derrota").add(f);
+            }
+            porFranja.get(franja(f.jugadaEn().atZone(zona).getHour())).add(f);
+            anterior = f;
+        }
+        return new Sesiones(
+                sesiones,
+                sesiones == 0 ? null : redondear((double) filas.size() / sesiones, 1),
+                filasMomento(juego, porOrden, filas),
+                filasMomento(juego, trasResultado, filas),
+                filasMomento(juego, porFranja, filas));
+    }
+
+    private static Duration pausa(FilaParticipacion anterior, FilaParticipacion siguiente) {
+        int duracion = anterior.duracionSeg() == null ? 0 : anterior.duracionSeg();
+        return Duration.between(anterior.jugadaEn().plusSeconds(duracion), siguiente.jugadaEn());
+    }
+
+    /** Mañana de 6 a 14 h, tarde de 14 a 20 h, noche de 20 a 24 h y madrugada de 0 a 6 h. */
+    public static String franja(int hora) {
+        if (hora < 6) {
+            return "madrugada";
+        }
+        return hora < 14 ? "manana" : hora < 20 ? "tarde" : "noche";
+    }
+
+    /** Una lista vacía por clave, en ese orden. */
+    private static Map<String, List<FilaParticipacion>> listas(String... claves) {
+        Map<String, List<FilaParticipacion>> mapa = new LinkedHashMap<>();
+        for (String clave : claves) {
+            mapa.put(clave, new ArrayList<>());
+        }
+        return mapa;
+    }
+
+    private static List<FilaMomento> filasMomento(
+            Juego juego, Map<String, List<FilaParticipacion>> grupos, List<FilaParticipacion> todas) {
+        return grupos.entrySet().stream()
+                .filter(e -> !e.getValue().isEmpty())
+                .map(e -> {
+                    Set<Long> ids = e.getValue().stream().map(FilaParticipacion::partidaId).collect(Collectors.toSet());
+                    List<FilaParticipacion> resto = todas.stream().filter(f -> !ids.contains(f.partidaId())).toList();
+                    ResumenJuego r = resumir(juego, e.getValue());
+                    return new FilaMomento(e.getKey(), r.partidas(), r.victorias(), r.winrate(), r.kd(), resto.size(),
+                            resto.isEmpty() ? null : resumir(juego, resto).winrate());
+                })
+                .toList();
     }
 
     // ─── Comparación ────────────────────────────────────────────────────────

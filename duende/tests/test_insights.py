@@ -1,9 +1,9 @@
 from app.insights import generar_insights
 from app.metricas import AJUSTES_ROL, METRICAS, NO_SE_JUZGA, PESA_MAS, TOLERA, formatear
 from app.modelos import Desglose, JugadorRef, MediasEquipo, PeticionInsights, Resumen, Sinergias
-from app.textos import NOMBRES_ROL
+from app.textos import NOMBRES_MOMENTO, NOMBRES_ROL
 
-from .conftest import companero, equipo_cs2, resumen_cs2
+from .conftest import companero, equipo_cs2, momento, resumen_cs2, sesiones
 
 
 def peticion(**cambios) -> PeticionInsights:
@@ -280,6 +280,97 @@ def test_companero_en_ingles():
     assert bueno.titulo == "You click with Jugador 3"
     assert bueno.texto == "With Jugador 3 you win 65.0% of 20 matches; without Jugador 3, 38.0%."
     assert [b.etiqueta for b in bueno.barras] == ["With Jugador 3", "Without Jugador 3"]
+
+
+# ─── Sesiones y tilt ─────────────────────────────────────────────────────────
+
+# 1ª y 2ª, en la media; desde la 3ª, 20 puntos menos.
+ORDEN_TILT = (momento("1", 20, 55.0, 35, 45.7), momento("2", 15, 55.0, 40, 47.5), momento("3+", 15, 35.0, 30, 55.0))
+
+
+def test_a_partir_de_la_tercera_seguida_se_desinfla():
+    insights = generar_insights(peticion(sesiones=sesiones(por_orden=ORDEN_TILT)))
+    tilt = next(i for i in insights if i.id == "tilt_sesion")
+    assert tilt.nivel == "medio"
+    assert tilt.titulo == "Las sesiones largas se te atragantan"
+    assert tilt.texto == "A partir de la 3ª partida seguida ganas el 35,0 % (15 partidas); en las dos primeras, el 55,0 %."
+    assert "si pierdes dos seguidas, para por hoy" in tilt.consejo
+    assert tilt.formato == "pct"
+    assert [(b.etiqueta, b.valor, b.tuyo) for b in tilt.barras] == [
+        ("3ª en adelante", 35.0, True),
+        ("1ª y 2ª", 55.0, False),
+    ]
+    # Con 25 puntos o más, es de mejorar ya.
+    grave = sesiones(por_orden=[momento("3+", 15, 28.0, 30, 55.0)])
+    assert next(i for i in generar_insights(peticion(sesiones=grave)) if i.id == "tilt_sesion").nivel == "alto"
+
+
+def test_sin_sesiones_o_partidas_suficientes_no_hay_aviso_de_tilt():
+    casos = [
+        sesiones(14, por_orden=ORDEN_TILT),  # 14 sesiones: aún no se puede saber
+        sesiones(por_orden=[momento("3+", 9, 20.0, 40, 55.0)]),  # pocas partidas desde la 3ª
+        sesiones(por_orden=[momento("3+", 40, 20.0, 9, 55.0)]),  # pocas en las dos primeras
+        sesiones(por_orden=[momento("3+", 15, 41.0, 30, 55.0)]),  # 14 puntos: no llega
+        sesiones(por_orden=[momento("3+", 15, 35.0, 0, None)]),  # nada con qué comparar
+        sesiones(),
+        None,
+    ]
+    for s in casos:
+        assert not {"tilt_sesion", "tilt_derrota"} & set(ids(generar_insights(peticion(sesiones=s)))), s
+
+
+def test_una_derrota_arrastra_a_la_siguiente():
+    tras = [momento("victoria", 18, 60.0, 32, 48.0), momento("derrota", 17, 33.0, 33, 58.0)]
+    insights = generar_insights(peticion(sesiones=sesiones(tras_resultado=tras)))
+    derrota = next(i for i in insights if i.id == "tilt_derrota")
+    assert derrota.nivel == "alto"  # 25 puntos
+    assert derrota.titulo == "Una derrota te arrastra a la siguiente"
+    assert derrota.texto == (
+        "Después de perder, la siguiente la ganas el 33,0 % de las veces (17 partidas); el resto, el 58,0 %."
+    )
+    assert [b.etiqueta for b in derrota.barras] == ["Tras una derrota", "El resto"]
+    # Si ya salta el tilt de las sesiones largas, no se repite: suele ser lo mismo.
+    las_dos = generar_insights(peticion(sesiones=sesiones(por_orden=ORDEN_TILT, tras_resultado=tras)))
+    assert "tilt_sesion" in ids(las_dos) and "tilt_derrota" not in ids(las_dos)
+
+
+def test_mejor_hora_del_dia():
+    franjas = [
+        momento("tarde", 15, 50.0, 30, 50.0),
+        momento("noche", 20, 65.0, 25, 40.0),  # +25
+        momento("madrugada", 6, 100.0, 39, 46.0),  # más diferencia, pero con 6 partidas no cuenta
+    ]
+    insights = generar_insights(peticion(sesiones=sesiones(por_franja=franjas)))
+    hora = next(i for i in insights if i.id == "mejor_horario")
+    assert hora.nivel == "bien"
+    assert hora.titulo == "Rindes más por la noche"
+    assert hora.texto == "Por la noche ganas el 65,0 % (20 partidas); el resto del día, el 40,0 %."
+    assert hora.consejo == "Si vas a jugar para subir, juega por la noche; a otras horas, partidas tranquilas."
+    assert [(b.etiqueta, b.valor, b.tuyo) for b in hora.barras] == [("Por la noche", 65.0, True), ("Resto del día", 40.0, False)]
+    # Entre cuatro franjas alguna sale mejor por casualidad: hacen falta 20 puntos.
+    justa = sesiones(por_franja=[momento("noche", 20, 59.0, 25, 40.0)])
+    assert "mejor_horario" not in ids(generar_insights(peticion(sesiones=justa)))
+    pocas = sesiones(10, por_franja=franjas)
+    assert "mejor_horario" not in ids(generar_insights(peticion(sesiones=pocas)))
+
+
+def test_sesiones_en_ingles():
+    s = sesiones(por_orden=ORDEN_TILT, por_franja=[momento("madrugada", 20, 65.0, 25, 40.0)])
+    insights = generar_insights(peticion(lang="en", sesiones=s))
+    tilt = next(i for i in insights if i.id == "tilt_sesion")
+    assert tilt.titulo == "Long sessions wear you down"
+    assert tilt.texto == "From your 3rd match in a row you win 35.0% (15 matches); in the first two, 55.0%."
+    assert [b.etiqueta for b in tilt.barras] == ["3rd onwards", "1st and 2nd"]
+    hora = next(i for i in insights if i.id == "mejor_horario")
+    assert hora.titulo == "You play best late at night"
+    assert hora.texto == "Late at night you win 65.0% (20 matches); the rest of the day, 40.0%."
+
+
+def test_cada_fila_de_las_sesiones_tiene_nombre():
+    # Las mismas claves que Estadisticas.sesiones (Java) y los textos momento.* de la web.
+    claves = {"1", "2", "3+", "victoria", "derrota", "manana", "tarde", "noche", "madrugada"}
+    assert set(NOMBRES_MOMENTO) == claves
+    assert all(set(n) == {"es", "en"} for n in NOMBRES_MOMENTO.values())
 
 
 def test_formatear():

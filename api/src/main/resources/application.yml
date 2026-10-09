@@ -29,6 +29,8 @@ ttcl:
   demo: ${TTCL_DEMO:true}
   # Equipo real (copia de config/equipo.example.json). Si existe, se carga al arrancar y no se generan datos demo.
   equipo-json: ${TTCL_EQUIPO_JSON:../config/equipo.json}
+  # Zona del equipo: con ella se sabe a qué hora del día se jugó cada partida (mañana, tarde, noche, madrugada).
+  zona-horaria: ${TTCL_ZONA_HORARIA:Europe/Madrid}
   duende:
     url: ${DUENDE_URL:http://localhost:8000}
     timeout-ms: ${DUENDE_TIMEOUT_MS:30000}

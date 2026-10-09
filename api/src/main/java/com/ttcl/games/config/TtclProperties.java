@@ -1,10 +1,20 @@
 package com.ttcl.games.config;
 
+import java.time.ZoneId;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/** Configuración propia del proyecto (prefijo {@code ttcl} en application.yml). */
+/**
+ * Configuración propia del proyecto (prefijo {@code ttcl} en application.yml).
+ *
+ * @param zonaHoraria zona del equipo, para saber a qué hora del día se jugó cada partida (por defecto, Europe/Madrid)
+ */
 @ConfigurationProperties(prefix = "ttcl")
-public record TtclProperties(boolean demo, String equipoJson, Duende duende, Faceit faceit, Smite2 smite2, Sync sync) {
+public record TtclProperties(
+        boolean demo, String equipoJson, String zonaHoraria, Duende duende, Faceit faceit, Smite2 smite2, Sync sync) {
+
+    public ZoneId zona() {
+        return zonaHoraria == null || zonaHoraria.isBlank() ? ZoneId.of("Europe/Madrid") : ZoneId.of(zonaHoraria);
+    }
 
     /** Servicio Python del Duende. */
     public record Duende(String url, int timeoutMs) {}

@@ -88,6 +88,14 @@ export const ES = {
   'jugador.solo': 'Solo',
   'jugador.sinEl': 'sin: {winrate}',
   'jugador.conEquipo': 'con el equipo: {winrate}',
+  'jugador.cuando': 'Cuándo juegas mejor',
+  'jugador.cuandoSub': '{sesiones} sesiones · {media} partidas de media',
+  'jugador.cuandoNota':
+    'Una sesión son partidas con menos de 45 minutos entre una y otra. Con menos de 15, el Duende aún no saca conclusiones.',
+  'jugador.enLaSesion': 'Partida de la sesión',
+  'jugador.trasLaAnterior': 'Según la anterior',
+  'jugador.horaDelDia': 'Hora del día',
+  'jugador.resto': 'resto: {winrate}',
 
   // Tablas
   'tabla.resultado': 'Resultado',
@@ -138,6 +146,7 @@ export const ES = {
   'duende.sugCadaUno': '¿En qué tiene que mejorar cada uno?',
   'duende.sugConQuien': '¿Con quién juego mejor?',
   'duende.sugMejorDuo': '¿Cuál es nuestro mejor dúo?',
+  'duende.sugCuando': '¿Cuándo juego mejor?',
 
   // Comparar
   'comparar.titulo': 'Comparar',
@@ -203,6 +212,17 @@ export const ES = {
   'rol.mid': 'Mid',
   'rol.guardian': 'Guardián',
   'rol.carry': 'Carry',
+
+  // Filas de las sesiones (las claves que manda la API)
+  'momento.1': '1ª',
+  'momento.2': '2ª',
+  'momento.3+': '3ª en adelante',
+  'momento.victoria': 'Tras ganar',
+  'momento.derrota': 'Tras perder',
+  'momento.manana': 'Mañana (6–14 h)',
+  'momento.tarde': 'Tarde (14–20 h)',
+  'momento.noche': 'Noche (20–24 h)',
+  'momento.madrugada': 'Madrugada (0–6 h)',
 } as const;
 
 export type Clave = keyof typeof ES;
@@ -289,6 +309,14 @@ export const EN: Record<Clave, string> = {
   'jugador.solo': 'Solo',
   'jugador.sinEl': 'without: {winrate}',
   'jugador.conEquipo': 'with the team: {winrate}',
+  'jugador.cuando': 'When you play best',
+  'jugador.cuandoSub': '{sesiones} sessions · {media} matches on average',
+  'jugador.cuandoNota':
+    'A session is matches less than 45 minutes apart. With fewer than 15, the Duende draws no conclusions yet.',
+  'jugador.enLaSesion': 'Match in the session',
+  'jugador.trasLaAnterior': 'After the previous one',
+  'jugador.horaDelDia': 'Time of day',
+  'jugador.resto': 'rest: {winrate}',
 
   'tabla.resultado': 'Result',
   'tabla.mapa': 'Map',
@@ -335,6 +363,7 @@ export const EN: Record<Clave, string> = {
   'duende.sugCadaUno': 'What should each of us improve?',
   'duende.sugConQuien': 'Who do I play best with?',
   'duende.sugMejorDuo': "What's our best duo?",
+  'duende.sugCuando': 'When do I play best?',
 
   'comparar.titulo': 'Compare',
   'comparar.sub': 'Two teammates, face to face, metric by metric.',
@@ -395,4 +424,14 @@ export const EN: Record<Clave, string> = {
   'rol.mid': 'Mid',
   'rol.guardian': 'Guardian',
   'rol.carry': 'Carry',
+
+  'momento.1': '1st',
+  'momento.2': '2nd',
+  'momento.3+': '3rd onwards',
+  'momento.victoria': 'After a win',
+  'momento.derrota': 'After a loss',
+  'momento.manana': 'Morning (6–14 h)',
+  'momento.tarde': 'Afternoon (14–20 h)',
+  'momento.noche': 'Evening (20–24 h)',
+  'momento.madrugada': 'Late night (0–6 h)',
 };

@@ -93,6 +93,29 @@ export interface Sinergias {
   companeros: FilaSinergia[];
 }
 
+/**
+ * Cómo le va en un tipo de partida y en el resto. Claves: "1", "2", "3+" (orden en la sesión); "victoria", "derrota"
+ * (cómo acabó la anterior de la sesión); "manana", "tarde", "noche", "madrugada" (hora del día).
+ */
+export interface FilaMomento {
+  clave: string;
+  partidas: number;
+  victorias: number;
+  winrate: number | null;
+  kd: number | null;
+  partidasResto: number;
+  winrateResto: number | null;
+}
+
+/** Sesiones: partidas seguidas, con menos de 45 minutos entre una y otra. Cada lista, sin las filas vacías. */
+export interface Sesiones {
+  sesiones: number;
+  partidasPorSesion: number | null;
+  porOrden: FilaMomento[];
+  trasResultado: FilaMomento[];
+  porFranja: FilaMomento[];
+}
+
 export interface Miembro {
   slug: string;
   nombre: string;

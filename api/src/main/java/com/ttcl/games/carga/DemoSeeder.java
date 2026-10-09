@@ -10,8 +10,12 @@ import com.ttcl.games.dominio.Repositorios.JugadorRepo;
 import com.ttcl.games.dominio.Repositorios.ParticipacionRepo;
 import com.ttcl.games.dominio.Repositorios.PartidaRepo;
 import com.ttcl.games.juego.Juego;
+import com.ttcl.games.stats.Estadisticas;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.Period;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -28,15 +32,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Datos de ejemplo para ver la web sin claves de FACEIT ni de Hi-Rez. Solo actúa con {@code ttcl.demo=true} y la
- * base vacía. Es determinista (semilla fija) y cada jugador tiene un perfil con algo que mejorar y algo que hace
- * bien, para que el Duende tenga de qué hablar.
+ * base vacía. Es determinista (semilla fija; las horas, en la zona del equipo) y cada jugador tiene un perfil con algo
+ * que mejorar y algo que hace bien, para que el Duende tenga de qué hablar. Se juega por sesiones: el mismo grupo,
+ * varias partidas seguidas.
  */
 @Component
 @Order(2)
 public class DemoSeeder implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DemoSeeder.class);
-    private static final Duration PERIODO = Duration.ofDays(45);
+    private static final Period PERIODO = Period.ofDays(45);
     private static final List<String> MAPAS =
             List.of("de_mirage", "de_inferno", "de_nuke", "de_ancient", "de_anubis", "de_dust2", "de_train");
     private static final List<String> COLAS = List.of("Conquest", "Conquest", "Conquest", "Arena", "Joust");
@@ -69,12 +74,13 @@ public class DemoSeeder implements ApplicationRunner {
                     new PerfilCs2(0.6, 0.66, 0.24, 69, 44, 1.2, 0.47, 1.1, 0.22, 215, 0.5, null, "de_mirage"),
                     "DemoDos", "guardian", new PerfilSmite(3.5, 3.6, 15, 610, 470, 26000, 5200, 0.56,
                             List.of("Ymir", "Athena", "Geb", "Khepri"), null)),
-            // Entry que abre mucho pero con poco éxito y poca cabeza; buenos clutches; viene mejorando.
+            // Entry que abre mucho pero con poco éxito y poca cabeza; buenos clutches; viene mejorando. Se tiltea: a
+            // partir de la 3ª partida seguida gana mucho menos.
             new Demo("j3", "Jugador 3",
                     "demo_tres", "entry",
                     new PerfilCs2(0.72, 0.64, 0.14, 78, 34, 4.6, 0.36, 1.3, 0.42, 85, 0.57, null, "de_ancient"),
                     null, null, null),
-            // Solo SMITE, de jungla con asesinos: muere demasiado y farmea poco.
+            // Solo SMITE, de jungla con asesinos: muere demasiado y farmea poco. Por la tarde rinde mucho más.
             new Demo("j4", "Jugador 4", null, null, null,
                     "DemoCuatro", "jungla", new PerfilSmite(5.5, 7.6, 6, 720, 395, 9000, 700, 0.44,
                             List.of("Loki", "Thanatos", "Fenrir", "Susano"), "Loki")));
@@ -117,8 +123,9 @@ public class DemoSeeder implements ApplicationRunner {
                 cuenta(j, Juego.SMITE2, d.nickSmite(), d.rolSmite(), ahora);
             }
         }
-        int cs2 = generarCs2(porSlug, ahora);
-        int smite = generarSmite(porSlug, ahora);
+        LocalDate hoy = ahora.atZone(props.zona()).toLocalDate();
+        int cs2 = generarCs2(porSlug, hoy);
+        int smite = generarSmite(porSlug, hoy);
         log.info("Datos de ejemplo creados: {} jugadores, {} partidas de CS2 y {} de SMITE 2", EQUIPO.size(), cs2, smite);
     }
 
@@ -130,61 +137,125 @@ public class DemoSeeder implements ApplicationRunner {
         cuentas.save(c);
     }
 
+    // ─── Sesiones ───────────────────────────────────────────────────────────
+
+    /**
+     * Unas cuantas partidas seguidas del mismo grupo.
+     *
+     * @param resultados resultado de cada partida, o null para sortearlos
+     */
+    record SesionDemo(List<Demo> grupo, int partidas, LocalDateTime inicio, List<Boolean> resultados) {}
+
+    /**
+     * Cuándo empieza cada sesión: probabilidad de que sea por la mañana, por la tarde y por la noche; el resto, de
+     * madrugada.
+     */
+    record Horario(double manana, double tarde, double noche) {}
+
+    /** Al CS2 se juega sobre todo por la noche; al SMITE 2, también mucho por la tarde. */
+    private static final Horario HORARIO_CS2 = new Horario(0.1, 0.3, 0.45);
+    private static final Horario HORARIO_SMITE = new Horario(0.1, 0.45, 0.35);
+
+    /**
+     * Sesiones repartidas por el periodo, una cada uno o dos días, hasta llegar a {@code minimo} partidas. Deja libres
+     * los últimos días para las rachas del final.
+     */
+    private List<SesionDemo> plan(List<Demo> candidatos, int minimo, LocalDate hoy, Horario horario) {
+        List<SesionDemo> sesiones = new ArrayList<>();
+        LocalDate dia = hoy.minus(PERIODO);
+        int partidasPlan = 0;
+        while (partidasPlan < minimo && dia.isBefore(hoy.minusDays(5))) {
+            double r = rnd.nextDouble();
+            int largo = r < 0.15 ? 1 : r < 0.4 ? 2 : r < 0.7 ? 3 : r < 0.9 ? 4 : 5;
+            sesiones.add(new SesionDemo(grupo(candidatos), largo, hora(dia, horario), null));
+            partidasPlan += largo;
+            dia = dia.plusDays(rnd.nextDouble() < 0.4 ? 2 : 1);
+        }
+        return sesiones;
+    }
+
+    /** Hora de empezar: mañana de 10 a 13 h, tarde de 16 a 19 h, noche de 20 a 23 h, madrugada de 0 a 2 h. */
+    private LocalDateTime hora(LocalDate dia, Horario horario) {
+        double r = rnd.nextDouble();
+        int minuto = rnd.nextInt(60);
+        if (r < horario.manana()) {
+            return dia.atTime(10 + rnd.nextInt(3), minuto);
+        }
+        if (r < horario.manana() + horario.tarde()) {
+            return dia.atTime(16 + rnd.nextInt(3), minuto);
+        }
+        if (r < horario.manana() + horario.tarde() + horario.noche()) {
+            return dia.atTime(20 + rnd.nextInt(3), minuto);
+        }
+        return dia.plusDays(1).atTime(rnd.nextInt(2), minuto);
+    }
+
+    /** Pausa entre dos partidas de la misma sesión: de 2 a 15 minutos. */
+    private int pausa() {
+        return 120 + rnd.nextInt(780);
+    }
+
     // ─── CS2 ────────────────────────────────────────────────────────────────
 
-    private int generarCs2(Map<String, Jugador> porSlug, Instant ahora) {
+    private int generarCs2(Map<String, Jugador> porSlug, LocalDate hoy) {
         List<Demo> jugadoresCs2 = EQUIPO.stream().filter(d -> d.cs2() != null).toList();
-        int total = 62;
-        for (int i = 0; i < total; i++) {
-            List<Demo> grupo;
-            Boolean forzado = null;
-            if (i >= total - 5) {
-                // Las últimas, Jugador 1 en solitario y casi todas perdidas: racha negra.
-                grupo = List.of(jugadoresCs2.get(0));
-                forzado = i != total - 3 ? Boolean.FALSE : Boolean.TRUE;
-            } else if (i >= total - 10) {
-                // Antes, Jugador 3 en racha con Jugador 2.
-                grupo = List.of(jugadoresCs2.get(1), jugadoresCs2.get(2));
-                forzado = Boolean.TRUE;
-            } else {
-                grupo = grupo(jugadoresCs2);
-            }
-            String mapa = MAPAS.get(rnd.nextInt(MAPAS.size()));
-            double prob = grupo.stream().mapToDouble(d -> d.cs2().ganar()
-                    + (mapa.equals(d.cs2().mapaMalo()) ? -0.3 : 0)
-                    + (mapa.equals(d.cs2().mapaBueno()) ? 0.2 : 0)).average().orElse(0.5);
-            boolean gano = forzado != null ? forzado : rnd.nextDouble() < prob;
-            int rondasRival = gano ? 4 + rnd.nextInt(9) : 13;
-            int rondasNuestras = gano ? 13 : 3 + rnd.nextInt(10);
-            int rondas = rondasNuestras + rondasRival;
+        List<SesionDemo> sesiones = new ArrayList<>(plan(jugadoresCs2, 75, hoy, HORARIO_CS2));
+        // Al final, Jugador 3 en racha con Jugador 2, en sesiones cortas...
+        List<Demo> dos = List.of(jugadoresCs2.get(1), jugadoresCs2.get(2));
+        sesiones.add(new SesionDemo(dos, 2, hoy.minusDays(4).atTime(21, 10), List.of(true, true)));
+        sesiones.add(new SesionDemo(dos, 2, hoy.minusDays(3).atTime(20, 40), List.of(true, true)));
+        sesiones.add(new SesionDemo(dos, 1, hoy.minusDays(2).atTime(21, 30), List.of(true)));
+        // ...y, lo último, Jugador 1 en solitario y casi todas perdidas: racha negra.
+        sesiones.add(new SesionDemo(List.of(jugadoresCs2.get(0)), 5, hoy.minusDays(1).atTime(17, 5),
+                List.of(false, false, true, false, false)));
+        int total = sesiones.stream().mapToInt(SesionDemo::partidas).sum();
+        int i = 0;
+        for (SesionDemo sesion : sesiones) {
+            Instant inicio = sesion.inicio().atZone(props.zona()).toInstant();
+            for (int n = 1; n <= sesion.partidas(); n++, i++) {
+                List<Demo> grupo = sesion.grupo();
+                // Jugador 3 se tiltea: a partir de la 3ª partida seguida se le va la cabeza.
+                double tilt = n >= 3 ? -0.45 : 0;
+                String mapa = MAPAS.get(rnd.nextInt(MAPAS.size()));
+                double prob = grupo.stream().mapToDouble(d -> d.cs2().ganar()
+                        + (mapa.equals(d.cs2().mapaMalo()) ? -0.3 : 0)
+                        + (mapa.equals(d.cs2().mapaBueno()) ? 0.2 : 0)
+                        + (d.slug().equals("j3") ? tilt : 0)).average().orElse(0.5);
+                boolean gano = sesion.resultados() != null ? sesion.resultados().get(n - 1) : rnd.nextDouble() < prob;
+                int rondasRival = gano ? 4 + rnd.nextInt(9) : 13;
+                int rondasNuestras = gano ? 13 : 3 + rnd.nextInt(10);
+                int rondas = rondasNuestras + rondasRival;
+                int duracion = rondas * 105 + rnd.nextInt(240);
 
-            Partida partida = partidas.save(new Partida(Juego.CS2, "demo-cs2-%04d".formatted(i),
-                    momento(ahora, i, total), (int) (rondas * 105 + rnd.nextInt(240)), mapa));
-            for (Demo d : grupo) {
-                PerfilCs2 p = d.cs2();
-                // Jugador 3 ha mejorado en las últimas partidas.
-                double mejora = d.slug().equals("j3") && i >= total - 18 ? 1.3 : 1.0;
-                double efecto = gano ? 1.08 : 0.92;
-                int kills = positivo(normal(p.kpr() * rondas * efecto * mejora, 2.8));
-                int muertes = Math.min(rondas, positivo(normal(p.dpr() * rondas / efecto / mejora, 2.4)));
-                int asist = positivo(normal(p.apr() * rondas, 1.6));
-                int entradas = positivo(normal(p.entradas(), 1.2));
-                int clutches = positivo(normal(p.clutches(), 0.9));
-                Map<String, Object> datos = new LinkedHashMap<>();
-                datos.put("mapa", mapa);
-                datos.put("marcador", rondasNuestras + " / " + rondasRival);
-                datos.put("rondas", rondas);
-                datos.put("adr", redondear(Math.max(20, normal(p.adr() * efecto * mejora, 11)), 1));
-                datos.put("hs_pct", redondear(Math.clamp(normal(p.hs(), 8), 5, 95), 1));
-                datos.put("kr", redondear((double) kills / rondas, 2));
-                datos.put("mvps", positivo(normal(kills / 6.0, 1)));
-                datos.put("multikills", positivo(normal(kills / 9.0, 0.8)));
-                datos.put("entry_intentos", entradas);
-                datos.put("entry_ganados", binomial(entradas, p.exitoEntrada()));
-                datos.put("clutch_intentos", clutches);
-                datos.put("clutch_ganados", binomial(clutches, p.exitoClutch()));
-                datos.put("dano_utilidad", positivo(normal(p.utilidad(), 35)));
-                guardar(partida, porSlug.get(d.slug()), gano, kills, muertes, asist, datos);
+                Partida partida = partidas.save(
+                        new Partida(Juego.CS2, "demo-cs2-%04d".formatted(i), inicio, duracion, mapa));
+                inicio = inicio.plusSeconds(duracion + pausa());
+                for (Demo d : grupo) {
+                    PerfilCs2 p = d.cs2();
+                    // Jugador 3 ha mejorado en las últimas partidas.
+                    double mejora = d.slug().equals("j3") && i >= total - 18 ? 1.3 : 1.0;
+                    double efecto = gano ? 1.08 : 0.92;
+                    int kills = positivo(normal(p.kpr() * rondas * efecto * mejora, 2.8));
+                    int muertes = Math.min(rondas, positivo(normal(p.dpr() * rondas / efecto / mejora, 2.4)));
+                    int asist = positivo(normal(p.apr() * rondas, 1.6));
+                    int entradas = positivo(normal(p.entradas(), 1.2));
+                    int clutches = positivo(normal(p.clutches(), 0.9));
+                    Map<String, Object> datos = new LinkedHashMap<>();
+                    datos.put("mapa", mapa);
+                    datos.put("marcador", rondasNuestras + " / " + rondasRival);
+                    datos.put("rondas", rondas);
+                    datos.put("adr", redondear(Math.max(20, normal(p.adr() * efecto * mejora, 11)), 1));
+                    datos.put("hs_pct", redondear(Math.clamp(normal(p.hs(), 8), 5, 95), 1));
+                    datos.put("kr", redondear((double) kills / rondas, 2));
+                    datos.put("mvps", positivo(normal(kills / 6.0, 1)));
+                    datos.put("multikills", positivo(normal(kills / 9.0, 0.8)));
+                    datos.put("entry_intentos", entradas);
+                    datos.put("entry_ganados", binomial(entradas, p.exitoEntrada()));
+                    datos.put("clutch_intentos", clutches);
+                    datos.put("clutch_ganados", binomial(clutches, p.exitoClutch()));
+                    datos.put("dano_utilidad", positivo(normal(p.utilidad(), 35)));
+                    guardar(partida, porSlug.get(d.slug()), gano, kills, muertes, asist, datos);
+                }
             }
         }
         return total;
@@ -192,40 +263,53 @@ public class DemoSeeder implements ApplicationRunner {
 
     // ─── SMITE 2 ────────────────────────────────────────────────────────────
 
-    private int generarSmite(Map<String, Jugador> porSlug, Instant ahora) {
+    private int generarSmite(Map<String, Jugador> porSlug, LocalDate hoy) {
         List<Demo> jugadoresSmite = EQUIPO.stream().filter(d -> d.smite() != null).toList();
         Demo cuatro = jugadoresSmite.stream().filter(d -> d.slug().equals("j4")).findFirst().orElseThrow();
-        int total = 54;
-        for (int i = 0; i < total; i++) {
-            List<Demo> grupo = i >= total - 5 ? List.of(cuatro) : grupo(jugadoresSmite);
-            Map<String, String> dios = new LinkedHashMap<>();
-            for (Demo d : grupo) {
-                dios.put(d.slug(), d.smite().dioses().get(rnd.nextInt(d.smite().dioses().size())));
-            }
-            double prob = grupo.stream().mapToDouble(d -> d.smite().ganar()
-                    + (dios.get(d.slug()).equals(d.smite().diosMalo()) ? -0.3 : 0)).average().orElse(0.5);
-            boolean gano = i >= total - 5 ? i == total - 4 : rnd.nextDouble() < prob;
-            String cola = COLAS.get(rnd.nextInt(COLAS.size()));
-            double minutos = redondear(cola.equals("Conquest") ? 24 + rnd.nextDouble() * 14 : 14 + rnd.nextDouble() * 8, 1);
+        List<SesionDemo> sesiones = new ArrayList<>(plan(jugadoresSmite, 65, hoy, HORARIO_SMITE));
+        // Lo último, Jugador 4 en solitario y casi todas perdidas.
+        sesiones.add(new SesionDemo(List.of(cuatro), 5, hoy.minusDays(1).atTime(19, 20),
+                List.of(false, true, false, false, false)));
+        int total = sesiones.stream().mapToInt(SesionDemo::partidas).sum();
+        int i = 0;
+        for (SesionDemo sesion : sesiones) {
+            Instant inicio = sesion.inicio().atZone(props.zona()).toInstant();
+            for (int n = 1; n <= sesion.partidas(); n++, i++) {
+                List<Demo> grupo = sesion.grupo();
+                // Jugador 4 rinde mucho más por la tarde que el resto del día.
+                boolean tarde = Estadisticas.franja(inicio.atZone(props.zona()).getHour()).equals("tarde");
+                Map<String, String> dios = new LinkedHashMap<>();
+                for (Demo d : grupo) {
+                    dios.put(d.slug(), d.smite().dioses().get(rnd.nextInt(d.smite().dioses().size())));
+                }
+                double prob = grupo.stream().mapToDouble(d -> d.smite().ganar()
+                        + (dios.get(d.slug()).equals(d.smite().diosMalo()) ? -0.3 : 0)
+                        + (tarde && d == cuatro ? 0.4 : 0)).average().orElse(0.5);
+                boolean gano = sesion.resultados() != null ? sesion.resultados().get(n - 1) : rnd.nextDouble() < prob;
+                String cola = COLAS.get(rnd.nextInt(COLAS.size()));
+                double minutos = redondear(
+                        cola.equals("Conquest") ? 24 + rnd.nextDouble() * 14 : 14 + rnd.nextDouble() * 8, 1);
 
-            Partida partida = partidas.save(new Partida(Juego.SMITE2, "demo-smite2-%04d".formatted(i),
-                    momento(ahora, i, total).minus(Duration.ofMinutes(47)), (int) (minutos * 60), cola));
-            for (Demo d : grupo) {
-                PerfilSmite p = d.smite();
-                double efecto = gano ? 1.1 : 0.9;
-                double escala = minutos / 30;
-                Map<String, Object> datos = new LinkedHashMap<>();
-                datos.put("dios", dios.get(d.slug()));
-                datos.put("dano", (int) Math.max(1000, normal(p.danoMin() * minutos * efecto, p.danoMin() * 3)));
-                datos.put("mitigado", positivo(normal(p.mitigado() * escala, p.mitigado() * 0.15)));
-                datos.put("curacion", positivo(normal(p.curacion() * escala, p.curacion() * 0.2)));
-                datos.put("oro", (int) Math.max(1000, normal(p.oroMin() * minutos * efecto, 400)));
-                datos.put("minutos", minutos);
-                guardar(partida, porSlug.get(d.slug()), gano,
-                        positivo(normal(p.kills() * escala * efecto, 2)),
-                        positivo(normal(p.muertes() * escala / efecto, 1.6)),
-                        positivo(normal(p.asist() * escala * efecto, 2.5)),
-                        datos);
+                Partida partida = partidas.save(new Partida(Juego.SMITE2, "demo-smite2-%04d".formatted(i), inicio,
+                        (int) (minutos * 60), cola));
+                inicio = inicio.plusSeconds((long) (minutos * 60) + pausa());
+                for (Demo d : grupo) {
+                    PerfilSmite p = d.smite();
+                    double efecto = gano ? 1.1 : 0.9;
+                    double escala = minutos / 30;
+                    Map<String, Object> datos = new LinkedHashMap<>();
+                    datos.put("dios", dios.get(d.slug()));
+                    datos.put("dano", (int) Math.max(1000, normal(p.danoMin() * minutos * efecto, p.danoMin() * 3)));
+                    datos.put("mitigado", positivo(normal(p.mitigado() * escala, p.mitigado() * 0.15)));
+                    datos.put("curacion", positivo(normal(p.curacion() * escala, p.curacion() * 0.2)));
+                    datos.put("oro", (int) Math.max(1000, normal(p.oroMin() * minutos * efecto, 400)));
+                    datos.put("minutos", minutos);
+                    guardar(partida, porSlug.get(d.slug()), gano,
+                            positivo(normal(p.kills() * escala * efecto, 2)),
+                            positivo(normal(p.muertes() * escala / efecto, 1.6)),
+                            positivo(normal(p.asist() * escala * efecto, 2.5)),
+                            datos);
+                }
             }
         }
         return total;
@@ -233,7 +317,7 @@ public class DemoSeeder implements ApplicationRunner {
 
     // ─── Utilidades ─────────────────────────────────────────────────────────
 
-    /** Quién juega cada partida: a veces el grupo entero, a veces dos, a veces uno solo. */
+    /** Quién juega cada sesión: a veces el grupo entero, a veces dos, a veces uno solo. */
     private List<Demo> grupo(List<Demo> candidatos) {
         double r = rnd.nextDouble();
         if (r < 0.45 || candidatos.size() == 1) {
@@ -242,13 +326,6 @@ public class DemoSeeder implements ApplicationRunner {
         List<Demo> mezcla = new ArrayList<>(candidatos);
         Collections.shuffle(mezcla, rnd);
         return mezcla.subList(0, r < 0.8 ? Math.min(2, mezcla.size()) : 1);
-    }
-
-    /** Fecha de la partida i de n, repartidas en el periodo, la última hace un par de horas. */
-    private Instant momento(Instant ahora, int i, int n) {
-        Instant inicio = ahora.minus(PERIODO);
-        long paso = PERIODO.minusHours(2).toSeconds() / n;
-        return inicio.plusSeconds(paso * i + rnd.nextLong(paso / 2));
     }
 
     private void guardar(Partida partida, Jugador jugador, boolean gano, int kills, int muertes, int asist,

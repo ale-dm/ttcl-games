@@ -5,6 +5,7 @@ import com.ttcl.games.juego.Juego;
 import com.ttcl.games.stats.Modelos.FilaDesglose;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
+import com.ttcl.games.stats.Modelos.Sesiones;
 import com.ttcl.games.stats.Modelos.Sinergias;
 import java.util.List;
 
@@ -38,6 +39,7 @@ public final class DuendeModelos {
     /**
      * @param rol rol declarado en ese juego, o null: el Duende juzga cada métrica según lo que pide el rol
      * @param sinergias con quién del equipo le va mejor o peor (y solo)
+     * @param sesiones cómo le va según el orden en la sesión, lo que pasó en la anterior y la hora del día
      */
     public record PeticionInsights(
             String lang,
@@ -48,7 +50,8 @@ public final class DuendeModelos {
             ResumenJuego reciente,
             MediasEquipo equipo,
             List<FilaDesglose> desglose,
-            Sinergias sinergias) {}
+            Sinergias sinergias,
+            Sesiones sesiones) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record RespuestaInsights(List<Insight> insights) {}
@@ -66,7 +69,7 @@ public final class DuendeModelos {
 
     public record JuegoContexto(
             Juego juego, String rol, ResumenJuego resumen, ResumenJuego reciente, MediasEquipo equipo,
-            List<FilaDesglose> desglose, Sinergias sinergias) {}
+            List<FilaDesglose> desglose, Sinergias sinergias, Sesiones sesiones) {}
 
     public record JugadorContexto(String slug, String nombre, List<JuegoContexto> juegos) {}
 

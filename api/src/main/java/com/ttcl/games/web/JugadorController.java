@@ -7,6 +7,7 @@ import com.ttcl.games.servicio.Vistas.ConsejosVista;
 import com.ttcl.games.servicio.Vistas.DetalleJuego;
 import com.ttcl.games.servicio.Vistas.JugadorVista;
 import com.ttcl.games.servicio.Vistas.PaginaPartidas;
+import com.ttcl.games.stats.Modelos.Sesiones;
 import com.ttcl.games.stats.Modelos.Sinergias;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -51,6 +52,12 @@ public class JugadorController {
     @GetMapping("/sinergias")
     public Sinergias sinergias(@PathVariable String slug, @RequestParam Juego juego) {
         return equipo.sinergias(slug, juego);
+    }
+
+    /** Cómo le va según cuándo juega: orden en la sesión, después de ganar o de perder y hora del día. */
+    @GetMapping("/sesiones")
+    public Sesiones sesiones(@PathVariable String slug, @RequestParam Juego juego) {
+        return equipo.sesiones(slug, juego);
     }
 
     /** En qué mejorar y qué hace bien, según el Duende. */

@@ -8,7 +8,7 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Literal
 
-from .insights import companeros_destacados, generar_insights
+from .insights import MIN_SESIONES, companeros_destacados, generar_insights, sesiones_destacadas
 from .metricas import METRICAS, NOMBRE_JUEGO, formatear, metrica, rol_de
 from .modelos import (
     Idioma,
@@ -20,10 +20,10 @@ from .modelos import (
     PeticionChat,
     PeticionInsights,
 )
-from .textos import NOMBRES_ROL
+from .textos import NOMBRES_MOMENTO, NOMBRES_ROL
 
 Intencion = Literal[
-    "hola", "companeros", "ranking", "comparar", "racha", "desglose", "fuerte", "mejorar", "stats", "ayuda"
+    "hola", "companeros", "sesiones", "ranking", "comparar", "racha", "desglose", "fuerte", "mejorar", "stats", "ayuda"
 ]
 
 
@@ -64,13 +64,21 @@ def detectar_intencion(pregunta: str, num_foco: int) -> Intencion:
         r"\bwho\b.*\bwith\b", t
     ):
         return "companeros"
+    # Antes que "mejor" (mejorar): "¿cuándo juego mejor?" va de sesiones y horas.
+    if _contiene(
+        t,
+        ["tilt", "sesion", "session", "partidas seguidas", "matches in a row", "games in a row", "horario",
+         "a que hora", "what time", "time of day", "cuando juego", "cuando juga", "when do i play",
+         "when should i play", "despues de perder", "tras perder", "after losing", "after a loss"],
+    ):
+        return "sesiones"
     if _contiene(t, ["compar", "vs", "versus", "contra", "frente a", "head to head"]) or (
         num_foco == 2 and _contiene(t, ["quien", "who"])
     ):
         return "comparar"
     if _contiene(t, ["quien", "who", "ranking", "clasificacion", "del equipo", "of the team", "best", "worst", "top"]):
         return "ranking"
-    if _contiene(t, ["racha", "forma", "ultim", "streak", "form", "recent", "lately", "tilt"]):
+    if _contiene(t, ["racha", "forma", "ultim", "streak", "form", "recent", "lately"]):
         return "racha"
     if _contiene(t, ["mapa", "map", "dios", "god", "personaje", "pick"]):
         return "desglose"
@@ -134,6 +142,7 @@ def _peticion(j: JugadorContexto, g: JuegoContexto, lang: Idioma) -> PeticionIns
         equipo=g.equipo,
         desglose=g.desglose,
         sinergias=g.sinergias,
+        sesiones=g.sesiones,
     )
 
 
@@ -277,6 +286,48 @@ def _companeros(f: Foco, lang: Idioma) -> str:
     # Sin el tope del panel: aquí se pregunta justo por esto.
     for i in companeros_destacados(_peticion(f.jugador, f.juego, lang)):
         texto += f"\n\n**{i.titulo}.** {i.consejo or ''}".rstrip()
+    return texto
+
+
+def _sesiones(f: Foco, lang: Idioma) -> str:
+    """Cómo le va según el orden en la sesión, lo que pasó en la anterior y la hora; y si se tiltea o tiene su hora."""
+    s = f.juego.sesiones
+    juego = NOMBRE_JUEGO[f.juego.juego]
+    if not s or not s.sesiones:
+        return _t(lang, f"Aún no hay partidas de {juego} para saberlo.", f"No {juego} matches to tell yet.")
+    media = f"{s.partidas_por_sesion or 0:.1f}"
+    if lang == "es":
+        media = media.replace(".", ",")
+    texto = _t(
+        lang,
+        f"Cómo te va según cuándo juegas a {juego}, {f.jugador.nombre} ({s.sesiones} sesiones, {media} partidas de media):",
+        f"How you do depending on when you play {juego}, {f.jugador.nombre} ({s.sesiones} sessions, {media} matches on average):",
+    )
+    lineas = [
+        f"- **{NOMBRES_MOMENTO[m.clave][lang]}**: {formatear(m.winrate, 'pct', lang)} "
+        f"({m.victorias} {_t(lang, 'de', 'of')} {m.partidas})"
+        for m in [*s.por_orden, *s.tras_resultado, *s.por_franja]
+        if m.winrate is not None and m.clave in NOMBRES_MOMENTO
+    ]
+    texto += "\n\n" + "\n".join(lineas)
+    # Sin el tope del panel: aquí se pregunta justo por esto.
+    destacados = sesiones_destacadas(_peticion(f.jugador, f.juego, lang))
+    if s.sesiones < MIN_SESIONES:
+        texto += "\n\n" + _t(
+            lang,
+            f"Con {s.sesiones} sesiones aún no saco conclusiones: a partir de {MIN_SESIONES} te digo si te tilteas o "
+            "cuál es tu hora.",
+            f"With {s.sesiones} sessions I can't draw conclusions yet: from {MIN_SESIONES} on I'll tell you whether you "
+            "tilt or what your best time is.",
+        )
+    elif not destacados:
+        texto += "\n\n" + _t(
+            lang,
+            "Ni tilt ni hora mágica: rindes parecido juegues cuando juegues.",
+            "No tilt and no magic hour: you play about the same whenever you play.",
+        )
+    for i in destacados:
+        texto += f"\n\n**{i.titulo}.** {i.texto} {i.consejo or ''}".rstrip()
     return texto
 
 
@@ -438,9 +489,11 @@ def _equipo_mejorar(equipo: list[JugadorContexto], juego: Juego | None, lang: Id
 
 AYUDA = {
     "es": "Puedo decirte en qué mejorar, qué haces bien, cómo vas últimamente, qué mapa o dios se te da peor, "
-    "con quién juegas mejor o comparar a dos del equipo. Pregúntame algo de eso.",
+    "con quién juegas mejor, cuándo juegas mejor (si te tilteas, a qué hora rindes más) o comparar a dos del equipo. "
+    "Pregúntame algo de eso.",
     "en": "I can tell you what to improve, what you do well, how you've been doing lately, your worst map or god, "
-    "who you play best with, or compare two teammates. Ask me any of that.",
+    "who you play best with, when you play best (whether you tilt, what time suits you) or compare two teammates. "
+    "Ask me any of that.",
 }
 
 
@@ -478,7 +531,7 @@ def responder(p: PeticionChat) -> str:
     if not foco:
         if intencion == "mejorar":
             return _equipo_mejorar(p.equipo, juego, lang)
-        if intencion in ("racha", "desglose"):
+        if intencion in ("racha", "desglose", "sesiones"):
             return _t(
                 lang,
                 "Dime de quién: abre su perfil o pon su nombre en la pregunta.",
@@ -499,6 +552,8 @@ def responder(p: PeticionChat) -> str:
         return _contra_equipo(f, lang)
     if intencion == "companeros":
         return _companeros(f, lang)
+    if intencion == "sesiones":
+        return _sesiones(f, lang)
     if intencion == "fuerte":
         return _fuerte(f, lang)
     if intencion == "racha":
@@ -531,6 +586,7 @@ def sugerencias(p: PeticionChat) -> list[str]:
             _t(lang, "¿Qué hago bien?", "What am I good at?"),
             _t(lang, "¿Cómo voy últimamente?", "How have I been doing lately?"),
             _t(lang, "¿Con quién juego mejor?", "Who do I play best with?"),
+            _t(lang, "¿Cuándo juego mejor?", "When do I play best?"),
             _t(lang, f"¿Qué {que} se me da peor?", f"What's my worst {que}?"),
         ]
     juegos = sorted({g.juego for j in p.equipo for g in j.juegos})

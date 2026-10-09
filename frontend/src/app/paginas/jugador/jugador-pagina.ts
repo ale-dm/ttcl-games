@@ -9,7 +9,8 @@ import { Api } from '../../core/api';
 import { cargaReactiva } from '../../core/carga';
 import { I18n, JUEGO_CORTO, NOMBRE_JUEGO } from '../../core/i18n';
 import { KPIS, claveTexto, metrica, valorDe } from '../../core/metricas';
-import { FilaDesglose, Juego, PartidaVista } from '../../core/modelos';
+import { FilaDesglose, FilaMomento, Juego, PartidaVista } from '../../core/modelos';
+import { Clave } from '../../core/textos';
 import { TituloTraducido } from '../../core/titulo';
 import { DuendeEstado } from '../../duende/duende-estado';
 import { PanelConsejos } from '../../duende/panel-consejos';
@@ -77,6 +78,18 @@ export class JugadorPagina {
   protected readonly conQuien = computed(() => {
     const s = this.sinergias.estado().datos;
     return s ? [...s.companeros, ...(s.solo ? [s.solo] : [])] : [];
+  });
+  protected readonly sesiones = cargaReactiva(this.clave, (p) => this.api.sesiones(p.slug, p.juego));
+  /** Bloques de "Cuándo juegas mejor": orden en la sesión, según la anterior y hora del día (los que tengan filas). */
+  protected readonly bloquesSesion = computed(() => {
+    const s = this.sesiones.estado().datos;
+    if (!s) return [];
+    const bloques: { titulo: Clave; filas: FilaMomento[] }[] = [
+      { titulo: 'jugador.enLaSesion', filas: s.porOrden },
+      { titulo: 'jugador.trasLaAnterior', filas: s.trasResultado },
+      { titulo: 'jugador.horaDelDia', filas: s.porFranja },
+    ];
+    return bloques.filter((b) => b.filas.length);
   });
   private readonly masPartidas = signal<PartidaVista[]>([]);
   protected readonly cargandoMas = signal(false);

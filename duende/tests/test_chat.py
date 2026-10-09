@@ -3,7 +3,7 @@ from app.config import get_config
 from app.modelos import Desglose, Mensaje, PeticionChat
 from app.reglas_chat import detectar_intencion, detectar_juego, insights_de
 
-from .conftest import Sinergias, companero, equipo_cs2, jugador, resumen_cs2
+from .conftest import Sinergias, companero, equipo_cs2, jugador, momento, resumen_cs2, sesiones
 
 
 def equipo():
@@ -154,6 +154,118 @@ def test_sugerencias_de_companeros():
     todos = chat.responder(PeticionChat(lang="es", mensajes=[Mensaje(rol="usuario", texto="hola")],
                                         equipo=equipo_con_sinergias()))
     assert "¿Cuál es nuestro mejor dúo?" in todos.sugerencias
+
+
+def test_intencion_de_sesiones_antes_que_mejorar():
+    assert detectar_intencion("¿Cuándo juego mejor?", 1) == "sesiones"  # no es "¿en qué mejorar?"
+    assert detectar_intencion("¿Me tilteo?", 1) == "sesiones"
+    assert detectar_intencion("¿A qué hora rindo más?", 1) == "sesiones"
+    assert detectar_intencion("¿Cuántas partidas seguidas debería jugar?", 1) == "sesiones"
+    assert detectar_intencion("When do I play best?", 1) == "sesiones"
+    assert detectar_intencion("am I on tilt after a loss?", 1) == "sesiones"
+    assert detectar_intencion("¿Cómo voy últimamente?", 1) == "racha"
+    assert detectar_intencion("¿Con quién juego mejor?", 1) == "companeros"
+
+
+def equipo_con_sesiones(n: int = 20, **filas):
+    """Ana con sesiones: por defecto, se desinfla desde la 3ª y rinde más por la noche."""
+    s = sesiones(
+        n,
+        por_orden=filas.get("por_orden", [momento("1", 20, 60.0, 30, 46.7), momento("2", 15, 60.0, 35, 48.6),
+                                           momento("3+", 15, 33.3, 35, 60.0)]),
+        tras_resultado=filas.get("tras_resultado", [momento("victoria", 16, 56.3, 34, 50.0),
+                                                     momento("derrota", 14, 50.0, 36, 52.8)]),
+        por_franja=filas.get("por_franja", [momento("tarde", 15, 40.0, 35, 57.1), momento("noche", 35, 57.1, 15, 40.0)]),
+    )
+    return [jugador("j1", "Ana", resumen_cs2(partidas=50), equipo_cs2(), sesiones=s)]
+
+
+def test_cuando_juego_mejor():
+    r = chat.responder(
+        PeticionChat(lang="es", mensajes=[Mensaje(rol="usuario", texto="¿Cuándo juego mejor?")], foco=["j1"],
+                     equipo=equipo_con_sesiones())
+    ).respuesta
+    lineas = r.split("\n")
+    assert lineas[0] == "Cómo te va según cuándo juegas a Counter-Strike 2, Ana (20 sesiones, 2,5 partidas de media):"
+    assert lineas[2:9] == [
+        "- **1ª de la sesión**: 60,0 % (12 de 20)",
+        "- **2ª**: 60,0 % (9 de 15)",
+        "- **3ª en adelante**: 33,3 % (5 de 15)",
+        "- **Tras una victoria**: 56,3 % (9 de 16)",
+        "- **Tras una derrota**: 50,0 % (7 de 14)",
+        "- **Por la tarde**: 40,0 % (6 de 15)",
+        "- **Por la noche**: 57,1 % (20 de 35)",
+    ]
+    assert "**Las sesiones largas se te atragantan.** A partir de la 3ª partida seguida ganas el 33,3 %" in r
+    assert "para por hoy" in r
+    assert "**Una derrota te arrastra" not in r
+
+
+def test_cuando_juego_mejor_da_la_hora_aunque_en_el_panel_no_quepa():
+    # K/D y asistencias muy por encima: dos fortalezas que pesan más que la hora (+20 puntos).
+    franjas = [momento("tarde", 20, 60.0, 30, 40.0), momento("noche", 30, 40.0, 20, 60.0)]
+    ana = equipo_con_sesiones(por_orden=[], tras_resultado=[], por_franja=franjas)[0]
+    ana.juegos[0].resumen = resumen_cs2(partidas=50, kd=1.5, asistencias_media=8.0)
+    assert "mejor_horario" not in [i.id for i in insights_de(ana, ana.juegos[0], "es")]
+
+    r = chat.responder(
+        PeticionChat(lang="es", mensajes=[Mensaje(rol="usuario", texto="¿A qué hora juego mejor?")], foco=["j1"],
+                     equipo=[ana])
+    ).respuesta
+    assert "**Rindes más por la tarde.** Por la tarde ganas el 60,0 % (20 partidas)" in r
+
+
+def test_cuando_juego_mejor_con_pocas_sesiones_sin_nada_o_sin_foco():
+    pocas = chat.responder(
+        PeticionChat(lang="es", mensajes=[Mensaje(rol="usuario", texto="¿Me tilteo?")], foco=["j1"],
+                     equipo=equipo_con_sesiones(12))
+    ).respuesta
+    assert "Con 12 sesiones aún no saco conclusiones: a partir de 15" in pocas
+    assert "atragantan" not in pocas
+
+    normal = [momento("3+", 15, 50.0, 35, 52.0)]
+    nada = chat.responder(
+        PeticionChat(lang="en", mensajes=[Mensaje(rol="usuario", texto="When do I play best?")], foco=["j1"],
+                     equipo=equipo_con_sesiones(por_orden=normal, tras_resultado=[], por_franja=[]))
+    ).respuesta
+    assert nada.startswith("How you do depending on when you play Counter-Strike 2, Ana (20 sessions, 2.5 matches")
+    assert "- **3rd onwards**: 50.0% (8 of 15)" in nada
+    assert nada.endswith("No tilt and no magic hour: you play about the same whenever you play.")
+
+    sin_datos = jugador("j1", "Ana", resumen_cs2(), equipo_cs2())
+    r = chat.responder(
+        PeticionChat(lang="es", mensajes=[Mensaje(rol="usuario", texto="¿Me tilteo?")], foco=["j1"], equipo=[sin_datos])
+    )
+    assert r.respuesta == "Aún no hay partidas de Counter-Strike 2 para saberlo."
+    r = chat.responder(
+        PeticionChat(lang="es", mensajes=[Mensaje(rol="usuario", texto="¿Cuándo jugamos mejor?")],
+                     equipo=equipo_con_sesiones())
+    )
+    assert r.respuesta.startswith("Dime de quién")
+    assert "¿Cuándo juego mejor?" in chat.responder(
+        PeticionChat(lang="es", mensajes=[Mensaje(rol="usuario", texto="hola")], foco=["j1"], equipo=equipo_con_sesiones())
+    ).sugerencias
+
+
+def test_las_sesiones_llegan_a_gemini(monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "clave-de-prueba")
+    get_config.cache_clear()
+    sistemas = []
+
+    def falso(sistema, contenidos, temperatura=0.8):
+        sistemas.append(sistema)
+        return "Respuesta de Gemini", "gemini-falso"
+
+    monkeypatch.setattr(gemini, "generar", falso)
+    chat.responder(
+        PeticionChat(lang="es", mensajes=[Mensaje(rol="usuario", texto="¿Me tilteo? (Gemini)")], foco=["j1"],
+                     equipo=equipo_con_sesiones())
+    )
+    sistema = sistemas[0]
+    assert '"sesiones":{"sesiones":20,"partidasPorSesion":2.5,"porOrden":[' in sistema
+    assert '"clave":"3+","partidas":15,"victorias":5,"winrate":33.3' in sistema
+    assert "Con menos de 15 sesiones no saques conclusiones" in sistema
+    assert "Las sesiones largas se te atragantan" in sistema  # y la recomendación ya calculada
 
 
 def test_mejorar_tiene_en_cuenta_el_rol():

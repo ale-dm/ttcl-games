@@ -45,6 +45,19 @@ describe('I18n', () => {
     expect(i18n.rol('jungla')).toBe('Jungle');
     expect(i18n.rol('francotirador')).toBe('francotirador');
   });
+
+  it('traduce todas las filas de las sesiones que manda la API', () => {
+    // Las mismas claves que Estadisticas.sesiones (Java) y NOMBRES_MOMENTO (Duende).
+    const claves = ['1', '2', '3+', 'victoria', 'derrota', 'manana', 'tarde', 'noche', 'madrugada'];
+    expect(claves.map(i18n.momento)).toEqual([
+      '1ª', '2ª', '3ª en adelante', 'Tras ganar', 'Tras perder',
+      'Mañana (6–14 h)', 'Tarde (14–20 h)', 'Noche (20–24 h)', 'Madrugada (0–6 h)',
+    ]);
+    i18n.cambiar('en');
+    expect(i18n.momento('3+')).toBe('3rd onwards');
+    expect(i18n.momento('madrugada')).toBe('Late night (0–6 h)');
+    expect(i18n.momento('siesta')).toBe('siesta');
+  });
 });
 
 describe('valorDe', () => {

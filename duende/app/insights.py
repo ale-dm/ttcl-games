@@ -1,15 +1,16 @@
 """Motor de recomendaciones: a partir del resumen de un jugador, decide en qué tiene que mejorar y qué hace bien.
 
 Es determinista y no necesita Gemini: compara cada métrica con la media del resto del equipo y con una referencia,
-y añade reglas con más contexto (kills que no dan victorias, rachas, tendencia reciente, mapas o dioses flojos).
+y añade reglas con más contexto (kills que no dan victorias, rachas, tendencia reciente, mapas o dioses flojos,
+compañeros, tilt en las sesiones largas y la mejor hora del día).
 Si se conoce el rol del jugador, cada métrica pesa lo que pide ese rol (metricas.AJUSTES_ROL).
 """
 
 from dataclasses import dataclass
 
 from .metricas import METRICAS, NOMBRE_JUEGO, Metrica, factor_rol, formatear, rol_de
-from .modelos import Barra, FilaSinergia, Idioma, Insight, Nivel, PeticionInsights, Resumen
-from .textos import DEBILIDADES, ESPECIALES, FORTALEZAS, FRASES, NOMBRES_ROL, consejo_para
+from .modelos import Barra, FilaMomento, FilaSinergia, Idioma, Insight, Nivel, PeticionInsights, Resumen
+from .textos import DEBILIDADES, ESPECIALES, FORTALEZAS, FRASES, NOMBRES_MOMENTO, NOMBRES_ROL, consejo_para
 
 MUESTRA_MINIMA = 5
 MAX_DEBILIDADES = 4
@@ -18,6 +19,14 @@ LONGITUD_RACHA = 5
 MIN_PARTIDAS_DESGLOSE = 3
 # Puntos de winrate entre jugar con un compañero y sin él para decir que con él se gana más (o menos).
 DIFERENCIA_SINERGIA = 15
+# Sesiones (P3): hacen falta sesiones y partidas suficientes a cada lado para no confundir casualidad con tilt.
+MIN_SESIONES = 15
+MUESTRA_SESION = 10
+# Puntos de winrate que se pierden desde la 3ª seguida (o tras perder) para avisar de tilt; desde TILT_GRAVE, "alto".
+DIFERENCIA_TILT = 15
+TILT_GRAVE = 25
+# La mejor hora del día se elige entre cuatro: se pide más diferencia para no premiar la casualidad.
+DIFERENCIA_HORARIO = 20
 
 ORDEN_NIVEL: dict[Nivel, int] = {"info": 0, "alto": 1, "medio": 2, "bien": 3}
 
@@ -165,12 +174,13 @@ def _por_metrica(p: PeticionInsights, ocupadas: set[str]) -> list[Candidato]:
 def _especial(regla: str, lang: Idioma, juego: str, nivel: Nivel, /, **valores: object) -> Insight:
     """Insight de una regla especial. Los parámetros van por posición: `juego` o `clave` pueden ser valores del texto."""
     textos = ESPECIALES[regla][lang]
+    consejo = consejo_para(textos, juego)  # type: ignore[arg-type]
     return Insight(
         id=regla,
         nivel=nivel,
         titulo=str(textos["titulo"]).format(**valores),
         texto=str(textos["frase"]).format(**valores),
-        consejo=consejo_para(textos, juego),  # type: ignore[arg-type]
+        consejo=consejo.format(**valores) if consejo else None,
     )
 
 
@@ -334,6 +344,89 @@ def companeros_destacados(p: PeticionInsights) -> list[Insight]:
     return [c.insight for c in _sinergias(p)]
 
 
+def _fila(filas: list[FilaMomento], clave: str) -> FilaMomento | None:
+    return next((f for f in filas if f.clave == clave), None)
+
+
+def _contraste(f: FilaMomento | None) -> float | None:
+    """Puntos de winrate de esta fila frente al resto de partidas, si hay partidas suficientes a los dos lados."""
+    if f is None or f.winrate is None or f.winrate_resto is None:
+        return None
+    if f.partidas < MUESTRA_SESION or f.partidas_resto < MUESTRA_SESION:
+        return None
+    return f.winrate - f.winrate_resto
+
+
+def _momento(
+    regla: str, nivel: Nivel, f: FilaMomento, p: PeticionInsights, barras: tuple[str, str], **extra: str
+) -> Candidato:
+    """Insight de una fila de las sesiones, con sus barras: esa fila (resaltada) y el resto de partidas."""
+    lang = p.lang
+    assert f.winrate is not None and f.winrate_resto is not None
+    insight = _especial(
+        regla,
+        lang,
+        p.juego,
+        nivel,
+        partidas=f.partidas,
+        winrate=formatear(f.winrate, "pct", lang),
+        resto=formatear(f.winrate_resto, "pct", lang),
+        **extra,
+    )
+    insight.formato = "pct"
+    fila, resto = barras
+    insight.barras = [Barra(etiqueta=fila, valor=f.winrate, tuyo=True), Barra(etiqueta=resto, valor=f.winrate_resto)]
+    return Candidato(insight, abs(f.winrate - f.winrate_resto) / 50)
+
+
+def _sesiones(p: PeticionInsights) -> list[Candidato]:
+    """Tilt (gana mucho menos desde la 3ª partida seguida o tras perder) y su mejor hora del día.
+
+    Solo con MIN_SESIONES sesiones o más: con menos, cualquier diferencia puede ser casualidad. Si salta el tilt por
+    sesiones largas, el de después de perder sobra (suelen ser la misma cosa: las derrotas se amontonan al final).
+    """
+    s = p.sesiones
+    if not s or s.sesiones < MIN_SESIONES:
+        return []
+    lang = p.lang
+    f = FRASES[lang]
+    candidatos: list[Candidato] = []
+
+    tercera = _fila(s.por_orden, "3+")
+    caida = _contraste(tercera)
+    derrota = _fila(s.tras_resultado, "derrota")
+    caida_derrota = _contraste(derrota)
+    if tercera and caida is not None and -caida >= DIFERENCIA_TILT:
+        nivel: Nivel = "alto" if -caida >= TILT_GRAVE else "medio"
+        candidatos.append(_momento("tilt_sesion", nivel, tercera, p, (NOMBRES_MOMENTO["3+"][lang], f["primeras"])))
+    elif derrota and caida_derrota is not None and -caida_derrota >= DIFERENCIA_TILT:
+        nivel = "alto" if -caida_derrota >= TILT_GRAVE else "medio"
+        candidatos.append(_momento("tilt_derrota", nivel, derrota, p, (NOMBRES_MOMENTO["derrota"][lang], f["resto"])))
+
+    franjas = [(fr, d) for fr in s.por_franja if (d := _contraste(fr)) is not None]
+    if franjas:
+        mejor, ventaja = max(franjas, key=lambda x: (x[1], x[0].partidas))
+        if ventaja >= DIFERENCIA_HORARIO:
+            nombre = NOMBRES_MOMENTO[mejor.clave][lang]
+            candidatos.append(
+                _momento(
+                    "mejor_horario",
+                    "bien",
+                    mejor,
+                    p,
+                    (nombre, f["resto_dia"]),
+                    franja=nombre[0].lower() + nombre[1:],
+                    Franja=nombre,
+                )
+            )
+    return candidatos
+
+
+def sesiones_destacadas(p: PeticionInsights) -> list[Insight]:
+    """Tilt y mejor hora sin el tope del panel, para cuando se pregunta por ellos."""
+    return [c.insight for c in _sesiones(p)]
+
+
 def generar_insights(p: PeticionInsights) -> list[Insight]:
     """Recomendaciones ordenadas: aviso de muestra, debilidades graves, medias y, al final, lo que hace bien."""
     if p.resumen.partidas == 0:
@@ -347,7 +440,12 @@ def generar_insights(p: PeticionInsights) -> list[Insight]:
             )
         )
 
-    especiales = [c for c in (_kd_sin_victorias(p), _rachas(p), _tendencia(p)) if c] + _desglose(p) + _sinergias(p)
+    especiales = (
+        [c for c in (_kd_sin_victorias(p), _rachas(p), _tendencia(p)) if c]
+        + _desglose(p)
+        + _sinergias(p)
+        + _sesiones(p)
+    )
     # Si una regla especial ya habla del winrate, la genérica del winrate sobra.
     ocupadas = {c.insight.metrica for c in especiales if c.insight.id == "kd_sin_victorias"}
     candidatos = especiales + _por_metrica(p, {m for m in ocupadas if m})

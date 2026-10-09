@@ -38,6 +38,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-ttcl}
       DUENDE_URL: http://duende:8000
       TTCL_DEMO: ${TTCL_DEMO:-true}
+      TTCL_ZONA_HORARIA: ${TTCL_ZONA_HORARIA:-Europe/Madrid}
       TTCL_EQUIPO_JSON: /config/equipo.json
       FACEIT_API_KEY: ${FACEIT_API_KEY:-}
       SMITE2_API_BASE: ${SMITE2_API_BASE:-}

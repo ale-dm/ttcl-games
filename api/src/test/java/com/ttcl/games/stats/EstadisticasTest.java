@@ -1,10 +1,12 @@
 package com.ttcl.games.stats;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.ttcl.games.juego.Juego;
 import com.ttcl.games.stats.Modelos.FilaComparacion;
 import com.ttcl.games.stats.Modelos.FilaDesglose;
+import com.ttcl.games.stats.Modelos.FilaMomento;
 import com.ttcl.games.stats.Modelos.FilaParticipacion;
 import com.ttcl.games.stats.Modelos.FilaSinergia;
 import com.ttcl.games.stats.Modelos.Grupo;
@@ -12,8 +14,11 @@ import com.ttcl.games.stats.Modelos.MediasEquipo;
 import com.ttcl.games.stats.Modelos.Miembro;
 import com.ttcl.games.stats.Modelos.Presencia;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
+import com.ttcl.games.stats.Modelos.Sesiones;
 import com.ttcl.games.stats.Modelos.Sinergias;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -25,7 +30,7 @@ class EstadisticasTest {
     private static final Instant BASE = Instant.parse("2026-10-01T18:00:00Z");
 
     private static FilaParticipacion cs2(int dia, Boolean gano, int k, int d, int a, Map<String, Object> datos) {
-        return new FilaParticipacion(dia, Juego.CS2, BASE.plusSeconds(dia * 86400L), "de_mirage", gano, k, d, a, datos);
+        return new FilaParticipacion(dia, Juego.CS2, BASE.plusSeconds(dia * 86400L), null, "de_mirage", gano, k, d, a, datos);
     }
 
     @Test
@@ -64,9 +69,9 @@ class EstadisticasTest {
     @Test
     void smiteCalculaKdaYPorMinuto() {
         List<FilaParticipacion> filas = List.of(
-                new FilaParticipacion(1, Juego.SMITE2, BASE, "Conquest", true, 6, 3, 9,
+                new FilaParticipacion(1, Juego.SMITE2, BASE, null, "Conquest", true, 6, 3, 9,
                         Map.of("dios", "Zeus", "dano", 30000, "oro", 15000, "minutos", 30.0)),
-                new FilaParticipacion(2, Juego.SMITE2, BASE.plusSeconds(60), "Arena", false, 4, 5, 2,
+                new FilaParticipacion(2, Juego.SMITE2, BASE.plusSeconds(60), null, "Arena", false, 4, 5, 2,
                         Map.of("dios", "Ra", "dano", 10000, "oro", 5000, "minutos", 10.0)));
 
         ResumenJuego r = Estadisticas.resumir(Juego.SMITE2, filas);
@@ -151,7 +156,7 @@ class EstadisticasTest {
         List<FilaParticipacion> filas = new ArrayList<>();
         presencias.forEach((id, ps) -> {
             Boolean gano = ps.getFirst().gano();
-            filas.add(new FilaParticipacion(id, Juego.CS2, BASE.plusSeconds(id), "x", gano, 10, 10, 2, Map.of()));
+            filas.add(new FilaParticipacion(id, Juego.CS2, BASE.plusSeconds(id), null, "x", gano, 10, 10, 2, Map.of()));
         });
 
         Sinergias s = Estadisticas.sinergias(Juego.CS2, "a", filas, presencias);
@@ -224,6 +229,68 @@ class EstadisticasTest {
         }
 
         assertThat(Estadisticas.grupos(presencias, 2)).extracting(Grupo::partidas).containsExactly(6, 3);
+    }
+
+    private static FilaParticipacion jugada(long id, String hora, Integer duracionSeg, Boolean gano) {
+        return new FilaParticipacion(
+                id, Juego.CS2, Instant.parse(hora), duracionSeg, "de_mirage", gano, 10, 10, 2, Map.of());
+    }
+
+    @Test
+    void sesionesPorOrdenTrasResultadoYFranja() {
+        List<FilaParticipacion> filas = List.of(
+                // Sesión 1, por la mañana: 10 minutos entre una y otra.
+                jugada(1, "2026-10-01T09:00:00Z", 1800, true),
+                jugada(2, "2026-10-01T09:40:00Z", 1800, true),
+                jugada(3, "2026-10-01T10:20:00Z", 1800, false),
+                jugada(4, "2026-10-01T11:00:00Z", 1800, false),
+                // Sesión 2, por la noche. Sin duración, la pausa se cuenta desde el principio: 44 minutos.
+                jugada(5, "2026-10-01T21:00:00Z", null, false),
+                jugada(6, "2026-10-01T21:44:00Z", 1800, null),
+                // Sesión 3: la 6 acabó a las 22:14 y han pasado más de 45 minutos. Pasa de la medianoche.
+                jugada(7, "2026-10-01T23:15:00Z", 1800, true),
+                jugada(8, "2026-10-02T00:00:00Z", 1800, true),
+                // Sesión 4, por la tarde, de una sola partida.
+                jugada(9, "2026-10-02T15:00:00Z", 1800, true));
+
+        Sesiones s = Estadisticas.sesiones(Juego.CS2, filas, ZoneOffset.UTC);
+
+        assertThat(s.sesiones()).isEqualTo(4);
+        assertThat(s.partidasPorSesion()).isEqualTo(2.3); // 9 / 4
+        assertThat(s.porOrden()).containsExactly(
+                new FilaMomento("1", 4, 3, 75.0, 1.0, 5, 50.0), // 1, 5, 7 y 9
+                new FilaMomento("2", 3, 2, 100.0, 1.0, 6, 50.0), // 2, 6 (sin resultado) y 8
+                new FilaMomento("3+", 2, 0, 0.0, 1.0, 7, 83.3)); // 3 y 4
+        assertThat(s.trasResultado()).containsExactly(
+                new FilaMomento("victoria", 3, 2, 66.7, 1.0, 6, 60.0), // 2, 3 y 8
+                new FilaMomento("derrota", 2, 0, 0.0, 1.0, 7, 71.4)); // 4 y 6; la 9 empieza sesión
+        assertThat(s.porFranja()).extracting(FilaMomento::clave, FilaMomento::partidas)
+                .containsExactly(tuple("manana", 4), tuple("tarde", 1), tuple("noche", 3), tuple("madrugada", 1));
+    }
+
+    @Test
+    void laHoraDelDiaEsLaDeLaZonaDelEquipo() {
+        // 22:30 en UTC son las 00:30 en Madrid (horario de verano).
+        List<FilaParticipacion> filas = List.of(jugada(1, "2026-10-01T22:30:00Z", 1800, true));
+
+        assertThat(Estadisticas.sesiones(Juego.CS2, filas, ZoneOffset.UTC).porFranja())
+                .extracting(FilaMomento::clave).containsExactly("noche");
+        assertThat(Estadisticas.sesiones(Juego.CS2, filas, ZoneId.of("Europe/Madrid")).porFranja())
+                .extracting(FilaMomento::clave).containsExactly("madrugada");
+        assertThat(List.of(0, 5, 6, 13, 14, 19, 20, 23)).extracting(Estadisticas::franja).containsExactly(
+                "madrugada", "madrugada", "manana", "manana", "tarde", "tarde", "noche", "noche");
+    }
+
+    @Test
+    void conUnaSolaPartidaNoHayRestoNiPartidasTrasOtra() {
+        Sesiones s = Estadisticas.sesiones(
+                Juego.CS2, List.of(jugada(1, "2026-10-01T18:00:00Z", 1800, true)), ZoneOffset.UTC);
+
+        assertThat(s.sesiones()).isEqualTo(1);
+        assertThat(s.porOrden()).containsExactly(new FilaMomento("1", 1, 1, 100.0, 1.0, 0, null));
+        assertThat(s.trasResultado()).isEmpty();
+        assertThat(Estadisticas.sesiones(Juego.CS2, List.of(), ZoneOffset.UTC))
+                .isEqualTo(new Sesiones(0, null, List.of(), List.of(), List.of()));
     }
 
     private static FilaComparacion fila(List<FilaComparacion> filas, String metrica) {

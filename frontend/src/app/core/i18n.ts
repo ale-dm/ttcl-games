@@ -117,6 +117,12 @@ export class I18n {
     return clave in ES ? this.t(clave as Clave) : rol;
   };
 
+  /** Nombre de una fila de las sesiones ("3+", "derrota", "noche"...). Si la web no la conoce, la clave tal cual. */
+  readonly momento = (clave: string): string => {
+    const texto = `momento.${clave}`;
+    return texto in ES ? this.t(texto as Clave) : clave;
+  };
+
   /** V/D en español, W/L en inglés. */
   readonly letraForma = (c: string): string => (c === 'V' ? this.t('comun.formaV') : c === 'D' ? this.t('comun.formaD') : '?');
 }

@@ -1,5 +1,6 @@
 package com.ttcl.games.servicio;
 
+import com.ttcl.games.config.TtclProperties;
 import com.ttcl.games.dominio.Cuenta;
 import com.ttcl.games.dominio.Jugador;
 import com.ttcl.games.dominio.Participacion;
@@ -26,8 +27,10 @@ import com.ttcl.games.stats.Modelos.FilaParticipacion;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
 import com.ttcl.games.stats.Modelos.Presencia;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
+import com.ttcl.games.stats.Modelos.Sesiones;
 import com.ttcl.games.stats.Modelos.Sinergias;
 import java.text.Normalizer;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -54,11 +57,15 @@ public class EquipoServicio {
     private final JugadorRepo jugadores;
     private final CuentaRepo cuentas;
     private final ParticipacionRepo participaciones;
+    /** Zona del equipo: con ella se sabe a qué hora del día se jugó cada partida. */
+    private final ZoneId zona;
 
-    public EquipoServicio(JugadorRepo jugadores, CuentaRepo cuentas, ParticipacionRepo participaciones) {
+    public EquipoServicio(
+            JugadorRepo jugadores, CuentaRepo cuentas, ParticipacionRepo participaciones, TtclProperties props) {
         this.jugadores = jugadores;
         this.cuentas = cuentas;
         this.participaciones = participaciones;
+        this.zona = props.zona();
     }
 
     /** Foto del equipo: jugadores, cuentas, participaciones por jugador y juego, y quién jugó cada partida. */
@@ -190,7 +197,7 @@ public class EquipoServicio {
         return Estadisticas.mediasEquipo(otros);
     }
 
-    private static JuegoContexto contexto(Instantanea foto, Jugador j, Juego juego) {
+    private JuegoContexto contexto(Instantanea foto, Jugador j, Juego juego) {
         List<FilaParticipacion> filas = foto.filas(j, juego);
         return new JuegoContexto(
                 juego,
@@ -199,7 +206,8 @@ public class EquipoServicio {
                 Estadisticas.resumir(juego, Estadisticas.recientes(filas, Estadisticas.PARTIDAS_RECIENTES)),
                 mediasSin(foto, j, juego),
                 Estadisticas.desglose(juego, filas),
-                Estadisticas.sinergias(juego, j.getSlug(), filas, foto.presencias(juego)));
+                Estadisticas.sinergias(juego, j.getSlug(), filas, foto.presencias(juego)),
+                Estadisticas.sesiones(juego, filas, zona));
     }
 
     /** Con quién del equipo juega mejor un jugador en un juego (y cómo le va solo). */
@@ -211,6 +219,17 @@ public class EquipoServicio {
             throw new NoEncontradoException(j.getNombre() + " no tiene partidas guardadas de " + juego.nombre() + ".");
         }
         return Estadisticas.sinergias(juego, slug, filas, foto.presencias(juego));
+    }
+
+    /** Cómo le va según cuándo juega: orden en la sesión, después de ganar o de perder y hora del día. */
+    public Sesiones sesiones(String slug, Juego juego) {
+        Instantanea foto = instantanea();
+        Jugador j = foto.porSlug(slug);
+        List<FilaParticipacion> filas = foto.filas(j, juego);
+        if (filas.isEmpty()) {
+            throw new NoEncontradoException(j.getNombre() + " no tiene partidas guardadas de " + juego.nombre() + ".");
+        }
+        return Estadisticas.sesiones(juego, filas, zona);
     }
 
     /** Dúos y tríos del equipo en un juego, o en todos los que tengan partidas si {@code juego} es null. */
@@ -297,10 +316,10 @@ public class EquipoServicio {
         return peticion(foto, j, juego, lang);
     }
 
-    private static PeticionInsights peticion(Instantanea foto, Jugador j, Juego juego, String lang) {
+    private PeticionInsights peticion(Instantanea foto, Jugador j, Juego juego, String lang) {
         JuegoContexto c = contexto(foto, j, juego);
         return new PeticionInsights(lang, new JugadorRef(j.getSlug(), j.getNombre()), juego, c.rol(), c.resumen(),
-                c.reciente(), c.equipo(), c.desglose(), c.sinergias());
+                c.reciente(), c.equipo(), c.desglose(), c.sinergias(), c.sesiones());
     }
 
     /** Peticiones de recomendaciones de todo el equipo (una por jugador y juego), para las tarjetas. */

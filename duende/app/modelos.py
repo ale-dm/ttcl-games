@@ -77,6 +77,29 @@ class Sinergias(Base):
     companeros: list[FilaSinergia] = Field(default_factory=list)
 
 
+class FilaMomento(Base):
+    """Cómo le va en un tipo de partida y, para comparar, en el resto («resto»). Claves: "1", "2", "3+" (orden en la
+    sesión); "victoria", "derrota" (cómo acabó la anterior de la sesión); "manana", "tarde", "noche", "madrugada"."""
+
+    clave: str
+    partidas: int
+    victorias: int = 0
+    winrate: float | None = None
+    kd: float | None = None
+    partidas_resto: int = 0
+    winrate_resto: float | None = None
+
+
+class Sesiones(Base):
+    """Sesiones: partidas seguidas, con menos de 45 minutos entre una y otra (lo calcula la API)."""
+
+    sesiones: int = 0
+    partidas_por_sesion: float | None = None
+    por_orden: list[FilaMomento] = Field(default_factory=list)
+    tras_resultado: list[FilaMomento] = Field(default_factory=list)
+    por_franja: list[FilaMomento] = Field(default_factory=list)
+
+
 class JugadorRef(Base):
     slug: str
     nombre: str
@@ -110,6 +133,7 @@ class PeticionInsights(Base):
     equipo: MediasEquipo | None = None
     desglose: list[Desglose] = Field(default_factory=list)
     sinergias: Sinergias | None = None
+    sesiones: Sesiones | None = None
 
 
 class RespuestaInsights(Base):
@@ -146,6 +170,7 @@ class JuegoContexto(Base):
     equipo: MediasEquipo | None = None
     desglose: list[Desglose] = Field(default_factory=list)
     sinergias: Sinergias | None = None
+    sesiones: Sesiones | None = None
 
 
 class JugadorContexto(Base):

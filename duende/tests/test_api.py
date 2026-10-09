@@ -67,6 +67,31 @@ def test_insights_con_sinergias_en_camel_case():
     assert bueno["texto"] == "Con Jugador 3 ganas el 65,0 % de 20 partidas; sin Jugador 3, el 38,0 %."
 
 
+def test_insights_con_sesiones_en_camel_case():
+    def fila(clave, partidas, victorias, winrate, resto, winrate_resto):
+        return {"clave": clave, "partidas": partidas, "victorias": victorias, "winrate": winrate, "kd": 1.0,
+                "partidasResto": resto, "winrateResto": winrate_resto}
+
+    sesiones = {
+        "sesiones": 18,
+        "partidasPorSesion": 2.8,
+        "porOrden": [fila("1", 18, 10, 55.6, 32, 46.9), fila("2", 14, 8, 57.1, 36, 47.2), fila("3+", 18, 6, 33.3, 32, 56.3)],
+        "trasResultado": [],
+        "porFranja": [fila("tarde", 12, 8, 66.7, 38, 42.1)],
+    }
+    r = cliente.post(
+        "/v1/insights",
+        json={"lang": "es", "jugador": {"slug": "j3", "nombre": "Jugador 3"}, "juego": "cs2", "resumen": RESUMEN,
+              "sesiones": sesiones},
+    )
+    assert r.status_code == 200
+    por_id = {i["id"]: i for i in r.json()["insights"]}
+    assert por_id["tilt_sesion"]["texto"] == (
+        "A partir de la 3ª partida seguida ganas el 33,3 % (18 partidas); en las dos primeras, el 56,3 %."
+    )
+    assert por_id["mejor_horario"]["titulo"] == "Rindes más por la tarde"
+
+
 def test_insights_lote():
     item = {"lang": "en", "jugador": {"slug": "j1", "nombre": "Jugador 1"}, "juego": "cs2", "resumen": RESUMEN}
     r = cliente.post("/v1/insights/lote", json={"items": [item, {**item, "jugador": {"slug": "j2", "nombre": "J2"}}]})

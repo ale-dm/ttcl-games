@@ -63,7 +63,13 @@ export class DuendeEstado {
       return [t('comparar.preguntaQuien'), t('comparar.preguntaMejorar', { nombre: foco[1].nombre })];
     }
     if (foco.length === 1) {
-      return [t('duende.sugMejorar'), t('duende.sugBien'), t('duende.sugRacha'), t('duende.sugConQuien')];
+      return [
+        t('duende.sugMejorar'),
+        t('duende.sugBien'),
+        t('duende.sugRacha'),
+        t('duende.sugConQuien'),
+        t('duende.sugCuando'),
+      ];
     }
     return [t('duende.sugMejorEquipo'), t('duende.sugCadaUno'), t('duende.sugMejorDuo')];
   });

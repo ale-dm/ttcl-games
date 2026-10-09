@@ -14,6 +14,7 @@ import {
   PaginaPartidas,
   Ranking,
   RespuestaChat,
+  Sesiones,
   Sinergias,
   TarjetaJugador,
 } from './modelos';
@@ -54,6 +55,10 @@ export class Api {
 
   sinergias(slug: string, juego: Juego): Observable<Sinergias> {
     return this.http.get<Sinergias>(`/api/jugadores/${encodeURIComponent(slug)}/sinergias`, { params: { juego } });
+  }
+
+  sesiones(slug: string, juego: Juego): Observable<Sesiones> {
+    return this.http.get<Sesiones>(`/api/jugadores/${encodeURIComponent(slug)}/sesiones`, { params: { juego } });
   }
 
   grupos(juego: Juego | null): Observable<GruposJuego[]> {

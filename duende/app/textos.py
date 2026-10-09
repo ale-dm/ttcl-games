@@ -417,6 +417,42 @@ ESPECIALES: dict[str, dict[Idioma, T]] = {
             },
         },
     },
+    "tilt_sesion": {
+        "es": {
+            "titulo": "Las sesiones largas se te atragantan",
+            "frase": "A partir de la 3ª partida seguida ganas el {winrate} ({partidas} partidas); en las dos primeras, el {resto}.",
+            "consejo": "Haz sesiones de dos o tres partidas y, si pierdes dos seguidas, para por hoy.",
+        },
+        "en": {
+            "titulo": "Long sessions wear you down",
+            "frase": "From your 3rd match in a row you win {winrate} ({partidas} matches); in the first two, {resto}.",
+            "consejo": "Keep sessions to two or three matches and, if you lose two in a row, call it a day.",
+        },
+    },
+    "tilt_derrota": {
+        "es": {
+            "titulo": "Una derrota te arrastra a la siguiente",
+            "frase": "Después de perder, la siguiente la ganas el {winrate} de las veces ({partidas} partidas); el resto, el {resto}.",
+            "consejo": "Tras una derrota, cinco minutos fuera: agua, estirar y vuelta. Y tras dos seguidas, se acabó por hoy.",
+        },
+        "en": {
+            "titulo": "One loss drags you into the next",
+            "frase": "After a loss you win the next one {winrate} of the time ({partidas} matches); otherwise, {resto}.",
+            "consejo": "After a loss, take five: water, stretch, back in. After two in a row, call it a day.",
+        },
+    },
+    "mejor_horario": {
+        "es": {
+            "titulo": "Rindes más {franja}",
+            "frase": "{Franja} ganas el {winrate} ({partidas} partidas); el resto del día, el {resto}.",
+            "consejo": "Si vas a jugar para subir, juega {franja}; a otras horas, partidas tranquilas.",
+        },
+        "en": {
+            "titulo": "You play best {franja}",
+            "frase": "{Franja} you win {winrate} ({partidas} matches); the rest of the day, {resto}.",
+            "consejo": "If you're playing to climb, play {franja}; at other times, keep it casual.",
+        },
+    },
     "desglose_bueno": {
         "es": {
             "titulo": "{clave} es tu casa",
@@ -448,6 +484,9 @@ FRASES: dict[Idioma, dict[str, str]] = {
         "ultimas": "Últimas {n}",
         "con": "Con {nombre}",
         "sin": "Sin {nombre}",
+        "primeras": "1ª y 2ª",
+        "resto": "El resto",
+        "resto_dia": "Resto del día",
         "cmp_equipo_ref": "Tienes {tu}; el resto del equipo, {equipo}, y un jugador medio anda por {ref}.",
         "cmp_equipo": "Tienes {tu}; el resto del equipo, {equipo}.",
         "cmp_ref": "Tienes {tu}; un jugador medio anda por {ref}.",
@@ -464,7 +503,10 @@ FRASES: dict[Idioma, dict[str, str]] = {
         "ultimas": "Last {n}",
         "con": "With {nombre}",
         "sin": "Without {nombre}",
-        "cmp_equipo_ref": "You have {tu}; the rest of the team, {equipo}, and an average player sits around {ref}.",
+        "primeras": "1st and 2nd",
+        "resto": "The rest",
+        "resto_dia": "Rest of the day",
+        "cmp_equipo_ref":"You have {tu}; the rest of the team, {equipo}, and an average player sits around {ref}.",
         "cmp_equipo": "You have {tu}; the rest of the team, {equipo}.",
         "cmp_ref": "You have {tu}; an average player sits around {ref}.",
         "cmp_solo": "You have {tu}.",
@@ -487,6 +529,20 @@ NOMBRES_ROL: dict[str, dict[Idioma, str]] = {
     "mid": {"es": "mid", "en": "mid"},
     "guardian": {"es": "guardián", "en": "guardian"},
     "carry": {"es": "carry", "en": "carry"},
+}
+
+
+# Cada fila de las sesiones (la clave que manda la API), como etiqueta.
+NOMBRES_MOMENTO: dict[str, dict[Idioma, str]] = {
+    "1": {"es": "1ª de la sesión", "en": "1st of the session"},
+    "2": {"es": "2ª", "en": "2nd"},
+    "3+": {"es": "3ª en adelante", "en": "3rd onwards"},
+    "victoria": {"es": "Tras una victoria", "en": "After a win"},
+    "derrota": {"es": "Tras una derrota", "en": "After a loss"},
+    "manana": {"es": "Por la mañana", "en": "In the morning"},
+    "tarde": {"es": "Por la tarde", "en": "In the afternoon"},
+    "noche": {"es": "Por la noche", "en": "In the evening"},
+    "madrugada": {"es": "De madrugada", "en": "Late at night"},
 }
 
 

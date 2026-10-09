@@ -199,6 +199,45 @@
                   </section>
                 }
 
+                @if (sesiones.estado().datos; as s) {
+                  <section class="card cuando">
+                    <div class="card-h">
+                      <div>
+                        <div class="card-t">{{ t('jugador.cuando') }}</div>
+                        <div class="small muted">
+                          {{ t('jugador.cuandoSub', { sesiones: s.sesiones, media: i18n.num(s.partidasPorSesion, 1) }) }}
+                        </div>
+                      </div>
+                    </div>
+                    <div class="card-b">
+                      @for (b of bloquesSesion(); track b.titulo) {
+                        <div class="cuando-b">
+                          <div class="eyebrow">{{ t(b.titulo) }}</div>
+                          <div class="mb">
+                            @for (f of b.filas; track f.clave) {
+                              <div class="mb-row">
+                                <div class="mb-name">{{ i18n.momento(f.clave) }}</div>
+                                <div class="mb-track">
+                                  <div class="mb-bar" [attr.aria-label]="i18n.pct(f.winrate)">
+                                    <i class="w" [style.width.%]="porcentaje(f.victorias, f.partidas)"></i>
+                                    <i class="l" [style.width.%]="100 - porcentaje(f.victorias, f.partidas)"></i>
+                                  </div>
+                                </div>
+                                <div class="mb-v num">
+                                  <b>{{ i18n.pct(f.winrate, 0) }}</b>
+                                  <small>{{ f.partidas }} {{ t('comun.partidas') }}</small>
+                                  <small>{{ t('jugador.resto', { winrate: i18n.pct(f.winrateResto, 0) }) }}</small>
+                                </div>
+                              </div>
+                            }
+                          </div>
+                        </div>
+                      }
+                      <p class="small muted cuando-nota">{{ t('jugador.cuandoNota') }}</p>
+                    </div>
+                  </section>
+                }
+
                 <section class="card">
                   <div class="card-h">
                     <div class="card-t">{{ t('jugador.recientes') }}</div>

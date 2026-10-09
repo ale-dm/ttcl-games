@@ -11,11 +11,16 @@ public final class Modelos {
 
     private Modelos() {}
 
-    /** Una participación ya leída de la base, sin entidades JPA: lo que necesitan los cálculos. */
+    /**
+     * Una participación ya leída de la base, sin entidades JPA: lo que necesitan los cálculos.
+     *
+     * @param duracionSeg duración de la partida, o null si la fuente no la da
+     */
     public record FilaParticipacion(
             long partidaId,
             Juego juego,
             Instant jugadaEn,
+            Integer duracionSeg,
             String modo,
             Boolean gano,
             Integer kills,
@@ -28,6 +33,7 @@ public final class Modelos {
                     p.getPartida().getId(),
                     p.getJuego(),
                     p.getPartida().getJugadaEn(),
+                    p.getPartida().getDuracionSeg(),
                     p.getPartida().getModo(),
                     p.getGano(),
                     p.getKills(),
@@ -97,6 +103,31 @@ public final class Modelos {
 
     /** Dos o tres del equipo y cómo les va cuando juegan juntos en el mismo bando (aunque haya alguien más). */
     public record Grupo(List<Miembro> jugadores, int partidas, int victorias, Double winrate) {}
+
+    /**
+     * Cómo le va en un tipo de partida (la 3ª o más de la sesión, la que sigue a una derrota, las de noche...) y, para
+     * comparar, en todas las demás.
+     *
+     * @param clave "1", "2" o "3+" (orden en la sesión); "victoria" o "derrota" (lo que pasó en la anterior de la
+     *     sesión); "manana", "tarde", "noche" o "madrugada" (hora del día en la zona del equipo)
+     * @param partidasResto partidas que no son de este tipo
+     * @param winrateResto winrate en esas otras partidas, o null si no hay ninguna con resultado
+     */
+    public record FilaMomento(
+            String clave, int partidas, int victorias, Double winrate, Double kd, int partidasResto,
+            Double winrateResto) {}
+
+    /**
+     * Sesiones de juego: partidas seguidas, con menos de {@code Estadisticas.PAUSA_SESION} entre el final de una y el
+     * principio de la siguiente. Cada lista, en orden fijo y sin las filas que no tienen partidas.
+     *
+     * @param porOrden 1ª, 2ª y de la 3ª en adelante dentro de la sesión
+     * @param trasResultado partidas que siguen a una victoria o a una derrota en la misma sesión
+     * @param porFranja mañana (6-14 h), tarde (14-20 h), noche (20-24 h) y madrugada (0-6 h)
+     */
+    public record Sesiones(
+            int sesiones, Double partidasPorSesion, List<FilaMomento> porOrden, List<FilaMomento> trasResultado,
+            List<FilaMomento> porFranja) {}
 
     /** Un punto de la gráfica de partidas. */
     public record PuntoSerie(

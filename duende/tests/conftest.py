@@ -1,7 +1,17 @@
 import pytest
 
 from app.config import get_config
-from app.modelos import Desglose, FilaSinergia, JuegoContexto, JugadorContexto, MediasEquipo, Resumen, Sinergias
+from app.modelos import (
+    Desglose,
+    FilaMomento,
+    FilaSinergia,
+    JuegoContexto,
+    JugadorContexto,
+    MediasEquipo,
+    Resumen,
+    Sesiones,
+    Sinergias,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -59,18 +69,55 @@ def companero(nombre: str, partidas: int, winrate: float, partidas_sin: int, win
     )
 
 
+def momento(clave: str, partidas: int, winrate: float, partidas_resto: int, winrate_resto: float | None) -> FilaMomento:
+    """Fila de las sesiones: tantas partidas de ese tipo y tantas del resto, con su winrate."""
+    return FilaMomento(
+        clave=clave,
+        partidas=partidas,
+        victorias=round(partidas * winrate / 100),
+        winrate=winrate,
+        kd=1.0,
+        partidas_resto=partidas_resto,
+        winrate_resto=winrate_resto,
+    )
+
+
+def sesiones(n: int = 20, por_orden=(), tras_resultado=(), por_franja=()) -> Sesiones:
+    """Sesiones con las filas que se pasen; por defecto, 20 sesiones de 2,5 partidas sin nada raro."""
+    return Sesiones(
+        sesiones=n,
+        partidas_por_sesion=2.5,
+        por_orden=list(por_orden),
+        tras_resultado=list(tras_resultado),
+        por_franja=list(por_franja),
+    )
+
+
 def jugador(
-    slug: str, nombre: str, resumen: Resumen, equipo: MediasEquipo | None = None, desglose=None, rol=None, sinergias=None
+    slug: str,
+    nombre: str,
+    resumen: Resumen,
+    equipo: MediasEquipo | None = None,
+    desglose=None,
+    rol=None,
+    sinergias=None,
+    sesiones=None,
 ):
     return JugadorContexto(
         slug=slug,
         nombre=nombre,
         juegos=[
             JuegoContexto(
-                juego=resumen.juego, rol=rol, resumen=resumen, equipo=equipo, desglose=desglose or [], sinergias=sinergias
+                juego=resumen.juego,
+                rol=rol,
+                resumen=resumen,
+                equipo=equipo,
+                desglose=desglose or [],
+                sinergias=sinergias,
+                sesiones=sesiones,
             )
         ],
     )
 
 
-__all__ = ["resumen_cs2", "equipo_cs2", "companero", "jugador", "Desglose", "Sinergias"]
+__all__ = ["resumen_cs2", "equipo_cs2", "companero", "momento", "sesiones", "jugador", "Desglose", "Sinergias"]

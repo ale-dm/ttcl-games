@@ -14,17 +14,21 @@ import com.ttcl.games.duende.DuendeCliente;
 import com.ttcl.games.duende.DuendeModelos.Insight;
 import com.ttcl.games.duende.DuendeModelos.ItemLote;
 import com.ttcl.games.duende.DuendeModelos.JuegoContexto;
+import com.ttcl.games.duende.DuendeModelos.JugadorContexto;
 import com.ttcl.games.duende.DuendeModelos.PeticionChat;
 import com.ttcl.games.duende.DuendeModelos.PeticionInsights;
 import com.ttcl.games.duende.DuendeModelos.RespuestaChat;
 import com.ttcl.games.duende.DuendeModelos.Salud;
 import com.ttcl.games.duende.DuendeNoDisponibleException;
 import com.ttcl.games.juego.Juego;
+import com.ttcl.games.stats.Modelos.FilaMomento;
 import com.ttcl.games.stats.Modelos.FilaSinergia;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -269,6 +273,66 @@ class ApiTest {
                 .andExpect(status().isOk());
         assertThat(duende.ultimaChat.equipo().getFirst().juegos())
                 .allSatisfy(g -> assertThat(g.sinergias().companeros()).isNotEmpty());
+    }
+
+    /** Las filas de una lista de las sesiones, por clave. */
+    private static Map<String, JsonNode> filas(JsonNode sesiones, String lista) {
+        Map<String, JsonNode> filas = new LinkedHashMap<>();
+        sesiones.get(lista).forEach(f -> filas.put(f.get("clave").asString(), f));
+        return filas;
+    }
+
+    @Test
+    void sesionesDeUnJugadorConLosDatosDeEjemplo() throws Exception {
+        JsonNode s = json("/api/jugadores/j3/sesiones?juego=cs2");
+        int total = json("/api/jugadores/j3/juegos/cs2").get("resumen").get("partidas").asInt();
+        int sesiones = s.get("sesiones").asInt();
+
+        assertThat(sesiones).isGreaterThanOrEqualTo(15);
+        assertThat(s.get("partidasPorSesion").asDouble()).isEqualTo(Math.round(10.0 * total / sesiones) / 10.0);
+        assertThat(filas(s, "porOrden")).containsOnlyKeys("1", "2", "3+");
+        assertThat(filas(s, "porOrden").get("1").get("partidas").asInt()).isEqualTo(sesiones); // una 1ª por sesión
+        assertThat(filas(s, "trasResultado")).containsOnlyKeys("victoria", "derrota");
+        for (String lista : List.of("porOrden", "trasResultado", "porFranja")) {
+            int suma = 0;
+            for (JsonNode f : filas(s, lista).values()) {
+                assertThat(f.get("partidas").asInt() + f.get("partidasResto").asInt()).isEqualTo(total);
+                suma += f.get("partidas").asInt();
+            }
+            // Todas las partidas tienen orden y franja; tras otra van todas menos la 1ª de cada sesión.
+            assertThat(suma).isEqualTo(lista.equals("trasResultado") ? total - sesiones : total);
+        }
+
+        mvc.perform(get("/api/jugadores/j4/sesiones?juego=cs2")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/jugadores/j3/sesiones")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void losDatosDeEjemploTienenTiltYUnaHoraBuena() throws Exception {
+        // Jugador 3 gana mucho menos a partir de la 3ª seguida; Jugador 4, mucho más por la tarde.
+        JsonNode tercera = filas(json("/api/jugadores/j3/sesiones?juego=cs2"), "porOrden").get("3+");
+        assertThat(tercera.get("partidas").asInt()).isGreaterThanOrEqualTo(10);
+        assertThat(tercera.get("winrateResto").asDouble() - tercera.get("winrate").asDouble()).isGreaterThanOrEqualTo(15);
+
+        JsonNode tarde = filas(json("/api/jugadores/j4/sesiones?juego=smite2"), "porFranja").get("tarde");
+        assertThat(tarde.get("partidas").asInt()).isGreaterThanOrEqualTo(10);
+        assertThat(tarde.get("winrate").asDouble() - tarde.get("winrateResto").asDouble()).isGreaterThanOrEqualTo(20);
+    }
+
+    @Test
+    void elDuendeRecibeLasSesiones() throws Exception {
+        mvc.perform(get("/api/jugadores/j3/consejos?juego=cs2")).andExpect(status().isOk());
+        assertThat(duende.ultimaInsights.sesiones().sesiones()).isGreaterThanOrEqualTo(15);
+        assertThat(duende.ultimaInsights.sesiones().porOrden()).extracting(FilaMomento::clave)
+                .containsExactly("1", "2", "3+");
+
+        duende.respuesta = new RespuestaChat("Hola", "reglas", null, List.of());
+        mvc.perform(post("/api/duende/chat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mensajes\": [{\"rol\": \"usuario\", \"texto\": \"¿Cuándo juego mejor?\"}]}"))
+                .andExpect(status().isOk());
+        assertThat(duende.ultimaChat.equipo()).flatExtracting(JugadorContexto::juegos)
+                .allSatisfy(g -> assertThat(g.sesiones().porFranja()).isNotEmpty());
     }
 
     @Test
