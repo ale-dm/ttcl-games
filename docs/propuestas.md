@@ -10,7 +10,7 @@ lo que se aprendió en su apartado y apuntar la entrega en [CHANGELOG.md](../CHA
 |---|---|---|---|---|---|
 | P1 | Rol del jugador | 1 | Bajo | Nuevos (los da el jugador) | Hecho |
 | P2 | Con quién juegas mejor (sinergias) | 1 | Bajo | Ya guardados | Hecho |
-| P3 | Sesiones y tilt | 1 | Bajo | Ya guardados | Pendiente |
+| P3 | Sesiones y tilt | 1 | Bajo | Ya guardados | Hecho |
 | P4 | Filtros por periodo | 1 | Bajo | Ya guardados | Pendiente |
 | P5 | Objetivos personales | 2 | Medio | Nuevos (los da el jugador) | Pendiente |
 | P6 | Memoria de consejos | 2 | Medio | Se generan | Pendiente |
@@ -39,9 +39,9 @@ y conviene hacerlo cuando lo demás esté estable.
 
 **Limitaciones que motivan esta hoja de ruta**
 
-1. No sabe el rol de cada uno: puede regañar a un soporte por hacer pocas kills.
+1. No sabe el rol de cada uno: puede regañar a un soporte por hacer pocas kills. (Resuelto en P1.)
 2. Las referencias de "jugador medio" son números fijos, no gente de tu nivel.
-3. No sabe con quién juegas, cuándo ni cuántas seguidas, aunque esos datos ya están en la base.
+3. No sabe con quién juegas, cuándo ni cuántas seguidas, aunque esos datos ya están en la base. (Resuelto en P2 y P3.)
 4. No recuerda qué te dijo ni si sirvió.
 5. Solo ve medias por partida: nada de rondas, posiciones, trades o economía.
 
@@ -133,6 +133,34 @@ sin Jugador 3, el 16,7 %". Lo que quedó y lo que se aprendió:
 - `DemoSeeder`: dar a algún jugador de ejemplo un patrón de tilt para que se vea.
 
 **Hecho cuando**: con datos de ejemplo sale al menos un aviso de tilt bien justificado y ninguno con menos de ~15 sesiones.
+
+**Hecho** (9 de octubre de 2026). Con los datos de ejemplo, a Jugador 3 en CS2: "A partir de la 3ª partida seguida ganas
+el 37,5 % (16 partidas); en las dos primeras, el 63,9 %", y a Jugador 4 en SMITE 2: "Por la tarde ganas el 64,3 % (14
+partidas); el resto del día, el 40,0 %". Lo que quedó y lo que se aprendió:
+- **Sesión**: menos de 45 minutos entre el final de una partida y el principio de la siguiente (`PAUSA_SESION`). Si no
+  se sabe cuánto duró, se cuenta desde su principio. Sesiones por jugador y juego.
+- **Se compara cada fila con el resto de partidas**, como en P2 (no con el winrate global): la API manda, por cada fila,
+  `partidasResto` y `winrateResto`. Filas: 1ª, 2ª y 3ª en adelante; tras victoria y tras derrota (dentro de la misma
+  sesión); mañana (6–14 h), tarde (14–20 h), noche (20–24 h) y madrugada (0–6 h) en la zona del equipo
+  (`TTCL_ZONA_HORARIA`, por defecto `Europe/Madrid`).
+- **Umbrales del Duende**: 15 sesiones o más (con menos, ni un aviso: lo pide la propuesta y hay test), 10 partidas a
+  cada lado. Tilt con 15 puntos menos desde la 3ª seguida (`tilt_sesion`) o tras perder (`tilt_derrota`); desde 25
+  puntos, *mejorar ya*. Mejor hora con 20 puntos más: se elige entre cuatro franjas y con 15 saldría alguna por pura
+  casualidad.
+- `tilt_derrota` solo sale si no sale `tilt_sesion`: casi siempre son lo mismo (las derrotas se amontonan al final de
+  las sesiones largas) y dos avisos de tilt seguidos sobran.
+- **El tilt se contagia en los datos**: Jugador 2 también recibe el aviso (39 % desde la 3ª, 62 % antes) porque juega
+  casi siempre con Jugador 3 y el resultado es del equipo. El Duende no puede saber de quién es la culpa, así que el
+  texto no culpa a nadie ("Las sesiones largas se te atragantan") y el consejo vale igual: sesiones más cortas.
+- Como en P2, con el tope de dos fortalezas la mejor hora puede quedarse fuera del panel (a Jugador 1 en SMITE 2 le
+  pasa). Al preguntar "¿cuándo juego mejor?", el chat la da igualmente.
+- `DemoSeeder` ahora juega por sesiones: el mismo grupo, varias partidas seguidas, casi siempre por la tarde o la noche.
+  Jugador 3 se tiltea desde la 3ª y Jugador 4 rinde más por la tarde. Todos los números de ejemplo han cambiado (el
+  ejemplo de P2 es ahora "Con Jugador 2 ganas el 51,0 % de 51 partidas; sin Jugador 2, el 21,4 %").
+- De paso: el consejo de las reglas especiales no rellenaba sus `{huecos}` (ninguno los usaba hasta ahora).
+- Endpoint nuevo: `GET /api/jugadores/{slug}/sesiones?juego=`.
+- **Queda pendiente**: comprobar con datos reales si `Entry_Datetime` de Hi-Rez es el principio o el final de la
+  partida (si es el final, las pausas salen una partida más cortas y alguna sesión se juntaría con la siguiente).
 
 ### P4 · Filtros por periodo
 

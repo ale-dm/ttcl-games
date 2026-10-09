@@ -3,6 +3,61 @@
 Lo que se ha entregado, de lo más reciente a lo más antiguo. Lo que falta por hacer está en
 [docs/propuestas.md](docs/propuestas.md) (P1–P12); al terminar una propuesta se marca allí y se anota aquí.
 
+## 2026-10-09 · P3: sesiones y tilt
+
+Commit `9e1b779`. El Duende ya sabe cuándo juega cada uno: cuántas partidas seguidas, qué pasa después de perder y a
+qué hora del día. Con eso avisa del tilt y dice a qué hora rinde más cada uno.
+
+**Qué se nota**
+- En el perfil, tarjeta **"Cuándo juegas mejor"**: winrate en la 1ª, la 2ª y de la 3ª en adelante de cada sesión,
+  después de ganar o de perder, y por hora del día; cada fila, con el winrate del resto de partidas.
+- El Duende avisa del tilt y da la mejor hora. Con los datos de ejemplo, a Jugador 3 en CS2: "Las sesiones largas se te
+  atragantan. A partir de la 3ª partida seguida ganas el 37,5 % (16 partidas); en las dos primeras, el 63,9 %", con el
+  consejo de jugar sesiones de dos o tres partidas y parar tras dos derrotas seguidas. A Jugador 4 en SMITE 2: "Rindes
+  más por la tarde. Por la tarde ganas el 64,3 % (14 partidas); el resto del día, el 40,0 %".
+- En el chat: "¿Cuándo juego mejor?", "¿Me tilteo?" o "¿A qué hora juego mejor?" (todas las filas, el aviso y el
+  consejo). Está entre las preguntas sugeridas.
+
+**Cómo funciona**
+- Sesión: partidas con menos de 45 minutos entre el final de una y el principio de la siguiente (sin duración, desde su
+  principio). Horas del día en la zona del equipo: mañana 6–14 h, tarde 14–20 h, noche 20–24 h, madrugada 0–6 h.
+- Cada fila se compara con el resto de partidas, no con el winrate global (como en P2).
+- El Duende no dice nada con menos de 15 sesiones y pide 10 partidas a cada lado. Tilt: 15 puntos menos desde la 3ª
+  seguida o, si eso no sale, en la partida que sigue a una derrota (25 o más, *mejorar ya*). Mejor hora: 20 puntos más
+  que el resto del día (se elige entre cuatro, así que se pide más).
+- El resultado es del equipo: si uno se tiltea, quien juega con él también lo nota. Con los datos de ejemplo, Jugador 2
+  también recibe el aviso. El texto no culpa a nadie y el consejo vale igual.
+
+**Cómo se configura**: `TTCL_ZONA_HORARIA` en `.env` (por defecto `Europe/Madrid`; con Docker también).
+
+**Cambios por servicio**
+- **API**: `Estadisticas.sesiones` (función pura) y `PAUSA_SESION`; `FilaParticipacion` lleva la duración de la
+  partida; endpoint `GET /api/jugadores/{slug}/sesiones?juego=`; `ttcl.zona-horaria` en `application.yml`.
+  `DemoSeeder` juega por sesiones (mismo grupo, varias partidas seguidas, casi siempre por la tarde o la noche), con un
+  patrón de tilt (Jugador 3) y una hora buena (Jugador 4). **Cambian todos los números de ejemplo**: el de P2 es ahora
+  "Con Jugador 2 ganas el 51,0 % de 51 partidas; sin Jugador 2, el 21,4 %".
+- **Contrato compartido**: `Sesiones` y `FilaMomento` en `PeticionInsights` y `JuegoContexto` (API → Duende) y para la
+  web.
+- **Duende**: reglas `tilt_sesion`, `tilt_derrota` y `mejor_horario` en `insights.py`; textos y `NOMBRES_MOMENTO` en
+  `textos.py`; intención `sesiones` en `reglas_chat.py`; las sesiones explicadas en el prompt de Gemini. Arreglado de
+  paso: el consejo de las reglas especiales no rellenaba sus `{huecos}`.
+- **Web**: tarjeta en el perfil, `i18n.momento()`, textos `momento.*` y la pregunta sugerida.
+- Sin migración: la duración ya se guardaba.
+
+**Tests**: Duende 55 → 67, API 34 → 40, web 17 → 20, todos en verde.
+- API: sesiones con pausas justas, sin duración, pasando la medianoche y sin resultado; la zona horaria y los límites de
+  cada franja; una sola partida y ninguna; el endpoint con los datos de ejemplo (cada lista suma todas las partidas);
+  que los datos de ejemplo tengan tilt y hora buena; lo que se manda al Duende.
+- Duende: tilt (medio y alto), sin avisos con menos de 15 sesiones, pocas partidas o poca diferencia, tras derrota (y
+  que no se repita con el de sesiones), mejor hora (y que no premie una franja con pocas partidas), inglés, nombres de
+  todas las filas, chat (con foco, pocas sesiones, sin nada que decir, sin datos, sin foco, el consejo aunque no quepa
+  en el panel, sugerencias), prompt de Gemini y la API HTTP.
+- Web: la tarjeta con sus tres bloques, los bloques vacíos fuera y la traducción de todas las filas.
+
+**Para actualizar una instalación**: como en P1 (parar la API, `./mvnw package -DskipTests`, arrancar; reiniciar el
+Duende). No hay migraciones. Con datos de ejemplo en H2, al arrancar se generan los nuevos; en Postgres con datos de
+ejemplo viejos, vacía la base para verlos.
+
 ## 2026-10-09 · P2: con quién juegas mejor (sinergias)
 
 Commit `c109873`. El Duende ya sabe con quién juega cada uno, algo que estaba en la base desde el principio (cada

@@ -8,7 +8,7 @@ Tres servicios; el navegador solo habla con la API Java y la API pasa resúmenes
 - `duende/` — Python, FastAPI. Recomendaciones por reglas (`app/insights.py`) y chat con Gemini o, sin clave, con reglas.
 
 **Hoja de ruta**: `docs/propuestas.md` (P1–P12) — lo siguiente que hay que construir para dar mejores datos al Duende.
-Al terminar una propuesta, marcarla allí (con lo aprendido) y anotar la entrega en `CHANGELOG.md`. Hechas: P1, P2.
+Al terminar una propuesta, marcarla allí (con lo aprendido) y anotar la entrega en `CHANGELOG.md`. Hechas: P1, P2, P3.
 
 ## Comandos
 
@@ -32,6 +32,10 @@ funciona con la API arrancada).
 - Roles por juego (P1): `Juego.java` (`roles`) ↔ `duende/app/metricas.py` (`AJUSTES_ROL`) y `textos.py`
   (`NOMBRES_ROL`) ↔ `textos.ts` (`rol.*`), y la tabla del README sale de `AJUSTES_ROL`. Ningún rol se llama igual en
   dos juegos: la web los traduce sin mirar el juego.
+- Filas de las sesiones (P3): las claves de `Estadisticas.sesiones` ("1", "2", "3+", "victoria", "derrota", "manana",
+  "tarde", "noche", "madrugada") ↔ `NOMBRES_MOMENTO` en `textos.py` ↔ `momento.*` en `textos.ts` (hay tests que lo vigilan).
+- `DemoSeeder` es determinista (semilla fija, horas en la zona del equipo): tocarlo cambia todos los números de ejemplo
+  y lo que dice el Duende. `ApiTest` comprueba que sigan saliendo los patrones (tilt, hora buena, rachas, compañeros).
 - Todo texto visible, en los dos idiomas (web y `duende/app/textos.py`).
 - El Duende no inventa números: todo dato sale de la API.
 - Migraciones nuevas como `V{n}__*.sql`, válidas en PostgreSQL y en H2 (modo PostgreSQL).
