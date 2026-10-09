@@ -85,9 +85,9 @@ Web en http://localhost:4200, con Postgres y datos de ejemplo (`TTCL_DEMO=true`;
 
 | Parte | Comando | Qué cubre |
 |---|---|---|
-| Duende | `cd duende && .venv/Scripts/python -m pytest` | Reglas de recomendación (también por rol), chat por reglas, uso y caché de Gemini, API |
-| API | `cd api && ./mvnw test` | Estadísticas, mapeo de FACEIT y Hi-Rez, carga del equipo con roles, API completa contra H2 con datos de ejemplo |
-| Web | `cd frontend && npm test` | Texto del Duende, i18n y formatos, estado del chat, rol en el perfil |
+| Duende | `cd duende && .venv/Scripts/python -m pytest` | Reglas de recomendación (también por rol y por compañero), chat por reglas, uso y caché de Gemini, API |
+| API | `cd api && ./mvnw test` | Estadísticas (también sinergias, dúos y tríos), mapeo de FACEIT y Hi-Rez, carga del equipo con roles, API completa contra H2 con datos de ejemplo |
+| Web | `cd frontend && npm test` | Texto del Duende, i18n y formatos, estado del chat, rol y "Con quién" en el perfil, dúos y tríos en el equipo |
 
 ## El Duende
 
@@ -120,11 +120,17 @@ avisa antes, lo reconoce antes como fortaleza y lo pone primero. La recomendaci�
 | `guardian` | Kills / partida, daño / min, oro / min | K/D | Asistencias / partida, daño mitigado |
 | `carry` | Daño mitigado | — | Daño / min, oro / min |
 
-**Chat** (`chat.py`): con `GOOGLE_API_KEY` contesta Gemini, que recibe los resúmenes del equipo (con el rol de cada uno)
-y las recomendaciones ya calculadas. Caché por petición, límite diario (`DUENDE_DAILY_LIMIT`) y modelos de respaldo si el principal ya no
-existe. Sin clave, sin cuota o si Gemini falla, contestan las reglas (`reglas_chat.py`): en qué mejorar, qué haces
-bien, cómo vas últimamente, peor mapa o dios, comparar a dos, quién es el mejor del equipo. La web indica bajo cada
-respuesta si la escribió Gemini o las reglas.
+**Con quién** (sinergias): la API calcula el winrate de cada jugador con cada compañero del equipo y en el resto de sus
+partidas, y cómo le va solo (mínimo 3 partidas por fila). Solo cuentan los del mismo bando: en FACEIT dos del equipo
+pueden caer en bandos contrarios. Si con alguien gana 15 puntos más (o menos) que sin él, con al menos 5 partidas a cada
+lado, el Duende lo dice ("Con Jugador 3 ganas el 55,2 % de 29 partidas; sin Jugador 3, el 16,7 %"). La web lo enseña en
+la tarjeta "Con quién" del perfil y, en el equipo, el mejor dúo y el mejor trío de cada juego.
+
+**Chat** (`chat.py`): con `GOOGLE_API_KEY` contesta Gemini, que recibe los resúmenes del equipo (con el rol de cada uno),
+las sinergias y las recomendaciones ya calculadas. Caché por petición, límite diario (`DUENDE_DAILY_LIMIT`) y modelos de
+respaldo si el principal ya no existe. Sin clave, sin cuota o si Gemini falla, contestan las reglas (`reglas_chat.py`):
+en qué mejorar, qué haces bien, cómo vas últimamente, peor mapa o dios, con quién juegas mejor, el mejor dúo, comparar a
+dos, quién es el mejor del equipo. La web indica bajo cada respuesta si la escribió Gemini o las reglas.
 
 **Personalidad** (`personalidad.py`): pica con las estadísticas como un colega del grupo, pero nunca entra en lo
 personal (aspecto, familia, origen, salud, dinero…). Solo se mete con lo que pasa en el juego.
@@ -138,7 +144,8 @@ Parte del prototipo `TTCL Stats.html` y lo lleva a una web de estadísticas comp
 - **Color con significado**: verde y rojo solo para victoria/derrota y mejor/peor; el violeta es del Duende (botones,
   cara, barras de "tú"). Así se reconoce de un vistazo qué es dato y qué es consejo.
 - **Estructura tipo csstats**: buscador siempre a mano, perfil con fila de cifras clave + tendencia, gráfica por
-  partida, desglose por mapa/dios con mejor y peor marcados, e historial. Ranking y cara a cara.
+  partida, desglose por mapa/dios con mejor y peor marcados, con quién juega mejor e historial. Ranking, cara a cara y
+  los mejores dúos y tríos del equipo.
 - **El Duende integrado, no escondido**: panel de recomendaciones junto a las estadísticas (fijo al hacer scroll en
   escritorio), consejo destacado en cada tarjeta del equipo, y el chat en un panel lateral con preguntas sugeridas
   según la página.
@@ -147,8 +154,8 @@ Parte del prototipo `TTCL Stats.html` y lo lleva a una web de estadísticas comp
 - **Accesibilidad**: foco visible, etiquetas para lectores de pantalla, `prefers-reduced-motion` y textos del Duende
   pintados como texto (nunca como HTML).
 
-Siguientes pasos: la hoja de ruta está en [docs/propuestas.md](docs/propuestas.md) (sinergias, tilt, objetivos,
-percentiles por nivel de FACEIT, Duende en Discord, análisis de demos…). Lo ya entregado, con lo que cambia en cada
+Siguientes pasos: la hoja de ruta está en [docs/propuestas.md](docs/propuestas.md) (sesiones y tilt, filtros por
+periodo, objetivos, percentiles por nivel de FACEIT, Duende en Discord, análisis de demos…). Lo ya entregado, con lo que cambia en cada
 servicio y cómo actualizar, está en [CHANGELOG.md](CHANGELOG.md).
 
 ## Fuentes de datos: estado

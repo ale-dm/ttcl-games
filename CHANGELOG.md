@@ -3,6 +3,49 @@
 Lo que se ha entregado, de lo más reciente a lo más antiguo. Lo que falta por hacer está en
 [docs/propuestas.md](docs/propuestas.md) (P1–P12); al terminar una propuesta se marca allí y se anota aquí.
 
+## 2026-10-09 · P2: con quién juegas mejor (sinergias)
+
+Commit `c109873`. El Duende ya sabe con quién juega cada uno, algo que estaba en la base desde el principio (cada
+partida guarda a todos los del equipo que la jugaron) pero no se usaba.
+
+**Qué se nota**
+- En el perfil, tarjeta **"Con quién"**: winrate con cada compañero del equipo, en el resto de partidas y jugando solo.
+- En la página del equipo, **"Los que mejor se entienden"**: el mejor dúo y el mejor trío de cada juego.
+- El Duende avisa cuando con alguien se gana mucho más o mucho menos. Con los datos de ejemplo, a Jugador 1: "Con
+  Jugador 3 ganas el 55,2 % de 29 partidas; sin Jugador 3, el 16,7 %". Y a Jugador 3, al revés, que con Jugador 1 no
+  termina de cuajar (55,2 % con él, 72,7 % sin él).
+- En el chat: "¿Con quién juego mejor?" (compañeros, solo y el consejo) y, desde la página del equipo, "¿Cuál es
+  nuestro mejor dúo?". Las dos están entre las preguntas sugeridas.
+
+**Cómo funciona**
+- Solo cuenta como compañero quien estaba en el mismo bando (mismo resultado): en FACEIT dos del equipo pueden caer en
+  bandos contrarios.
+- Filas con al menos 3 partidas. El Duende compara jugar **con** el compañero frente a jugar **sin** él (no frente al
+  winrate global, como decía la propuesta: en un grupo pequeño casi todo se juega con los mismos y la diferencia no se
+  vería). Avisa con 15 puntos o más de diferencia y 5 partidas o más a cada lado; solo del mejor y del peor compañero.
+- Dúos y tríos: partidas en que estaban juntos en el mismo bando, aunque hubiera alguien más.
+
+**Cambios por servicio**
+- **API**: `Estadisticas.sinergias` y `Estadisticas.grupos` (funciones puras); endpoints
+  `GET /api/jugadores/{slug}/sinergias?juego=` y `GET /api/equipo/grupos?juego=`. El historial de partidas sigue
+  igual, ahora calculado a partir de quién jugó cada partida.
+- **Contrato compartido**: `Sinergias` y `FilaSinergia` en `PeticionInsights` y `JuegoContexto` (API → Duende);
+  `Sinergias`, `Grupo` y `GruposJuego` para la web.
+- **Duende**: reglas `companero_bueno` y `companero_malo` en `insights.py`, textos en `textos.py`, intención
+  `companeros` en `reglas_chat.py` y las sinergias explicadas en el prompt de Gemini.
+- **Web**: tarjeta en el perfil, sección en el equipo y textos en `textos.ts`.
+- Sin migración: no hay datos nuevos.
+
+**Tests**: Duende 42 → 55, API 27 → 34, web 13 → 17, todos en verde.
+- API: sinergias con compañero, solo y bandos contrarios; mínimo de partidas; dúos y tríos con su orden; los endpoints
+  con los datos de ejemplo (con + sin = todas las partidas); lo que se manda al Duende.
+- Duende: compañero bueno y malo, umbrales y muestras, solo el mejor y el peor, inglés, chat (con foco, sin datos,
+  mejor dúo, sugerencias, el consejo aunque no quepa en el panel), prompt de Gemini y la API HTTP.
+- Web: la tarjeta "Con quién" (con y sin datos) y los mejores grupos del equipo.
+
+**Para actualizar una instalación**: como en P1 (parar la API, `./mvnw package -DskipTests`, arrancar; reiniciar el
+Duende). No hay migraciones.
+
 ## 2026-10-08 · P1: rol del jugador
 
 Commit `9d35552`. Hasta ahora el Duende no sabía qué papel juega cada uno y podía regañar a un soporte por hacer pocas

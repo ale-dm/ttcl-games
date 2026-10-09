@@ -9,7 +9,7 @@ lo que se aprendió en su apartado y apuntar la entrega en [CHANGELOG.md](../CHA
 | ID | Propuesta | Fase | Esfuerzo | Datos | Estado |
 |---|---|---|---|---|---|
 | P1 | Rol del jugador | 1 | Bajo | Nuevos (los da el jugador) | Hecho |
-| P2 | Con quién juegas mejor (sinergias) | 1 | Bajo | Ya guardados | Pendiente |
+| P2 | Con quién juegas mejor (sinergias) | 1 | Bajo | Ya guardados | Hecho |
 | P3 | Sesiones y tilt | 1 | Bajo | Ya guardados | Pendiente |
 | P4 | Filtros por periodo | 1 | Bajo | Ya guardados | Pendiente |
 | P5 | Objetivos personales | 2 | Medio | Nuevos (los da el jugador) | Pendiente |
@@ -102,6 +102,24 @@ un "bien" por asistencias; tests en `duende/tests/test_insights.py`.
 - Web: tarjeta "Con quién" en el perfil y, en el equipo, el mejor dúo y el mejor trío.
 
 **Hecho cuando**: el Duende puede decir "con Jugador 3 ganas el 65 %, sin él el 38 %" con datos de ejemplo.
+
+**Hecho** (9 de octubre de 2026). Con los datos de ejemplo, a Jugador 1: "Con Jugador 3 ganas el 55,2 % de 29 partidas;
+sin Jugador 3, el 16,7 %". Lo que quedó y lo que se aprendió:
+- **Cambio sobre lo previsto: se compara con y sin el compañero, no con el winrate global.** En un grupo pequeño casi
+  todo se juega con los mismos, así que "con él" es casi todo el global y la diferencia no se ve: con los datos de
+  ejemplo, el caso más claro (Jugador 1 con Jugador 3: 55 % con él, 17 % sin él) se quedaba en +14,8 puntos frente al
+  global. Las reglas `companero_bueno` / `companero_malo` saltan con 15 puntos o más entre con y sin, y piden al menos 5
+  partidas a cada lado. Solo se habla del mejor y del peor compañero.
+- **Mismo bando**: en FACEIT dos del equipo pueden caer en bandos contrarios. Solo cuenta como compañero quien tuvo el
+  mismo resultado en esa partida; si no hay nadie del equipo en su bando, la partida cuenta como "solo".
+- La API filtra compañeros, "solo", dúos y tríos con menos de 3 partidas (`MIN_PARTIDAS_SINERGIA`). Dúos y tríos cuentan
+  las partidas en que estaban juntos aunque hubiera alguien más; el mejor es el de más winrate y, a igualdad, el que
+  más ha jugado. Con 3 partidas un 3 de 3 puede quedar primero: la web enseña siempre cuántas son.
+- Con el tope de dos fortalezas, el compañero puede quedarse fuera del panel (a Jugador 2 le pasa: sus asistencias y su
+  utilidad pesan más por su rol). Al preguntar "¿con quién juego mejor?", el chat lo da igualmente.
+- El chat por reglas responde "¿con quién juego mejor?" (compañeros, solo y el consejo) y, sin nadie en el foco, "¿cuál
+  es nuestro mejor dúo?". Gemini recibe las sinergias de los jugadores del foco.
+- Endpoints nuevos: `GET /api/jugadores/{slug}/sinergias?juego=` y `GET /api/equipo/grupos?juego=` (sin `juego`, todos).
 
 ### P3 · Sesiones y tilt
 
