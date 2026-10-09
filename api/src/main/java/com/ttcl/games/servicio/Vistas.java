@@ -5,6 +5,7 @@ import com.ttcl.games.duende.DuendeModelos.JugadorRef;
 import com.ttcl.games.juego.Juego;
 import com.ttcl.games.stats.Modelos.FilaComparacion;
 import com.ttcl.games.stats.Modelos.FilaDesglose;
+import com.ttcl.games.stats.Modelos.Grupo;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
 import com.ttcl.games.stats.Modelos.PuntoSerie;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
@@ -72,6 +73,9 @@ public final class Vistas {
     public record FilaRanking(String slug, String nombre, ResumenJuego resumen) {}
 
     public record Ranking(Juego juego, List<String> metricas, List<FilaRanking> filas) {}
+
+    /** Dúos y tríos de un juego, el mejor winrate primero (con un mínimo de partidas juntos). */
+    public record GruposJuego(Juego juego, List<Grupo> duos, List<Grupo> trios) {}
 
     public record EstadoDuende(boolean disponible, boolean gemini, String modelo) {}
 

@@ -16,6 +16,7 @@ import com.ttcl.games.servicio.Vistas.Comparacion;
 import com.ttcl.games.servicio.Vistas.CuentaVista;
 import com.ttcl.games.servicio.Vistas.DetalleJuego;
 import com.ttcl.games.servicio.Vistas.FilaRanking;
+import com.ttcl.games.servicio.Vistas.GruposJuego;
 import com.ttcl.games.servicio.Vistas.JugadorVista;
 import com.ttcl.games.servicio.Vistas.PaginaPartidas;
 import com.ttcl.games.servicio.Vistas.PartidaVista;
@@ -23,7 +24,9 @@ import com.ttcl.games.servicio.Vistas.Ranking;
 import com.ttcl.games.stats.Estadisticas;
 import com.ttcl.games.stats.Modelos.FilaParticipacion;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
+import com.ttcl.games.stats.Modelos.Presencia;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
+import com.ttcl.games.stats.Modelos.Sinergias;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -58,15 +61,20 @@ public class EquipoServicio {
         this.participaciones = participaciones;
     }
 
-    /** Foto del equipo: jugadores, cuentas y participaciones por jugador y juego. */
+    /** Foto del equipo: jugadores, cuentas, participaciones por jugador y juego, y quién jugó cada partida. */
     record Instantanea(
             List<Jugador> jugadores,
             Map<Long, List<Cuenta>> cuentas,
             Map<Long, Map<Juego, List<FilaParticipacion>>> filas,
-            Map<Long, List<String>> nombresPorPartida) {
+            Map<Juego, Map<Long, List<Presencia>>> presencias) {
 
         List<FilaParticipacion> filas(Jugador j, Juego juego) {
             return filas.getOrDefault(j.getId(), Map.of()).getOrDefault(juego, List.of());
+        }
+
+        /** Quién del equipo jugó cada partida de un juego, por id de partida. */
+        Map<Long, List<Presencia>> presencias(Juego juego) {
+            return presencias.getOrDefault(juego, Map.of());
         }
 
         List<FilaParticipacion> todas(Jugador j) {
@@ -98,14 +106,16 @@ public class EquipoServicio {
             porJugador.computeIfAbsent(c.getJugador().getId(), k -> new ArrayList<>()).add(c);
         }
         Map<Long, Map<Juego, List<FilaParticipacion>>> filas = new HashMap<>();
-        Map<Long, List<String>> nombres = new HashMap<>();
+        Map<Juego, Map<Long, List<Presencia>>> presencias = new EnumMap<>(Juego.class);
         for (Participacion p : participaciones.findAllCompletas()) {
             filas.computeIfAbsent(p.getJugador().getId(), k -> new EnumMap<>(Juego.class))
                     .computeIfAbsent(p.getJuego(), k -> new ArrayList<>())
                     .add(FilaParticipacion.de(p));
-            nombres.computeIfAbsent(p.getPartida().getId(), k -> new ArrayList<>()).add(p.getJugador().getNombre());
+            presencias.computeIfAbsent(p.getJuego(), k -> new HashMap<>())
+                    .computeIfAbsent(p.getPartida().getId(), k -> new ArrayList<>())
+                    .add(new Presencia(p.getJugador().getSlug(), p.getJugador().getNombre(), p.getGano()));
         }
-        return new Instantanea(lista, porJugador, filas, nombres);
+        return new Instantanea(lista, porJugador, filas, presencias);
     }
 
     // ─── Vistas de jugador ──────────────────────────────────────────────────
@@ -188,7 +198,29 @@ public class EquipoServicio {
                 Estadisticas.resumir(juego, filas),
                 Estadisticas.resumir(juego, Estadisticas.recientes(filas, Estadisticas.PARTIDAS_RECIENTES)),
                 mediasSin(foto, j, juego),
-                Estadisticas.desglose(juego, filas));
+                Estadisticas.desglose(juego, filas),
+                Estadisticas.sinergias(juego, j.getSlug(), filas, foto.presencias(juego)));
+    }
+
+    /** Con quién del equipo juega mejor un jugador en un juego (y cómo le va solo). */
+    public Sinergias sinergias(String slug, Juego juego) {
+        Instantanea foto = instantanea();
+        Jugador j = foto.porSlug(slug);
+        List<FilaParticipacion> filas = foto.filas(j, juego);
+        if (filas.isEmpty()) {
+            throw new NoEncontradoException(j.getNombre() + " no tiene partidas guardadas de " + juego.nombre() + ".");
+        }
+        return Estadisticas.sinergias(juego, slug, filas, foto.presencias(juego));
+    }
+
+    /** Dúos y tríos del equipo en un juego, o en todos los que tengan partidas si {@code juego} es null. */
+    public List<GruposJuego> grupos(Juego juego) {
+        Instantanea foto = instantanea();
+        return Arrays.stream(Juego.values())
+                .filter(g -> (juego == null || juego == g) && !foto.presencias(g).isEmpty())
+                .map(g -> new GruposJuego(
+                        g, Estadisticas.grupos(foto.presencias(g), 2), Estadisticas.grupos(foto.presencias(g), 3)))
+                .toList();
     }
 
     public DetalleJuego detalle(String slug, Juego juego) {
@@ -216,8 +248,9 @@ public class EquipoServicio {
                 .map(f -> new PartidaVista(
                         f.partidaId(), f.juego(), f.jugadaEn(), f.modo(), f.gano(), f.kills(), f.muertes(),
                         f.asistencias(), f.datos(),
-                        foto.nombresPorPartida().getOrDefault(f.partidaId(), List.of()).stream()
-                                .filter(n -> !n.equals(j.getNombre()))
+                        foto.presencias(f.juego()).getOrDefault(f.partidaId(), List.of()).stream()
+                                .filter(p -> !p.slug().equals(j.getSlug()))
+                                .map(Presencia::nombre)
                                 .toList()))
                 .toList();
         return new PaginaPartidas(items, filas.size());
@@ -267,7 +300,7 @@ public class EquipoServicio {
     private static PeticionInsights peticion(Instantanea foto, Jugador j, Juego juego, String lang) {
         JuegoContexto c = contexto(foto, j, juego);
         return new PeticionInsights(lang, new JugadorRef(j.getSlug(), j.getNombre()), juego, c.rol(), c.resumen(),
-                c.reciente(), c.equipo(), c.desglose());
+                c.reciente(), c.equipo(), c.desglose(), c.sinergias());
     }
 
     /** Peticiones de recomendaciones de todo el equipo (una por jugador y juego), para las tarjetas. */

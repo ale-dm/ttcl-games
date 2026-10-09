@@ -37,7 +37,8 @@ _CABECERA_DATOS: dict[Idioma, str] = {
         "Porcentajes de 0 a 100. «forma» va de la partida más reciente a la más antigua (V victoria, D derrota). "
         "«rol» es el rol que juega en ese juego, si lo ha dicho; las recomendaciones ya lo tienen en cuenta. No le "
         "reproches lo que su rol no pide (a un soporte o un guardián no le pidas kills; a un entry, que muera poco) y "
-        "júzgale sobre todo por lo que sí pide."
+        "júzgale sobre todo por lo que sí pide. «sinergias» es cómo le va con cada compañero del equipo (partidas en "
+        "el mismo bando) y solo; «winrateSin» es su winrate en el resto de partidas, para comparar."
     ),
     "en": (
         "Available data (JSON). 'foco' are the players this conversation is about; 'equipo' is the whole group. "
@@ -45,7 +46,8 @@ _CABECERA_DATOS: dict[Idioma, str] = {
         "Percentages go from 0 to 100. 'forma' runs from most recent to oldest match (V win, D loss). "
         "'rol' is the role they play in that game, if they told us; the recommendations already account for it. "
         "Don't blame them for what their role doesn't ask for (don't ask a support or guardian for kills, or an entry "
-        "to die less) and judge them mainly on what it does ask for."
+        "to die less) and judge them mainly on what it does ask for. 'sinergias' is how they do with each teammate "
+        "(matches on the same side) and solo; 'winrateSin' is their win rate in the rest of their matches, to compare."
     ),
 }
 

@@ -387,6 +387,36 @@ ESPECIALES: dict[str, dict[Idioma, T]] = {
             },
         },
     },
+    "companero_bueno": {
+        "es": {
+            "titulo": "Con {nombre} vas a otro nivel",
+            "frase": "Con {nombre} ganas el {con} de {partidas} partidas; sin {nombre}, el {sin}.",
+            "consejo": "Buscad partidas juntos siempre que podáis: lo que hacéis funciona.",
+        },
+        "en": {
+            "titulo": "You click with {nombre}",
+            "frase": "With {nombre} you win {con} of {partidas} matches; without {nombre}, {sin}.",
+            "consejo": "Queue together whenever you can: whatever you're doing works.",
+        },
+    },
+    "companero_malo": {
+        "es": {
+            "titulo": "Con {nombre} no termina de cuajar",
+            "frase": "Con {nombre} ganas el {con} de {partidas} partidas; sin {nombre}, el {sin}.",
+            "consejo": {
+                "cs2": "No es culpa de nadie en concreto: repartid roles y posiciones antes de jugar juntos y repasad qué falla en las rondas que perdéis.",
+                "smite2": "Hablad la composición antes de entrar (quién inicia, quién protege) o probad otra combinación del equipo.",
+            },
+        },
+        "en": {
+            "titulo": "It's not clicking with {nombre}",
+            "frase": "With {nombre} you win {con} of {partidas} matches; without {nombre}, {sin}.",
+            "consejo": {
+                "cs2": "It's nobody's fault in particular: split roles and positions before playing together and review the rounds you lose.",
+                "smite2": "Agree on the comp before queueing (who engages, who peels) or try another team combo.",
+            },
+        },
+    },
     "desglose_bueno": {
         "es": {
             "titulo": "{clave} es tu casa",
@@ -416,6 +446,8 @@ FRASES: dict[Idioma, dict[str, str]] = {
         "referencia": "Referencia",
         "global": "Global",
         "ultimas": "Últimas {n}",
+        "con": "Con {nombre}",
+        "sin": "Sin {nombre}",
         "cmp_equipo_ref": "Tienes {tu}; el resto del equipo, {equipo}, y un jugador medio anda por {ref}.",
         "cmp_equipo": "Tienes {tu}; el resto del equipo, {equipo}.",
         "cmp_ref": "Tienes {tu}; un jugador medio anda por {ref}.",
@@ -430,6 +462,8 @@ FRASES: dict[Idioma, dict[str, str]] = {
         "referencia": "Benchmark",
         "global": "Overall",
         "ultimas": "Last {n}",
+        "con": "With {nombre}",
+        "sin": "Without {nombre}",
         "cmp_equipo_ref": "You have {tu}; the rest of the team, {equipo}, and an average player sits around {ref}.",
         "cmp_equipo": "You have {tu}; the rest of the team, {equipo}.",
         "cmp_ref": "You have {tu}; an average player sits around {ref}.",

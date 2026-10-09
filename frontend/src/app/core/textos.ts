@@ -51,6 +51,11 @@ export const ES = {
     'Aún no hay nadie en el equipo. Copia config/equipo.example.json a config/equipo.json o arranca la API con datos de ejemplo.',
   'equipo.vacioJuego': 'Nadie del equipo tiene partidas de {juego}.',
   'equipo.duende': 'El Duende · {juego}',
+  'equipo.grupos': 'Los que mejor se entienden',
+  'equipo.gruposSub': 'Mejor winrate jugando juntos en el mismo bando',
+  'equipo.duo': 'Dúo',
+  'equipo.trio': 'Trío',
+  'equipo.juntos': '{victorias} de {partidas} juntos',
 
   // Jugador
   'jugador.volver': '← Equipo',
@@ -77,6 +82,12 @@ export const ES = {
   'jugador.historial': 'Historial · {total} partidas',
   'jugador.pocasParaGrafica': 'Hacen falta al menos 2 partidas para dibujar la gráfica.',
   'jugador.rol': 'Rol en {juego}',
+  'jugador.conQuien': 'Con quién',
+  'jugador.conQuienSub': 'Tu winrate con cada compañero del equipo y en el resto de partidas',
+  'jugador.conQuienVacio': 'Aún no hay partidas suficientes con nadie del equipo.',
+  'jugador.solo': 'Solo',
+  'jugador.sinEl': 'sin: {winrate}',
+  'jugador.conEquipo': 'con el equipo: {winrate}',
 
   // Tablas
   'tabla.resultado': 'Resultado',
@@ -125,6 +136,8 @@ export const ES = {
   'duende.sugRacha': '¿Cómo voy últimamente?',
   'duende.sugMejorEquipo': '¿Quién es el mejor del equipo?',
   'duende.sugCadaUno': '¿En qué tiene que mejorar cada uno?',
+  'duende.sugConQuien': '¿Con quién juego mejor?',
+  'duende.sugMejorDuo': '¿Cuál es nuestro mejor dúo?',
 
   // Comparar
   'comparar.titulo': 'Comparar',
@@ -240,6 +253,11 @@ export const EN: Record<Clave, string> = {
     'No one on the team yet. Copy config/equipo.example.json to config/equipo.json or start the API with sample data.',
   'equipo.vacioJuego': 'Nobody on the team has {juego} matches.',
   'equipo.duende': 'The Duende · {juego}',
+  'equipo.grupos': 'Best partnerships',
+  'equipo.gruposSub': 'Highest win rate playing together on the same side',
+  'equipo.duo': 'Duo',
+  'equipo.trio': 'Trio',
+  'equipo.juntos': '{victorias} of {partidas} together',
 
   'jugador.volver': '← Team',
   'jugador.comparar': 'Compare',
@@ -265,6 +283,12 @@ export const EN: Record<Clave, string> = {
   'jugador.historial': 'History · {total} matches',
   'jugador.pocasParaGrafica': 'At least 2 matches are needed to draw the chart.',
   'jugador.rol': 'Role in {juego}',
+  'jugador.conQuien': 'Who with',
+  'jugador.conQuienSub': 'Your win rate with each teammate and in the rest of your matches',
+  'jugador.conQuienVacio': 'Not enough matches with anyone on the team yet.',
+  'jugador.solo': 'Solo',
+  'jugador.sinEl': 'without: {winrate}',
+  'jugador.conEquipo': 'with the team: {winrate}',
 
   'tabla.resultado': 'Result',
   'tabla.mapa': 'Map',
@@ -309,6 +333,8 @@ export const EN: Record<Clave, string> = {
   'duende.sugRacha': 'How have I been doing lately?',
   'duende.sugMejorEquipo': "Who's the best on the team?",
   'duende.sugCadaUno': 'What should each of us improve?',
+  'duende.sugConQuien': 'Who do I play best with?',
+  'duende.sugMejorDuo': "What's our best duo?",
 
   'comparar.titulo': 'Compare',
   'comparar.sub': 'Two teammates, face to face, metric by metric.',

@@ -35,6 +35,37 @@
     @if (!tarjetas.length) {
       <div class="aviso">{{ filtro() ? t('equipo.vacioJuego', { juego: nombreJuego[filtro()!] }) : t('equipo.vacio') }}</div>
     }
+    @if (mejoresGrupos().length) {
+      <section class="card grupos">
+        <div class="card-h">
+          <div>
+            <div class="card-t">{{ t('equipo.grupos') }}</div>
+            <div class="small muted">{{ t('equipo.gruposSub') }}</div>
+          </div>
+        </div>
+        <div class="grupos-l">
+          @for (m of mejoresGrupos(); track m.juego + m.tipo) {
+            <div class="grupo">
+              <div class="eyebrow">{{ juegoCorto[m.juego] }} · {{ t(m.tipo) }}</div>
+              <div class="grupo-n">
+                @for (j of m.grupo.jugadores; track j.slug; let ultimo = $last) {
+                  <a [routerLink]="['/jugador', j.slug]" [queryParams]="{ juego: m.juego }">{{ j.nombre }}</a>
+                  @if (!ultimo) {
+                    <span class="muted"> + </span>
+                  }
+                }
+              </div>
+              <div class="grupo-v">
+                <b class="num">{{ i18n.pct(m.grupo.winrate, 0) }}</b>
+                <span class="small muted">
+                  {{ t('equipo.juntos', { victorias: m.grupo.victorias, partidas: m.grupo.partidas }) }}
+                </span>
+              </div>
+            </div>
+          }
+        </div>
+      </section>
+    }
     <div class="team-grid">
       @for (tj of tarjetas; track tj.slug) {
         <article class="card pc">

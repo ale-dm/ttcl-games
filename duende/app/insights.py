@@ -8,7 +8,7 @@ Si se conoce el rol del jugador, cada métrica pesa lo que pide ese rol (metrica
 from dataclasses import dataclass
 
 from .metricas import METRICAS, NOMBRE_JUEGO, Metrica, factor_rol, formatear, rol_de
-from .modelos import Barra, Idioma, Insight, Nivel, PeticionInsights, Resumen
+from .modelos import Barra, FilaSinergia, Idioma, Insight, Nivel, PeticionInsights, Resumen
 from .textos import DEBILIDADES, ESPECIALES, FORTALEZAS, FRASES, NOMBRES_ROL, consejo_para
 
 MUESTRA_MINIMA = 5
@@ -16,6 +16,8 @@ MAX_DEBILIDADES = 4
 MAX_FORTALEZAS = 2
 LONGITUD_RACHA = 5
 MIN_PARTIDAS_DESGLOSE = 3
+# Puntos de winrate entre jugar con un compañero y sin él para decir que con él se gana más (o menos).
+DIFERENCIA_SINERGIA = 15
 
 ORDEN_NIVEL: dict[Nivel, int] = {"info": 0, "alto": 1, "medio": 2, "bien": 3}
 
@@ -275,6 +277,63 @@ def _desglose(p: PeticionInsights) -> list[Candidato]:
     return candidatos
 
 
+def _companero(regla: str, nivel: Nivel, c: FilaSinergia, p: PeticionInsights) -> Candidato:
+    """Insight de un compañero con el que se gana más o menos, con las barras de con él y sin él."""
+    lang = p.lang
+    assert c.winrate is not None and c.winrate_sin is not None and c.nombre
+    insight = _especial(
+        regla,
+        lang,
+        p.juego,
+        nivel,
+        nombre=c.nombre,
+        partidas=c.partidas,
+        con=formatear(c.winrate, "pct", lang),
+        sin=formatear(c.winrate_sin, "pct", lang),
+    )
+    f = FRASES[lang]
+    insight.formato = "pct"
+    insight.barras = [
+        Barra(etiqueta=f["con"].format(nombre=c.nombre), valor=c.winrate, tuyo=True),
+        Barra(etiqueta=f["sin"].format(nombre=c.nombre), valor=c.winrate_sin),
+    ]
+    return Candidato(insight, abs(c.winrate - c.winrate_sin) / 50)
+
+
+def _sinergias(p: PeticionInsights) -> list[Candidato]:
+    """El compañero con el que más gana y con el que menos, si la diferencia entre jugar con él y sin él es clara.
+
+    Se compara con las partidas sin él y no con el winrate global: en un grupo pequeño casi todo se juega con los
+    mismos, así que "con él" y "global" son casi lo mismo y la diferencia no se vería nunca.
+    """
+    if not p.sinergias:
+        return []
+    validos = [
+        c
+        for c in p.sinergias.companeros
+        if c.nombre
+        and c.winrate is not None
+        and c.winrate_sin is not None
+        and c.partidas >= MUESTRA_MINIMA
+        and c.partidas_sin >= MUESTRA_MINIMA
+    ]
+    if not validos:
+        return []
+    candidatos: list[Candidato] = []
+    mejor = max(validos, key=lambda c: (c.winrate - c.winrate_sin, c.partidas))
+    if mejor.winrate - mejor.winrate_sin >= DIFERENCIA_SINERGIA:
+        candidatos.append(_companero("companero_bueno", "bien", mejor, p))
+    peor = min(validos, key=lambda c: (c.winrate - c.winrate_sin, -c.partidas))
+    if peor.winrate_sin - peor.winrate >= DIFERENCIA_SINERGIA:
+        candidatos.append(_companero("companero_malo", "medio", peor, p))
+    return candidatos
+
+
+def companeros_destacados(p: PeticionInsights) -> list[Insight]:
+    """Las recomendaciones de compañeros sin el tope de fortalezas y debilidades, para cuando se pregunta por ellos."""
+    return [c.insight for c in _sinergias(p)]
+
+
 def generar_insights(p: PeticionInsights) -> list[Insight]:
     """Recomendaciones ordenadas: aviso de muestra, debilidades graves, medias y, al final, lo que hace bien."""
     if p.resumen.partidas == 0:
@@ -288,7 +347,7 @@ def generar_insights(p: PeticionInsights) -> list[Insight]:
             )
         )
 
-    especiales = [c for c in (_kd_sin_victorias(p), _rachas(p), _tendencia(p)) if c] + _desglose(p)
+    especiales = [c for c in (_kd_sin_victorias(p), _rachas(p), _tendencia(p)) if c] + _desglose(p) + _sinergias(p)
     # Si una regla especial ya habla del winrate, la genérica del winrate sobra.
     ocupadas = {c.insight.metrica for c in especiales if c.insight.id == "kd_sin_victorias"}
     candidatos = especiales + _por_metrica(p, {m for m in ocupadas if m})

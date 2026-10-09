@@ -8,7 +8,7 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Literal
 
-from .insights import generar_insights
+from .insights import companeros_destacados, generar_insights
 from .metricas import METRICAS, NOMBRE_JUEGO, formatear, metrica, rol_de
 from .modelos import (
     Idioma,
@@ -22,7 +22,9 @@ from .modelos import (
 )
 from .textos import NOMBRES_ROL
 
-Intencion =Literal["hola", "ranking", "comparar", "racha", "desglose", "fuerte", "mejorar", "stats", "ayuda"]
+Intencion = Literal[
+    "hola", "companeros", "ranking", "comparar", "racha", "desglose", "fuerte", "mejorar", "stats", "ayuda"
+]
 
 
 def normalizar(texto: str) -> str:
@@ -57,6 +59,11 @@ def detectar_intencion(pregunta: str, num_foco: int) -> Intencion:
     palabras = re.findall(r"[a-z0-9/]+", t)
     if len(palabras) <= 3 and _contiene(t, ["hola", "buenas", "hey", "hello", "hi", "ey"]):
         return "hola"
+    # Antes que "quién" (ranking y comparar): "¿con quién juego mejor?" va de compañeros.
+    if _contiene(t, ["con quien", "companer", "duo", "trio", "sinergi", "synerg", "teammate", "partner"]) or re.search(
+        r"\bwho\b.*\bwith\b", t
+    ):
+        return "companeros"
     if _contiene(t, ["compar", "vs", "versus", "contra", "frente a", "head to head"]) or (
         num_foco == 2 and _contiene(t, ["quien", "who"])
     ):
@@ -116,19 +123,22 @@ def _juego_de(j: JugadorContexto, juego: Juego | None) -> JuegoContexto | None:
     return max(con_partidas, key=lambda g: g.resumen.partidas, default=None)
 
 
-def insights_de(j: JugadorContexto, g: JuegoContexto, lang: Idioma) -> list[Insight]:
-    return generar_insights(
-        PeticionInsights(
-            lang=lang,
-            jugador=JugadorRef(slug=j.slug, nombre=j.nombre),
-            juego=g.juego,
-            rol=g.rol,
-            resumen=g.resumen,
-            reciente=g.reciente,
-            equipo=g.equipo,
-            desglose=g.desglose,
-        )
+def _peticion(j: JugadorContexto, g: JuegoContexto, lang: Idioma) -> PeticionInsights:
+    return PeticionInsights(
+        lang=lang,
+        jugador=JugadorRef(slug=j.slug, nombre=j.nombre),
+        juego=g.juego,
+        rol=g.rol,
+        resumen=g.resumen,
+        reciente=g.reciente,
+        equipo=g.equipo,
+        desglose=g.desglose,
+        sinergias=g.sinergias,
     )
+
+
+def insights_de(j: JugadorContexto, g: JuegoContexto, lang: Idioma) -> list[Insight]:
+    return generar_insights(_peticion(j, g, lang))
 
 
 def _t(lang: Idioma, es: str, en: str) -> str:
@@ -225,6 +235,75 @@ def _desglose(f: Foco, lang: Idioma) -> str:
         lang,
         "Pide el bueno siempre que puedas y entrena (o evita) el malo.",
         "Ask for the good one whenever you can and practise (or avoid) the bad one.",
+    )
+
+
+def _companeros(f: Foco, lang: Idioma) -> str:
+    """Con quién del equipo le va mejor, el mejor winrate primero, y cómo le va solo."""
+    s = f.juego.sinergias
+    juego = NOMBRE_JUEGO[f.juego.juego]
+    filas = sorted((c for c in (s.companeros if s else []) if c.winrate is not None), key=lambda c: -c.winrate)
+    solo = s.solo if s and s.solo and s.solo.winrate is not None else None
+    if not filas and not solo:
+        return _t(
+            lang,
+            f"Aún no hay partidas suficientes de {juego} con nadie del equipo para saberlo.",
+            f"Not enough {juego} matches with anyone on the team to tell yet.",
+        )
+    lineas = []
+    for c in filas:
+        con = formatear(c.winrate, "pct", lang)
+        sin = formatear(c.winrate_sin, "pct", lang)
+        lineas.append(
+            _t(
+                lang,
+                f"- **{c.nombre}**: ganas el {con} ({c.victorias} de {c.partidas}); sin {c.nombre}, el {sin}.",
+                f"- **{c.nombre}**: you win {con} ({c.victorias} of {c.partidas}); without {c.nombre}, {sin}.",
+            )
+        )
+    if solo:
+        pct = formatear(solo.winrate, "pct", lang)
+        lineas.append(
+            _t(
+                lang,
+                f"- **Solo**: ganas el {pct} ({solo.victorias} de {solo.partidas}).",
+                f"- **Solo**: you win {pct} ({solo.victorias} of {solo.partidas}).",
+            )
+        )
+    texto = _t(
+        lang, f"Con quién te va mejor en {juego}, {f.jugador.nombre}:", f"Who you do best with in {juego}, {f.jugador.nombre}:"
+    )
+    texto += "\n\n" + "\n".join(lineas)
+    # Sin el tope del panel: aquí se pregunta justo por esto.
+    for i in companeros_destacados(_peticion(f.jugador, f.juego, lang)):
+        texto += f"\n\n**{i.titulo}.** {i.consejo or ''}".rstrip()
+    return texto
+
+
+def _mejores_duos(equipo: list[JugadorContexto], juego: Juego, lang: Idioma) -> str:
+    """Los dúos del equipo con mejor winrate juntos, a partir de las sinergias de cada uno."""
+    duos: dict[tuple[str, str], tuple[str, float, int, int]] = {}
+    for j in equipo:
+        g = _juego_de(j, juego)
+        for c in g.sinergias.companeros if g and g.sinergias else []:
+            if c.slug and c.nombre and c.winrate is not None:
+                # Desde los dos lados salen los mismos números: basta con uno.
+                clave = tuple(sorted((j.slug, c.slug)))
+                duos.setdefault(clave, (f"{j.nombre} + {c.nombre}", c.winrate, c.victorias, c.partidas))
+    if not duos:
+        return _t(
+            lang,
+            f"Aún no hay ningún dúo con partidas suficientes juntos en {NOMBRE_JUEGO[juego]}.",
+            f"No duo has played enough {NOMBRE_JUEGO[juego]} matches together yet.",
+        )
+    orden = sorted(duos.values(), key=lambda d: (-d[1], -d[3]))[:3]
+    lineas = [
+        f"- **{n}**: {formatear(wr, 'pct', lang)} ({v} {_t(lang, 'de', 'of')} {p})" for n, wr, v, p in orden
+    ]
+    return (
+        _t(lang, f"Los mejores dúos en {NOMBRE_JUEGO[juego]}:", f"Best duos in {NOMBRE_JUEGO[juego]}:")
+        + "\n\n"
+        + "\n".join(lineas)
     )
 
 
@@ -359,9 +438,9 @@ def _equipo_mejorar(equipo: list[JugadorContexto], juego: Juego | None, lang: Id
 
 AYUDA = {
     "es": "Puedo decirte en qué mejorar, qué haces bien, cómo vas últimamente, qué mapa o dios se te da peor, "
-    "o comparar a dos del equipo. Pregúntame algo de eso.",
+    "con quién juegas mejor o comparar a dos del equipo. Pregúntame algo de eso.",
     "en": "I can tell you what to improve, what you do well, how you've been doing lately, your worst map or god, "
-    "or compare two teammates. Ask me any of that.",
+    "who you play best with, or compare two teammates. Ask me any of that.",
 }
 
 
@@ -383,6 +462,12 @@ def responder(p: PeticionChat) -> str:
 
     if intencion == "hola":
         return _t(lang, "¡Buenas! Soy el Duende. ", "Hey! I'm the Duende. ") + AYUDA[lang]
+
+    if intencion == "companeros" and not foco:
+        juego_d = juego or next((g.juego for j in p.equipo for g in j.juegos), None)
+        if not juego_d:
+            return _t(lang, "Aún no hay partidas guardadas.", "There are no saved matches yet.")
+        return _mejores_duos(p.equipo, juego_d, lang)
 
     if intencion == "ranking" or (not foco and intencion in ("comparar", "fuerte", "stats")):
         juego_r = juego or next((g.juego for j in p.equipo for g in j.juegos), None)
@@ -412,6 +497,8 @@ def responder(p: PeticionChat) -> str:
         if len(foco) == 2 and (g2 := _juego_de(foco[1], g.juego)):
             return _comparar(f, Foco(foco[1], g2), lang)
         return _contra_equipo(f, lang)
+    if intencion == "companeros":
+        return _companeros(f, lang)
     if intencion == "fuerte":
         return _fuerte(f, lang)
     if intencion == "racha":
@@ -443,11 +530,13 @@ def sugerencias(p: PeticionChat) -> list[str]:
             _t(lang, "¿En qué tengo que mejorar?", "What should I improve?"),
             _t(lang, "¿Qué hago bien?", "What am I good at?"),
             _t(lang, "¿Cómo voy últimamente?", "How have I been doing lately?"),
+            _t(lang, "¿Con quién juego mejor?", "Who do I play best with?"),
             _t(lang, f"¿Qué {que} se me da peor?", f"What's my worst {que}?"),
         ]
     juegos = sorted({g.juego for j in p.equipo for g in j.juegos})
     preguntas = [_t(lang, f"¿Quién es el mejor en {NOMBRE_JUEGO[jg]}?", f"Who's the best at {NOMBRE_JUEGO[jg]}?") for jg in juegos]
     preguntas.append(_t(lang, "¿En qué tiene que mejorar cada uno?", "What should each of us improve?"))
+    preguntas.append(_t(lang, "¿Cuál es nuestro mejor dúo?", "What's our best duo?"))
     return preguntas[:4]
 
 

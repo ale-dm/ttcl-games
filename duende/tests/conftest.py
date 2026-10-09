@@ -1,7 +1,7 @@
 import pytest
 
 from app.config import get_config
-from app.modelos import Desglose, JuegoContexto, JugadorContexto, MediasEquipo, Resumen
+from app.modelos import Desglose, FilaSinergia, JuegoContexto, JugadorContexto, MediasEquipo, Resumen, Sinergias
 
 
 @pytest.fixture(autouse=True)
@@ -45,12 +45,32 @@ def equipo_cs2(**cambios) -> MediasEquipo:
     return MediasEquipo(**base)
 
 
-def jugador(slug: str, nombre: str, resumen: Resumen, equipo: MediasEquipo | None = None, desglose=None, rol=None):
-    return JugadorContexto(
-        slug=slug,
+def companero(nombre: str, partidas: int, winrate: float, partidas_sin: int, winrate_sin: float | None) -> FilaSinergia:
+    """Fila de sinergia con un compañero: tantas partidas con él y tantas sin él, con su winrate."""
+    return FilaSinergia(
+        slug=nombre.lower().replace(" ", ""),
         nombre=nombre,
-        juegos=[JuegoContexto(juego=resumen.juego, rol=rol, resumen=resumen, equipo=equipo, desglose=desglose or [])],
+        partidas=partidas,
+        victorias=round(partidas * winrate / 100),
+        winrate=winrate,
+        kd=1.0,
+        partidas_sin=partidas_sin,
+        winrate_sin=winrate_sin,
     )
 
 
-__all__ = ["resumen_cs2", "equipo_cs2", "jugador", "Desglose"]
+def jugador(
+    slug: str, nombre: str, resumen: Resumen, equipo: MediasEquipo | None = None, desglose=None, rol=None, sinergias=None
+):
+    return JugadorContexto(
+        slug=slug,
+        nombre=nombre,
+        juegos=[
+            JuegoContexto(
+                juego=resumen.juego, rol=rol, resumen=resumen, equipo=equipo, desglose=desglose or [], sinergias=sinergias
+            )
+        ],
+    )
+
+
+__all__ = ["resumen_cs2", "equipo_cs2", "companero", "jugador", "Desglose", "Sinergias"]

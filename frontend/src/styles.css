@@ -206,6 +206,15 @@ h1 { font-size: 34px; letter-spacing: -0.03em; margin: 0; font-weight: 700; line
 .pc-tip:hover { text-decoration: none; color: var(--text); }
 .pc-tip-t { font-size: 14px; font-weight: 550; margin-top: 4px; }
 
+/* Mejores dúos y tríos, encima de las tarjetas del equipo */
+.grupos { margin-bottom: 16px; }
+.grupos-l { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 12px; padding: 12px 18px 18px; }
+.grupo { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface2); min-width: 0; }
+.grupo-n { font-weight: 600; font-size: 14px; }
+.grupo-n a { color: var(--text); }
+.grupo-v { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.grupo-v b { font-size: 20px; font-weight: 650; letter-spacing: -0.02em; }
+
 /* ─── Jugador ─────────────────────────────────────────────────────────────── */
 .crumb { display: inline-block; font-size: 13.5px; color: var(--muted); margin-bottom: 18px; }
 .crumb:hover { color: var(--text); }

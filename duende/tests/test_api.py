@@ -54,6 +54,19 @@ def test_insights_con_rol():
     assert "fuerte_asistencias_media" in con_rol
 
 
+def test_insights_con_sinergias_en_camel_case():
+    fila = {"slug": "j3", "nombre": "Jugador 3", "partidas": 20, "victorias": 13, "winrate": 65.0, "kd": 1.1,
+            "partidasSin": 10, "winrateSin": 38.0}
+    r = cliente.post(
+        "/v1/insights",
+        json={"lang": "es", "jugador": {"slug": "j1", "nombre": "Jugador 1"}, "juego": "cs2", "resumen": RESUMEN,
+              "sinergias": {"solo": None, "companeros": [fila]}},
+    )
+    assert r.status_code == 200
+    bueno = next(i for i in r.json()["insights"] if i["id"] == "companero_bueno")
+    assert bueno["texto"] == "Con Jugador 3 ganas el 65,0 % de 20 partidas; sin Jugador 3, el 38,0 %."
+
+
 def test_insights_lote():
     item = {"lang": "en", "jugador": {"slug": "j1", "nombre": "Jugador 1"}, "juego": "cs2", "resumen": RESUMEN}
     r = cliente.post("/v1/insights/lote", json={"items": [item, {**item, "jugador": {"slug": "j2", "nombre": "J2"}}]})

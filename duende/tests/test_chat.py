@@ -1,9 +1,9 @@
 from app import chat, gemini
 from app.config import get_config
 from app.modelos import Desglose, Mensaje, PeticionChat
-from app.reglas_chat import detectar_intencion, detectar_juego
+from app.reglas_chat import detectar_intencion, detectar_juego, insights_de
 
-from .conftest import equipo_cs2, jugador, resumen_cs2
+from .conftest import Sinergias, companero, equipo_cs2, jugador, resumen_cs2
 
 
 def equipo():
@@ -70,6 +70,92 @@ def test_racha_en_ingles():
     assert "Last 10" in r.respuesta and "L L L L W" in r.respuesta
 
 
+def test_intencion_de_companeros_antes_que_quien():
+    assert detectar_intencion("¿Con quién juego mejor?", 1) == "companeros"
+    assert detectar_intencion("¿Con quién juego mejor?", 2) == "companeros"  # no es "¿quién es mejor?"
+    assert detectar_intencion("who do I play best with?", 1) == "companeros"
+    assert detectar_intencion("¿Cuál es nuestro mejor dúo?", 0) == "companeros"
+    assert detectar_intencion("¿Quién es mejor?", 2) == "comparar"
+
+
+def equipo_con_sinergias():
+    ana = Sinergias(
+        solo=companero("solo", 6, 33.3, 24, 58.3).model_copy(update={"slug": None, "nombre": None}),
+        companeros=[
+            companero("Bea", 20, 65.0, 10, 38.0).model_copy(update={"slug": "j2"}),
+            companero("Carla", 12, 41.7, 18, 61.1),
+        ],
+    )
+    bea = Sinergias(companeros=[companero("Ana", 20, 65.0, 8, 50.0).model_copy(update={"slug": "j1"})])
+    return [
+        jugador("j1", "Ana", resumen_cs2(), equipo_cs2(), sinergias=ana),
+        jugador("j2", "Bea", resumen_cs2(), equipo_cs2(), sinergias=bea),
+    ]
+
+
+def test_con_quien_juego_mejor():
+    peticion = PeticionChat(
+        lang="es", mensajes=[Mensaje(rol="usuario", texto="¿Con quién juego mejor?")], foco=["j1"],
+        equipo=equipo_con_sinergias(),
+    )
+    r = chat.responder(peticion).respuesta
+    lineas = r.split("\n")
+    assert lineas[0] == "Con quién te va mejor en Counter-Strike 2, Ana:"
+    assert "- **Bea**: ganas el 65,0 % (13 de 20); sin Bea, el 38,0 %." in lineas
+    assert lineas.index("- **Bea**: ganas el 65,0 % (13 de 20); sin Bea, el 38,0 %.") < lineas.index(
+        "- **Carla**: ganas el 41,7 % (5 de 12); sin Carla, el 61,1 %."
+    )
+    assert "- **Solo**: ganas el 33,3 % (2 de 6)." in lineas
+    # Y lo que el Duende saca de ahí, con su consejo.
+    assert "**Con Bea vas a otro nivel.** Buscad partidas juntos" in r
+    assert "**Con Carla no termina de cuajar.**" in r
+
+
+def test_con_quien_da_el_consejo_aunque_en_el_panel_no_quepa():
+    # K/D y asistencias muy por encima: dos fortalezas que pesan más que el compañero (+20 puntos).
+    s = Sinergias(companeros=[companero("Bea", 20, 60.0, 10, 40.0).model_copy(update={"slug": "j2"})])
+    ana = jugador("j1", "Ana", resumen_cs2(kd=1.5, asistencias_media=8.0), equipo_cs2(), sinergias=s)
+    assert "companero_bueno" not in [i.id for i in insights_de(ana, ana.juegos[0], "es")]
+
+    r = chat.responder(
+        PeticionChat(lang="es", mensajes=[Mensaje(rol="usuario", texto="¿Con quién juego mejor?")], foco=["j1"],
+                     equipo=[ana])
+    )
+    assert "**Con Bea vas a otro nivel.** Buscad partidas juntos" in r.respuesta
+
+
+def test_con_quien_sin_datos_y_en_ingles():
+    sin_datos = jugador("j1", "Ana", resumen_cs2(), equipo_cs2())
+    r = chat.responder(
+        PeticionChat(lang="en", mensajes=[Mensaje(rol="usuario", texto="who do I play best with?")], foco=["j1"],
+                     equipo=[sin_datos])
+    )
+    assert r.respuesta == "Not enough Counter-Strike 2 matches with anyone on the team to tell yet."
+
+
+def test_mejor_duo_del_equipo_sin_foco():
+    r = chat.responder(
+        PeticionChat(lang="es", mensajes=[Mensaje(rol="usuario", texto="¿Cuál es nuestro mejor dúo?")],
+                     equipo=equipo_con_sinergias())
+    ).respuesta
+    # Ana + Bea sale de las dos fichas, pero cuenta una vez.
+    assert r.split("\n") == [
+        "Los mejores dúos en Counter-Strike 2:",
+        "",
+        "- **Ana + Bea**: 65,0 % (13 de 20)",
+        "- **Ana + Carla**: 41,7 % (5 de 12)",
+    ]
+
+
+def test_sugerencias_de_companeros():
+    uno = chat.responder(PeticionChat(lang="es", mensajes=[Mensaje(rol="usuario", texto="hola")], foco=["j1"],
+                                      equipo=equipo_con_sinergias()))
+    assert "¿Con quién juego mejor?" in uno.sugerencias
+    todos = chat.responder(PeticionChat(lang="es", mensajes=[Mensaje(rol="usuario", texto="hola")],
+                                        equipo=equipo_con_sinergias()))
+    assert "¿Cuál es nuestro mejor dúo?" in todos.sugerencias
+
+
 def test_mejorar_tiene_en_cuenta_el_rol():
     r = resumen_cs2(kills_media=12.0, asistencias_media=4.0)
 
@@ -104,6 +190,26 @@ def test_el_rol_llega_a_gemini(monkeypatch):
     assert '"rol":"awp"' in sistema  # el del foco
     assert '"rol":"soporte"' in sistema  # y el del resto del equipo
     assert "a un soporte o un guardián no le pidas kills" in sistema
+
+
+def test_las_sinergias_llegan_a_gemini(monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "clave-de-prueba")
+    get_config.cache_clear()
+    sistemas = []
+
+    def falso(sistema, contenidos, temperatura=0.8):
+        sistemas.append(sistema)
+        return "Respuesta de Gemini", "gemini-falso"
+
+    monkeypatch.setattr(gemini, "generar", falso)
+    chat.responder(
+        PeticionChat(lang="es", mensajes=[Mensaje(rol="usuario", texto="¿Con quién juego mejor? (Gemini)")],
+                     foco=["j1"], equipo=equipo_con_sinergias())
+    )
+    sistema = sistemas[0]
+    assert '"nombre":"Bea","partidas":20' in sistema and '"winrateSin":38.0' in sistema
+    assert "«winrateSin» es su winrate en el resto de partidas" in sistema
+    assert "Con Bea vas a otro nivel" in sistema  # y la recomendación ya calculada
 
 
 def test_con_gemini_usa_gemini_y_cachea(monkeypatch):

@@ -39,6 +39,17 @@ export class EquipoPagina {
     () => true,
     () => this.api.estado(),
   );
+  protected readonly grupos = cargaReactiva(
+    () => ({ juego: this.filtro() }),
+    (p) => this.api.grupos(p.juego),
+  );
+  /** El mejor dúo y el mejor trío de cada juego, los que haya. */
+  protected readonly mejoresGrupos = computed(() =>
+    (this.grupos.estado().datos ?? []).flatMap((g) => [
+      ...(g.duos.length ? [{ juego: g.juego, tipo: 'equipo.duo' as const, grupo: g.duos[0] }] : []),
+      ...(g.trios.length ? [{ juego: g.juego, tipo: 'equipo.trio' as const, grupo: g.trios[0] }] : []),
+    ]),
+  );
 
   constructor() {
     effect(() => this.duende.fijarContexto({ foco: [], juego: this.filtro() }));

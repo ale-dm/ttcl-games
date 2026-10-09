@@ -6,10 +6,16 @@ import com.ttcl.games.juego.Juego;
 import com.ttcl.games.stats.Modelos.FilaComparacion;
 import com.ttcl.games.stats.Modelos.FilaDesglose;
 import com.ttcl.games.stats.Modelos.FilaParticipacion;
+import com.ttcl.games.stats.Modelos.FilaSinergia;
+import com.ttcl.games.stats.Modelos.Grupo;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
+import com.ttcl.games.stats.Modelos.Miembro;
+import com.ttcl.games.stats.Modelos.Presencia;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
+import com.ttcl.games.stats.Modelos.Sinergias;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -124,6 +130,100 @@ class EstadisticasTest {
         assertThat(fila(filas, "muertes_media").ventaja()).isEqualTo("b"); // menos muertes es mejor
         assertThat(fila(filas, "adr").ventaja()).isNull(); // empate
         assertThat(filas).extracting(FilaComparacion::metrica).doesNotContain("hs_pct"); // sin datos de nadie
+    }
+
+    private static Presencia p(String slug, Boolean gano) {
+        return new Presencia(slug, slug.toUpperCase(), gano);
+    }
+
+    @Test
+    void sinergiasConCadaCompaneroDelMismoBandoYSolo() {
+        // Partidas de "a": con b (3), solas (3), con c (1, no llega al mínimo) y una contra b, en bandos contrarios.
+        Map<Long, List<Presencia>> presencias = Map.of(
+                1L, List.of(p("a", true), p("b", true)),
+                2L, List.of(p("a", false), p("b", false)),
+                3L, List.of(p("a", true), p("b", true)),
+                4L, List.of(p("a", true)),
+                5L, List.of(p("a", false)),
+                6L, List.of(p("a", false)),
+                7L, List.of(p("a", true), p("c", true)),
+                8L, List.of(p("a", true), p("b", false)));
+        List<FilaParticipacion> filas = new ArrayList<>();
+        presencias.forEach((id, ps) -> {
+            Boolean gano = ps.getFirst().gano();
+            filas.add(new FilaParticipacion(id, Juego.CS2, BASE.plusSeconds(id), "x", gano, 10, 10, 2, Map.of()));
+        });
+
+        Sinergias s = Estadisticas.sinergias(Juego.CS2, "a", filas, presencias);
+
+        assertThat(s.companeros()).singleElement().satisfies(b -> {
+            assertThat(b.slug()).isEqualTo("b");
+            assertThat(b.nombre()).isEqualTo("B");
+            assertThat(b.partidas()).isEqualTo(3); // la 8 no: b estaba en el otro bando
+            assertThat(b.victorias()).isEqualTo(2);
+            assertThat(b.winrate()).isEqualTo(66.7);
+            assertThat(b.kd()).isEqualTo(1.0);
+            assertThat(b.partidasSin()).isEqualTo(5);
+            assertThat(b.winrateSin()).isEqualTo(60.0); // 4, 7 y 8 ganadas; 5 y 6 perdidas
+        });
+        FilaSinergia solo = s.solo();
+        assertThat(solo.slug()).isNull();
+        assertThat(solo.partidas()).isEqualTo(4); // 4, 5, 6 y la 8, sin nadie del equipo en su bando
+        assertThat(solo.winrate()).isEqualTo(50.0);
+        assertThat(solo.partidasSin()).isEqualTo(4);
+        assertThat(solo.winrateSin()).isEqualTo(75.0);
+    }
+
+    @Test
+    void sinergiasSinPartidasSuficientesNoDanFilas() {
+        // Una partida con b y otra sola: ninguna llega a las 3 que hacen falta.
+        Map<Long, List<Presencia>> presencias = Map.of(1L, List.of(p("a", true), p("b", true)), 2L, List.of(p("a", true)));
+        List<FilaParticipacion> filas = List.of(cs2(1, true, 1, 1, 0, Map.of()), cs2(2, true, 1, 1, 0, Map.of()));
+
+        Sinergias s = Estadisticas.sinergias(Juego.CS2, "a", filas, presencias);
+
+        assertThat(s.companeros()).isEmpty();
+        assertThat(s.solo()).isNull();
+    }
+
+    @Test
+    void duosYTriosDelMismoBandoConElMejorPrimero() {
+        Map<Long, List<Presencia>> presencias = Map.of(
+                1L, List.of(p("a", true), p("b", true), p("c", true)),
+                2L, List.of(p("a", true), p("b", true), p("c", false)), // c en el otro bando
+                3L, List.of(p("b", false), p("a", false)),
+                4L, List.of(p("a", true), p("c", true)),
+                5L, List.of(p("c", true), p("a", true)),
+                6L, List.of(p("b", true), p("c", true)),
+                7L, List.of(p("a", false), p("b", false), p("c", false)),
+                8L, List.of(p("a", true), p("b", true), p("c", true)));
+
+        List<Grupo> duos = Estadisticas.grupos(presencias, 2);
+        List<Grupo> trios = Estadisticas.grupos(presencias, 3);
+
+        assertThat(duos).extracting(g -> g.jugadores().stream().map(Miembro::slug).toList())
+                .containsExactly(List.of("a", "c"), List.of("b", "c"), List.of("a", "b"));
+        assertThat(duos).extracting(Grupo::partidas).containsExactly(5, 4, 5);
+        assertThat(duos).extracting(Grupo::winrate).containsExactly(80.0, 75.0, 60.0);
+        assertThat(duos.getFirst().jugadores()).extracting(Miembro::nombre).containsExactly("A", "C");
+        assertThat(trios).singleElement().satisfies(t -> {
+            assertThat(t.partidas()).isEqualTo(3); // 1, 7 y 8: en la 2, c estaba enfrente
+            assertThat(t.victorias()).isEqualTo(2);
+            assertThat(t.winrate()).isEqualTo(66.7);
+        });
+    }
+
+    @Test
+    void aIgualdadDeWinrateVaPrimeroElGrupoQueMasHaJugado() {
+        Map<Long, List<Presencia>> presencias = new HashMap<>();
+        for (long i = 1; i <= 3; i++) {
+            presencias.put(i, List.of(p("a", true), p("b", true)));
+        }
+        for (long i = 4; i <= 9; i++) {
+            presencias.put(i, List.of(p("c", true), p("d", true)));
+        }
+
+        assertThat(Estadisticas.grupos(presencias, 2)).extracting(Grupo::partidas).containsExactly(6, 3);
     }
 
     private static FilaComparacion fila(List<FilaComparacion> filas, String metrica) {

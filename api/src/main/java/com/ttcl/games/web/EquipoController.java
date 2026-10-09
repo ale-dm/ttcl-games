@@ -11,6 +11,7 @@ import com.ttcl.games.servicio.Vistas.BusquedaVista;
 import com.ttcl.games.servicio.Vistas.Comparacion;
 import com.ttcl.games.servicio.Vistas.Estado;
 import com.ttcl.games.servicio.Vistas.EstadoDuende;
+import com.ttcl.games.servicio.Vistas.GruposJuego;
 import com.ttcl.games.servicio.Vistas.Ranking;
 import com.ttcl.games.servicio.Vistas.TarjetaJugador;
 import java.util.List;
@@ -66,6 +67,12 @@ public class EquipoController {
     public List<TarjetaJugador> equipo(
             @RequestParam(required = false) Juego juego, @RequestParam(defaultValue = "es") String lang) {
         return duende.tarjetas(juego, lang);
+    }
+
+    /** Mejores dúos y tríos. Con {@code juego}, solo ese juego. */
+    @GetMapping("/equipo/grupos")
+    public List<GruposJuego> grupos(@RequestParam(required = false) Juego juego) {
+        return equipo.grupos(juego);
     }
 
     @GetMapping("/buscar")

@@ -7,12 +7,14 @@ import {
   ConsejosVista,
   DetalleJuego,
   Estado,
+  GruposJuego,
   Juego,
   JugadorVista,
   MensajeChat,
   PaginaPartidas,
   Ranking,
   RespuestaChat,
+  Sinergias,
   TarjetaJugador,
 } from './modelos';
 import { Idioma } from './i18n';
@@ -48,6 +50,14 @@ export class Api {
     let params = new HttpParams().set('limite', limite).set('offset', offset);
     if (juego) params = params.set('juego', juego);
     return this.http.get<PaginaPartidas>(`/api/jugadores/${encodeURIComponent(slug)}/partidas`, { params });
+  }
+
+  sinergias(slug: string, juego: Juego): Observable<Sinergias> {
+    return this.http.get<Sinergias>(`/api/jugadores/${encodeURIComponent(slug)}/sinergias`, { params: { juego } });
+  }
+
+  grupos(juego: Juego | null): Observable<GruposJuego[]> {
+    return this.http.get<GruposJuego[]>('/api/equipo/grupos', { params: juego ? { juego } : {} });
   }
 
   consejos(slug: string, juego: Juego, lang: Idioma): Observable<ConsejosVista> {

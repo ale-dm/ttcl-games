@@ -72,6 +72,12 @@ export class JugadorPagina {
   protected readonly paginaPartidas = cargaReactiva(this.clave, (p) =>
     this.api.partidas(p.slug, p.juego, POR_PAGINA, 0),
   );
+  protected readonly sinergias = cargaReactiva(this.clave, (p) => this.api.sinergias(p.slug, p.juego));
+  /** Filas de "Con quién": cada compañero (el que más partidas juntos primero) y, al final, solo. */
+  protected readonly conQuien = computed(() => {
+    const s = this.sinergias.estado().datos;
+    return s ? [...s.companeros, ...(s.solo ? [s.solo] : [])] : [];
+  });
   private readonly masPartidas = signal<PartidaVista[]>([]);
   protected readonly cargandoMas = signal(false);
   protected readonly partidas = computed(() => [

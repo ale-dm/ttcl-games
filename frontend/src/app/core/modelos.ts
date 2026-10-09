@@ -75,6 +75,44 @@ export interface FilaDesglose {
   kd: number | null;
 }
 
+/** Cómo le va con un compañero del equipo (o solo: slug y nombre null). «Sin» son las demás partidas. */
+export interface FilaSinergia {
+  slug: string | null;
+  nombre: string | null;
+  partidas: number;
+  victorias: number;
+  winrate: number | null;
+  kd: number | null;
+  partidasSin: number;
+  winrateSin: number | null;
+}
+
+/** Con quién juega mejor: solo (null si hay pocas) y un compañero por fila, el que más partidas juntos primero. */
+export interface Sinergias {
+  solo: FilaSinergia | null;
+  companeros: FilaSinergia[];
+}
+
+export interface Miembro {
+  slug: string;
+  nombre: string;
+}
+
+/** Dos o tres del equipo y cómo les va juntos en el mismo bando. */
+export interface Grupo {
+  jugadores: Miembro[];
+  partidas: number;
+  victorias: number;
+  winrate: number | null;
+}
+
+/** Dúos y tríos de un juego, el mejor winrate primero. */
+export interface GruposJuego {
+  juego: Juego;
+  duos: Grupo[];
+  trios: Grupo[];
+}
+
 export interface PuntoSerie {
   partidaId: number;
   fecha: string;

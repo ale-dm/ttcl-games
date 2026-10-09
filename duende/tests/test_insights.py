@@ -1,9 +1,9 @@
 from app.insights import generar_insights
 from app.metricas import AJUSTES_ROL, METRICAS, NO_SE_JUZGA, PESA_MAS, TOLERA, formatear
-from app.modelos import Desglose, JugadorRef, MediasEquipo, PeticionInsights, Resumen
+from app.modelos import Desglose, JugadorRef, MediasEquipo, PeticionInsights, Resumen, Sinergias
 from app.textos import NOMBRES_ROL
 
-from .conftest import equipo_cs2, resumen_cs2
+from .conftest import companero, equipo_cs2, resumen_cs2
 
 
 def peticion(**cambios) -> PeticionInsights:
@@ -209,6 +209,77 @@ def test_cada_rol_tiene_nombre_y_solo_ajusta_metricas_que_existen():
     # Ningún rol se llama igual en los dos juegos: la web traduce el rol sin mirar el juego.
     assert not set(AJUSTES_ROL["cs2"]) & set(AJUSTES_ROL["smite2"])
     assert set(NOMBRES_ROL) == set(AJUSTES_ROL["cs2"]) | set(AJUSTES_ROL["smite2"])
+
+
+# ─── Con quién juegas mejor ──────────────────────────────────────────────────
+
+
+def con(*companeros, solo=None) -> Sinergias:
+    return Sinergias(solo=solo, companeros=list(companeros))
+
+
+def test_con_un_companero_ganas_mucho_mas_que_sin_el():
+    insights = generar_insights(peticion(sinergias=con(companero("Jugador 3", 20, 65.0, 10, 38.0))))
+    bueno = next(i for i in insights if i.id == "companero_bueno")
+    assert bueno.nivel == "bien"
+    assert bueno.titulo == "Con Jugador 3 vas a otro nivel"
+    assert bueno.texto == "Con Jugador 3 ganas el 65,0 % de 20 partidas; sin Jugador 3, el 38,0 %."
+    assert bueno.consejo
+    assert bueno.formato == "pct"
+    assert [(b.etiqueta, b.valor, b.tuyo) for b in bueno.barras] == [
+        ("Con Jugador 3", 65.0, True),
+        ("Sin Jugador 3", 38.0, False),
+    ]
+
+
+def test_con_un_companero_ganas_mucho_menos_que_sin_el():
+    insights = generar_insights(peticion(sinergias=con(companero("Bea", 12, 30.0, 18, 55.0))))
+    malo = next(i for i in insights if i.id == "companero_malo")
+    assert malo.nivel == "medio"
+    assert malo.titulo == "Con Bea no termina de cuajar"
+    assert "repartid roles" in malo.consejo  # el consejo de CS2
+    smite = generar_insights(
+        peticion(juego="smite2", resumen=Resumen(juego="smite2", partidas=30), equipo=None,
+                 sinergias=con(companero("Bea", 12, 30.0, 18, 55.0)))
+    )
+    assert "composición" in next(i for i in smite if i.id == "companero_malo").consejo
+
+
+def test_sin_muestra_o_sin_diferencia_clara_no_dice_nada_del_companero():
+    casos = [
+        con(companero("Bea", 20, 60.0, 10, 46.0)),  # 14 puntos: no llega
+        con(companero("Bea", 4, 100.0, 26, 40.0)),  # pocas partidas con ella
+        con(companero("Bea", 26, 60.0, 4, 0.0)),  # pocas partidas sin ella
+        con(companero("Bea", 20, 60.0, 0, None)),  # siempre juntos: nada con qué comparar
+        con(),
+        None,
+    ]
+    for sinergias in casos:
+        ids_ = ids(generar_insights(peticion(sinergias=sinergias)))
+        assert not {"companero_bueno", "companero_malo"} & set(ids_), sinergias
+
+
+def test_solo_habla_del_mejor_y_del_peor_companero():
+    sinergias = con(
+        companero("Ana", 20, 70.0, 10, 40.0),  # +30
+        companero("Bea", 15, 60.0, 15, 40.0),  # +20
+        companero("Carla", 10, 30.0, 20, 55.0),  # −25
+        companero("Dani", 10, 40.0, 20, 56.0),  # −16
+    )
+    insights = generar_insights(peticion(sinergias=sinergias))
+    companeros = [(i.id, i.titulo) for i in insights if i.id.startswith("companero_")]
+    assert companeros == [
+        ("companero_malo", "Con Carla no termina de cuajar"),
+        ("companero_bueno", "Con Ana vas a otro nivel"),
+    ]
+
+
+def test_companero_en_ingles():
+    insights = generar_insights(peticion(lang="en", sinergias=con(companero("Jugador 3", 20, 65.0, 10, 38.0))))
+    bueno = next(i for i in insights if i.id == "companero_bueno")
+    assert bueno.titulo == "You click with Jugador 3"
+    assert bueno.texto == "With Jugador 3 you win 65.0% of 20 matches; without Jugador 3, 38.0%."
+    assert [b.etiqueta for b in bueno.barras] == ["With Jugador 3", "Without Jugador 3"]
 
 
 def test_formatear():

@@ -1,6 +1,7 @@
 package com.ttcl.games.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -19,6 +20,10 @@ import com.ttcl.games.duende.DuendeModelos.RespuestaChat;
 import com.ttcl.games.duende.DuendeModelos.Salud;
 import com.ttcl.games.duende.DuendeNoDisponibleException;
 import com.ttcl.games.juego.Juego;
+import com.ttcl.games.stats.Modelos.FilaSinergia;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +37,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /** La API entera contra H2 con los datos de ejemplo. El servicio Python del Duende se simula. */
 @SpringBootTest(properties = {"ttcl.demo=true", "ttcl.equipo-json=", "ttcl.faceit.api-key=", "ttcl.smite2.base="})
@@ -196,6 +203,72 @@ class ApiTest {
                 .filteredOn(j -> j.slug().equals("j4"))
                 .singleElement()
                 .satisfies(j -> assertThat(j.juegos()).extracting(JuegoContexto::rol).containsExactly("jungla"));
+    }
+
+    /** GET que tiene que ir bien, con la respuesta ya leída. */
+    private JsonNode json(String url) throws Exception {
+        String cuerpo = mvc.perform(get(url))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
+        return JsonMapper.builder().build().readTree(cuerpo);
+    }
+
+    @Test
+    void sinergiasDeUnJugadorConLosDatosDeEjemplo() throws Exception {
+        JsonNode s = json("/api/jugadores/j1/sinergias?juego=cs2");
+        int total = json("/api/jugadores/j1/juegos/cs2").get("resumen").get("partidas").asInt();
+
+        // Compañeros de CS2 de Jugador 1, el que más partidas juntos primero.
+        List<JsonNode> filas = new ArrayList<>();
+        s.get("companeros").forEach(filas::add);
+        assertThat(filas).extracting(f -> f.get("slug").asString()).containsExactly("j2", "j3");
+        assertThat(filas.getFirst().get("nombre").asString()).isEqualTo("Jugador 2");
+        filas.add(s.get("solo"));
+        for (JsonNode f : filas) {
+            assertThat(f.get("partidas").asInt()).isGreaterThanOrEqualTo(3);
+            assertThat(f.get("partidas").asInt() + f.get("partidasSin").asInt()).isEqualTo(total); // con + sin = todas
+            assertThat(f.get("winrate").isNumber()).isTrue();
+        }
+
+        mvc.perform(get("/api/jugadores/j4/sinergias?juego=cs2")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/jugadores/j1/sinergias")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void duosYTriosDelEquipo() throws Exception {
+        mvc.perform(get("/api/equipo/grupos"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].juego").value("cs2"))
+                .andExpect(jsonPath("$[0].duos", hasSize(3))) // los tres de CS2, de dos en dos
+                .andExpect(jsonPath("$[0].trios", hasSize(1)))
+                .andExpect(jsonPath("$[0].trios[0].jugadores[*].slug", contains("j1", "j2", "j3")))
+                .andExpect(jsonPath("$[0].duos[0].jugadores[0].nombre").isString());
+
+        JsonNode smite = json("/api/equipo/grupos?juego=smite2");
+        assertThat(smite).hasSize(1);
+        assertThat(smite.get(0).get("juego").asString()).isEqualTo("smite2");
+        List<Double> winrates = new ArrayList<>();
+        smite.get(0).get("duos").forEach(d -> winrates.add(d.get("winrate").asDouble()));
+        assertThat(winrates).hasSize(3).isSortedAccordingTo(Comparator.reverseOrder());
+    }
+
+    @Test
+    void elDuendeRecibeLasSinergias() throws Exception {
+        mvc.perform(get("/api/jugadores/j2/consejos?juego=cs2")).andExpect(status().isOk());
+        assertThat(duende.ultimaInsights.sinergias().companeros())
+                .extracting(FilaSinergia::slug)
+                .containsExactlyInAnyOrder("j1", "j3");
+
+        duende.respuesta = new RespuestaChat("Hola", "reglas", null, List.of());
+        mvc.perform(post("/api/duende/chat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mensajes\": [{\"rol\": \"usuario\", \"texto\": \"¿Con quién juego mejor?\"}]}"))
+                .andExpect(status().isOk());
+        assertThat(duende.ultimaChat.equipo().getFirst().juegos())
+                .allSatisfy(g -> assertThat(g.sinergias().companeros()).isNotEmpty());
     }
 
     @Test

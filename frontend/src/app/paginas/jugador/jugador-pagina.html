@@ -152,6 +152,53 @@
                   </section>
                 }
 
+                @if (sinergias.estado().datos) {
+                  <section class="card con-quien">
+                    <div class="card-h">
+                      <div>
+                        <div class="card-t">{{ t('jugador.conQuien') }}</div>
+                        <div class="small muted">{{ t('jugador.conQuienSub') }}</div>
+                      </div>
+                    </div>
+                    <div class="card-b">
+                      @if (conQuien().length) {
+                        <div class="mb">
+                          @for (f of conQuien(); track f.slug ?? 'solo') {
+                            <div class="mb-row">
+                              <div class="mb-name">
+                                @if (f.slug) {
+                                  <a [routerLink]="['/jugador', f.slug]" [queryParams]="{ juego: j }">{{ f.nombre }}</a>
+                                } @else {
+                                  <span>{{ t('jugador.solo') }}</span>
+                                }
+                              </div>
+                              <div class="mb-track">
+                                <div class="mb-bar" [attr.aria-label]="i18n.pct(f.winrate)">
+                                  <i class="w" [style.width.%]="porcentaje(f.victorias, f.partidas)"></i>
+                                  <i class="l" [style.width.%]="100 - porcentaje(f.victorias, f.partidas)"></i>
+                                </div>
+                              </div>
+                              <div class="mb-v num">
+                                <b>{{ i18n.pct(f.winrate, 0) }}</b>
+                                <small>{{ f.partidas }} {{ t('comun.partidas') }}</small>
+                                <small>
+                                  {{
+                                    f.slug
+                                      ? t('jugador.sinEl', { winrate: i18n.pct(f.winrateSin, 0) })
+                                      : t('jugador.conEquipo', { winrate: i18n.pct(f.winrateSin, 0) })
+                                  }}
+                                </small>
+                              </div>
+                            </div>
+                          }
+                        </div>
+                      } @else {
+                        <p class="muted">{{ t('jugador.conQuienVacio') }}</p>
+                      }
+                    </div>
+                  </section>
+                }
+
                 <section class="card">
                   <div class="card-h">
                     <div class="card-t">{{ t('jugador.recientes') }}</div>

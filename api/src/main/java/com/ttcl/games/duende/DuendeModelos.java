@@ -5,6 +5,7 @@ import com.ttcl.games.juego.Juego;
 import com.ttcl.games.stats.Modelos.FilaDesglose;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
+import com.ttcl.games.stats.Modelos.Sinergias;
 import java.util.List;
 
 /** Contrato con el servicio Python del Duende (duende/app/modelos.py). Mismos nombres de campo, en camelCase. */
@@ -34,7 +35,10 @@ public final class DuendeModelos {
             List<Barra> barras,
             String formato) {}
 
-    /** @param rol rol declarado en ese juego, o null: el Duende juzga cada métrica según lo que pide el rol */
+    /**
+     * @param rol rol declarado en ese juego, o null: el Duende juzga cada métrica según lo que pide el rol
+     * @param sinergias con quién del equipo le va mejor o peor (y solo)
+     */
     public record PeticionInsights(
             String lang,
             JugadorRef jugador,
@@ -43,7 +47,8 @@ public final class DuendeModelos {
             ResumenJuego resumen,
             ResumenJuego reciente,
             MediasEquipo equipo,
-            List<FilaDesglose> desglose) {}
+            List<FilaDesglose> desglose,
+            Sinergias sinergias) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record RespuestaInsights(List<Insight> insights) {}
@@ -61,7 +66,7 @@ public final class DuendeModelos {
 
     public record JuegoContexto(
             Juego juego, String rol, ResumenJuego resumen, ResumenJuego reciente, MediasEquipo equipo,
-            List<FilaDesglose> desglose) {}
+            List<FilaDesglose> desglose, Sinergias sinergias) {}
 
     public record JugadorContexto(String slug, String nombre, List<JuegoContexto> juegos) {}
 

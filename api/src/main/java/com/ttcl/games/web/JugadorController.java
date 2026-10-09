@@ -7,6 +7,7 @@ import com.ttcl.games.servicio.Vistas.ConsejosVista;
 import com.ttcl.games.servicio.Vistas.DetalleJuego;
 import com.ttcl.games.servicio.Vistas.JugadorVista;
 import com.ttcl.games.servicio.Vistas.PaginaPartidas;
+import com.ttcl.games.stats.Modelos.Sinergias;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -44,6 +45,12 @@ public class JugadorController {
             @RequestParam(defaultValue = "20") int limite,
             @RequestParam(defaultValue = "0") int offset) {
         return equipo.partidas(slug, juego, limite, offset);
+    }
+
+    /** Con quién del equipo juega mejor (y cómo le va solo). */
+    @GetMapping("/sinergias")
+    public Sinergias sinergias(@PathVariable String slug, @RequestParam Juego juego) {
+        return equipo.sinergias(slug, juego);
     }
 
     /** En qué mejorar y qué hace bien, según el Duende. */

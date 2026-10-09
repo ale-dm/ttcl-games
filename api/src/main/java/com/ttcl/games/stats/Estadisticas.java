@@ -4,9 +4,14 @@ import com.ttcl.games.juego.Juego;
 import com.ttcl.games.stats.Modelos.FilaComparacion;
 import com.ttcl.games.stats.Modelos.FilaDesglose;
 import com.ttcl.games.stats.Modelos.FilaParticipacion;
+import com.ttcl.games.stats.Modelos.FilaSinergia;
+import com.ttcl.games.stats.Modelos.Grupo;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
+import com.ttcl.games.stats.Modelos.Miembro;
+import com.ttcl.games.stats.Modelos.Presencia;
 import com.ttcl.games.stats.Modelos.PuntoSerie;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
+import com.ttcl.games.stats.Modelos.Sinergias;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -23,6 +28,8 @@ public final class Estadisticas {
 
     public static final int LONGITUD_FORMA = 10;
     public static final int PARTIDAS_RECIENTES = 10;
+    /** Partidas juntos para que un compañero, un dúo o un trío cuente (y "solo", para la fila de solo). */
+    public static final int MIN_PARTIDAS_SINERGIA = 3;
 
     /** Recuentos que no se promedian: con ellos se calculan porcentajes sobre el total (entry_pct, dano_min...). */
     private static final Set<String> RECUENTOS = Set.of(
@@ -201,6 +208,110 @@ public final class Estadisticas {
                             f.asistencias(), clave != null ? String.valueOf(clave) : f.modo());
                 })
                 .toList();
+    }
+
+    // ─── Sinergias ──────────────────────────────────────────────────────────
+
+    /**
+     * Cómo le va a un jugador según con quién del equipo juega: por cada compañero, sus partidas juntos y, para
+     * comparar, las demás; y solo, sin nadie del equipo. Solo cuenta como compañero quien estaba en su bando (mismo
+     * resultado): en FACEIT dos del equipo pueden caer en bandos contrarios. Filas con menos de
+     * {@value #MIN_PARTIDAS_SINERGIA} partidas, fuera.
+     *
+     * @param presencias quién del equipo jugó cada partida, por id de partida (incluido el propio jugador)
+     */
+    public static Sinergias sinergias(
+            Juego juego, String slug, List<FilaParticipacion> filas, Map<Long, List<Presencia>> presencias) {
+        Map<String, String> nombres = new LinkedHashMap<>();
+        Map<String, List<FilaParticipacion>> con = new LinkedHashMap<>();
+        List<FilaParticipacion> solo = new ArrayList<>();
+        for (FilaParticipacion f : filas) {
+            List<Presencia> companeros = presencias.getOrDefault(f.partidaId(), List.of()).stream()
+                    .filter(p -> !p.slug().equals(slug) && Objects.equals(p.gano(), f.gano()))
+                    .toList();
+            if (companeros.isEmpty()) {
+                solo.add(f);
+            }
+            for (Presencia p : companeros) {
+                nombres.putIfAbsent(p.slug(), p.nombre());
+                con.computeIfAbsent(p.slug(), k -> new ArrayList<>()).add(f);
+            }
+        }
+        List<FilaSinergia> lista = con.entrySet().stream()
+                .filter(e -> e.getValue().size() >= MIN_PARTIDAS_SINERGIA)
+                .map(e -> filaSinergia(juego, e.getKey(), nombres.get(e.getKey()), e.getValue(), filas))
+                .sorted(Comparator.comparingInt(FilaSinergia::partidas).reversed()
+                        .thenComparing(FilaSinergia::nombre))
+                .toList();
+        FilaSinergia filaSolo =
+                solo.size() >= MIN_PARTIDAS_SINERGIA ? filaSinergia(juego, null, null, solo, filas) : null;
+        return new Sinergias(filaSolo, lista);
+    }
+
+    private static FilaSinergia filaSinergia(
+            Juego juego, String slug, String nombre, List<FilaParticipacion> con, List<FilaParticipacion> todas) {
+        Set<Long> ids = con.stream().map(FilaParticipacion::partidaId).collect(Collectors.toSet());
+        List<FilaParticipacion> sin = todas.stream().filter(f -> !ids.contains(f.partidaId())).toList();
+        ResumenJuego r = resumir(juego, con);
+        Double winrateSin = sin.isEmpty() ? null : resumir(juego, sin).winrate();
+        return new FilaSinergia(slug, nombre, r.partidas(), r.victorias(), r.winrate(), r.kd(), sin.size(), winrateSin);
+    }
+
+    /**
+     * Dúos ({@code tamano} 2) o tríos (3) del equipo: partidas en las que estaban juntos en el mismo bando, aunque
+     * hubiera alguien más. Con al menos {@value #MIN_PARTIDAS_SINERGIA} partidas; el mejor winrate primero y, a
+     * igualdad, el que más ha jugado.
+     *
+     * @param presencias quién del equipo jugó cada partida de un juego, por id de partida
+     */
+    public static List<Grupo> grupos(Map<Long, List<Presencia>> presencias, int tamano) {
+        Map<List<String>, List<Boolean>> resultados = new LinkedHashMap<>();
+        Map<String, String> nombres = new LinkedHashMap<>();
+        for (List<Presencia> partida : presencias.values()) {
+            // Un bando por resultado (victoria, derrota o sin dato), con los slugs en orden para que AB y BA sean uno.
+            Map<String, List<Presencia>> bandos = partida.stream()
+                    .sorted(Comparator.comparing(Presencia::slug))
+                    .collect(Collectors.groupingBy(
+                            p -> String.valueOf(p.gano()), LinkedHashMap::new, Collectors.toList()));
+            for (List<Presencia> bando : bandos.values()) {
+                bando.forEach(p -> nombres.putIfAbsent(p.slug(), p.nombre()));
+                for (List<Presencia> combinacion : combinaciones(bando, tamano)) {
+                    List<String> clave = combinacion.stream().map(Presencia::slug).toList();
+                    resultados.computeIfAbsent(clave, k -> new ArrayList<>()).add(combinacion.getFirst().gano());
+                }
+            }
+        }
+        return resultados.entrySet().stream()
+                .filter(e -> e.getValue().size() >= MIN_PARTIDAS_SINERGIA)
+                .map(e -> {
+                    int victorias = (int) e.getValue().stream().filter(Boolean.TRUE::equals).count();
+                    int derrotas = (int) e.getValue().stream().filter(Boolean.FALSE::equals).count();
+                    Double winrate = victorias + derrotas == 0
+                            ? null
+                            : redondear(100.0 * victorias / (victorias + derrotas), 1);
+                    List<Miembro> miembros = e.getKey().stream().map(s -> new Miembro(s, nombres.get(s))).toList();
+                    return new Grupo(miembros, e.getValue().size(), victorias, winrate);
+                })
+                .sorted(Comparator.comparing(Grupo::winrate, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Comparator.comparingInt(Grupo::partidas).reversed()))
+                .toList();
+    }
+
+    /** Todas las combinaciones de {@code k} elementos, en el orden de la lista. */
+    private static <T> List<List<T>> combinaciones(List<T> lista, int k) {
+        if (k == 0) {
+            return List.of(List.of());
+        }
+        List<List<T>> resultado = new ArrayList<>();
+        for (int i = 0; i <= lista.size() - k; i++) {
+            T primero = lista.get(i);
+            for (List<T> resto : combinaciones(lista.subList(i + 1, lista.size()), k - 1)) {
+                List<T> combinacion = new ArrayList<>(List.of(primero));
+                combinacion.addAll(resto);
+                resultado.add(combinacion);
+            }
+        }
+        return resultado;
     }
 
     // ─── Comparación ────────────────────────────────────────────────────────

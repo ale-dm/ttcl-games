@@ -62,8 +62,10 @@ export class DuendeEstado {
     if (foco.length === 2) {
       return [t('comparar.preguntaQuien'), t('comparar.preguntaMejorar', { nombre: foco[1].nombre })];
     }
-    if (foco.length === 1) return [t('duende.sugMejorar'), t('duende.sugBien'), t('duende.sugRacha')];
-    return [t('duende.sugMejorEquipo'), t('duende.sugCadaUno')];
+    if (foco.length === 1) {
+      return [t('duende.sugMejorar'), t('duende.sugBien'), t('duende.sugRacha'), t('duende.sugConQuien')];
+    }
+    return [t('duende.sugMejorEquipo'), t('duende.sugCadaUno'), t('duende.sugMejorDuo')];
   });
 
   fijarContexto(nuevo: ContextoDuende): void {

@@ -57,6 +57,26 @@ class Desglose(Base):
     kd: float | None = None
 
 
+class FilaSinergia(Base):
+    """Cómo le va con un compañero del equipo (o solo: sin slug ni nombre). «sin» son las demás partidas."""
+
+    slug: str | None = None
+    nombre: str | None = None
+    partidas: int
+    victorias: int = 0
+    winrate: float | None = None
+    kd: float | None = None
+    partidas_sin: int = 0
+    winrate_sin: float | None = None
+
+
+class Sinergias(Base):
+    """Con quién juega mejor. Solo compañeros del mismo bando y con un mínimo de partidas juntos (lo filtra la API)."""
+
+    solo: FilaSinergia | None = None
+    companeros: list[FilaSinergia] = Field(default_factory=list)
+
+
 class JugadorRef(Base):
     slug: str
     nombre: str
@@ -89,6 +109,7 @@ class PeticionInsights(Base):
     reciente: Resumen | None = None
     equipo: MediasEquipo | None = None
     desglose: list[Desglose] = Field(default_factory=list)
+    sinergias: Sinergias | None = None
 
 
 class RespuestaInsights(Base):
@@ -124,6 +145,7 @@ class JuegoContexto(Base):
     reciente: Resumen | None = None
     equipo: MediasEquipo | None = None
     desglose: list[Desglose] = Field(default_factory=list)
+    sinergias: Sinergias | None = None
 
 
 class JugadorContexto(Base):
