@@ -14,6 +14,7 @@ import com.ttcl.games.servicio.Vistas.EstadoDuende;
 import com.ttcl.games.servicio.Vistas.GruposJuego;
 import com.ttcl.games.servicio.Vistas.Ranking;
 import com.ttcl.games.servicio.Vistas.TarjetaJugador;
+import com.ttcl.games.stats.Periodo;
 import java.util.List;
 import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -80,13 +81,17 @@ public class EquipoController {
         return equipo.buscar(q);
     }
 
+    /** Cara a cara. Con {@code periodo} (7d, 30d o todo), solo las partidas de esos días. */
     @GetMapping("/comparar")
-    public Comparacion comparar(@RequestParam String a, @RequestParam String b, @RequestParam Juego juego) {
-        return equipo.comparar(a, b, juego);
+    public Comparacion comparar(
+            @RequestParam String a, @RequestParam String b, @RequestParam Juego juego,
+            @RequestParam(defaultValue = "todo") Periodo periodo) {
+        return equipo.comparar(a, b, juego, periodo);
     }
 
+    /** Clasificación. Con {@code periodo} (7d, 30d o todo), solo las partidas de esos días. */
     @GetMapping("/ranking")
-    public Ranking ranking(@RequestParam Juego juego) {
-        return equipo.ranking(juego);
+    public Ranking ranking(@RequestParam Juego juego, @RequestParam(defaultValue = "todo") Periodo periodo) {
+        return equipo.ranking(juego, periodo);
     }
 }

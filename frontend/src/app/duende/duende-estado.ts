@@ -1,12 +1,16 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Api } from '../core/api';
 import { I18n, JUEGO_CORTO } from '../core/i18n';
-import { Juego, MensajeChat } from '../core/modelos';
+import { Juego, MensajeChat, Periodo } from '../core/modelos';
 
-/** De quién va la conversación: nadie (todo el equipo), un jugador o dos (comparación). */
+/**
+ * De quién va la conversación: nadie (todo el equipo), un jugador o dos (comparación). Con el juego y el periodo que
+ * se ven en la página: el Duende los usa si la pregunta no dice otros.
+ */
 export interface ContextoDuende {
   foco: { slug: string; nombre: string }[];
   juego: Juego | null;
+  periodo?: Periodo;
 }
 
 export interface MensajeVista extends MensajeChat {
@@ -45,9 +49,10 @@ export class DuendeEstado {
 
   /** Línea bajo el título del panel. */
   readonly etiqueta = computed(() => {
-    const { foco, juego } = this.contexto();
+    const { foco, juego, periodo } = this.contexto();
     const t = this.i18n.t;
-    const sufijo = juego ? ` · ${JUEGO_CORTO[juego]}` : '';
+    const sufijo =
+      (juego ? ` · ${JUEGO_CORTO[juego]}` : '') + (periodo && periodo !== 'todo' ? ` · ${t(`periodo.${periodo}`)}` : '');
     if (foco.length === 2) return t('duende.ctxComparar', { a: foco[0].nombre, b: foco[1].nombre }) + sufijo;
     if (foco.length === 1) return t('duende.ctxJugador', { nombre: foco[0].nombre }) + sufijo;
     return t('duende.ctxEquipo') + sufijo;
@@ -76,7 +81,8 @@ export class DuendeEstado {
 
   fijarContexto(nuevo: ContextoDuende): void {
     const actual = this.contexto();
-    const clave = (c: ContextoDuende) => c.foco.map((f) => f.slug).join('|') + '#' + (c.juego ?? '');
+    const clave = (c: ContextoDuende) =>
+      c.foco.map((f) => f.slug).join('|') + '#' + (c.juego ?? '') + '#' + (c.periodo ?? 'todo');
     if (clave(actual) !== clave(nuevo)) {
       this.contexto.set(nuevo);
       this.reiniciar();
@@ -115,10 +121,16 @@ export class DuendeEstado {
         .filter((m) => !m.error)
         .map(({ rol, texto }): MensajeChat => ({ rol, texto })),
     ].slice(-30);
-    const { foco, juego } = this.contexto();
+    const { foco, juego, periodo } = this.contexto();
 
     this.api
-      .chat({ lang: this.i18n.idioma(), mensajes: historial, foco: foco.map((f) => f.slug), juego })
+      .chat({
+        lang: this.i18n.idioma(),
+        mensajes: historial,
+        foco: foco.map((f) => f.slug),
+        juego,
+        periodo: periodo && periodo !== 'todo' ? periodo : null,
+      })
       .subscribe({
         next: (r) => {
           if (turno !== this.turno) return;

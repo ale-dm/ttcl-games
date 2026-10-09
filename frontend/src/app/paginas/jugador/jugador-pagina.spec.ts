@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { I18n } from '../../core/i18n';
 import { DetalleJuego, FilaMomento, JugadorVista, ResumenJuego, Sesiones, Sinergias } from '../../core/modelos';
 import { JugadorPagina } from './jugador-pagina';
@@ -59,6 +59,74 @@ describe('JugadorPagina', () => {
     i18n.cambiar('en');
     await pagina.whenStable();
     expect(cuentas()[0]).toEqual({ nick: 'bea_faceit', rol: 'Role in Counter-Strike 2: Support' });
+  });
+});
+
+describe('JugadorPagina · periodo', () => {
+  const VACIO: ResumenJuego = {
+    juego: 'cs2',
+    partidas: 0,
+    victorias: 0,
+    derrotas: 0,
+    winrate: null,
+    kd: null,
+    killsMedia: null,
+    muertesMedia: null,
+    asistenciasMedia: null,
+    datosMedios: {},
+    forma: '',
+    ultimaPartida: null,
+  };
+  const ANA: JugadorVista = {
+    slug: 'j1',
+    nombre: 'Ana',
+    demo: false,
+    cuentas: [],
+    resumenes: [{ ...VACIO, partidas: 30, ultimaPartida: '2026-09-20T18:00:00Z' }],
+  };
+
+  let http: HttpTestingController;
+  afterEach(() => http.verify());
+
+  it('pide todo con el periodo de la URL y, si no jugó en esos días, lo dice', async () => {
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])] });
+    TestBed.inject(I18n).cambiar('es');
+    http = TestBed.inject(HttpTestingController);
+    const pagina = TestBed.createComponent(JugadorPagina);
+    pagina.componentRef.setInput('slug', 'j1');
+    pagina.componentRef.setInput('periodo', '7d');
+    await pagina.whenStable();
+    http.expectOne('/api/jugadores/j1').flush(ANA); // el perfil, siempre con todas: de ahí salen los juegos
+    await pagina.whenStable();
+
+    const conPeriodo = (url: string) => http.expectOne((r) => r.url === url && r.params.get('periodo') === '7d');
+    const detalle: DetalleJuego = { juego: 'cs2', resumen: VACIO, reciente: VACIO, equipo: null, desglose: [], serie: [] };
+    conPeriodo('/api/jugadores/j1/juegos/cs2').flush(detalle);
+    conPeriodo('/api/jugadores/j1/consejos').flush({ disponible: true, insights: [] });
+    conPeriodo('/api/jugadores/j1/partidas').flush({ items: [], total: 0 });
+    conPeriodo('/api/jugadores/j1/sinergias').flush({ solo: null, companeros: [] });
+    conPeriodo('/api/jugadores/j1/sesiones').flush({ sesiones: 0, partidasPorSesion: null, porOrden: [], trasResultado: [], porFranja: [] });
+    await pagina.whenStable();
+
+    const el = pagina.nativeElement as HTMLElement;
+    expect(el.querySelector('.vacio-periodo')!.textContent!.trim()).toBe(
+      'Ana no ha jugado a Counter-Strike 2 en los últimos 7 días.',
+    );
+    expect(el.querySelector('.pl-kpi')).toBeNull();
+    // La última partida es la de siempre, no la del periodo.
+    expect(el.querySelector('.accounts .small')!.textContent).toContain('20/09/2026');
+    expect(el.querySelector('.periodo button.on')!.textContent!.trim()).toBe('7 días');
+
+    // Elegir otro periodo lo pone en la URL; "Todo" lo quita.
+    const router = TestBed.inject(Router);
+    const boton = (texto: string) =>
+      [...el.querySelectorAll<HTMLButtonElement>('.periodo button')].find((b) => b.textContent!.trim() === texto)!;
+    boton('30 días').click();
+    await pagina.whenStable();
+    expect(router.url).toContain('periodo=30d');
+    boton('Todo').click();
+    await pagina.whenStable();
+    expect(router.url).not.toContain('periodo');
   });
 });
 

@@ -3,6 +3,15 @@
 export type Juego = 'cs2' | 'smite2';
 export const JUEGOS: readonly Juego[] = ['cs2', 'smite2'];
 
+/** Qué partidas cuentan: las de los últimos 7 días, las de los últimos 30 o todas. En la URL, `?periodo=7d`. */
+export type Periodo = '7d' | '30d' | 'todo';
+export const PERIODOS: readonly Periodo[] = ['7d', '30d', 'todo'];
+
+/** El periodo de un parámetro de la URL; si no es uno conocido, todas las partidas. */
+export function periodoDe(texto: string | null | undefined): Periodo {
+  return PERIODOS.find((p) => p === texto) ?? 'todo';
+}
+
 export interface ResumenJuego {
   juego: Juego;
   partidas: number;

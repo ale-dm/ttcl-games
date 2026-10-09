@@ -7,14 +7,15 @@ import { Api } from '../../core/api';
 import { cargaReactiva } from '../../core/carga';
 import { I18n, JUEGO_CORTO, NOMBRE_JUEGO } from '../../core/i18n';
 import { claveTexto, metrica } from '../../core/metricas';
-import { JUEGOS, Juego } from '../../core/modelos';
+import { JUEGOS, Juego, Periodo, periodoDe } from '../../core/modelos';
 import { DuendeEstado } from '../../duende/duende-estado';
+import { SelectorPeriodo } from '../../compartido/selector-periodo';
 
 const MIN_PARTIDAS = 5;
 
 @Component({
   selector: 'app-comparar-pagina',
-  imports: [RouterLink, Avatar, Forma, MarcaDuende],
+  imports: [RouterLink, Avatar, Forma, MarcaDuende, SelectorPeriodo],
   templateUrl: './comparar-pagina.html',
 })
 export class CompararPagina {
@@ -27,10 +28,15 @@ export class CompararPagina {
   protected readonly juegoCorto = JUEGO_CORTO;
   protected readonly claveTexto = claveTexto;
 
-  /** /comparar?a=j1&b=j2&juego=cs2 */
+  /** /comparar?a=j1&b=j2&juego=cs2&periodo=30d */
   readonly a = input<string | undefined>();
   readonly b = input<string | undefined>();
   readonly juego = input<string | undefined>();
+  readonly periodo = input<string | undefined>();
+
+  protected readonly periodoSel = computed(() => periodoDe(this.periodo()));
+  /** El periodo para la URL y los enlaces (sin parámetro si son todas las partidas). */
+  protected readonly periodoUrl = computed(() => (this.periodoSel() === 'todo' ? null : this.periodoSel()));
 
   protected readonly lista = cargaReactiva(
     () => true,
@@ -61,10 +67,20 @@ export class CompararPagina {
     () => {
       const a = this.slugA();
       const b = this.slugB();
-      return a && b && a !== b ? { a, b, juego: this.juegoSel() } : null;
+      return a && b && a !== b ? { a, b, juego: this.juegoSel(), periodo: this.periodoSel() } : null;
     },
-    (p) => this.api.comparar(p.a, p.b, p.juego),
+    (p) => this.api.comparar(p.a, p.b, p.juego, p.periodo),
   );
+  /** Quién no tiene partidas (de ese juego o en ese periodo), para el aviso. */
+  protected readonly sinDatos = computed(() => {
+    const c = this.comparacion.estado().datos;
+    if (!c || (c.resumenA && c.resumenB)) return null;
+    const nombre = !c.resumenA ? c.a.nombre : c.b.nombre;
+    const juego = NOMBRE_JUEGO[c.juego];
+    return this.periodoSel() === 'todo'
+      ? this.t('comparar.sinDatos', { nombre, juego })
+      : this.t('periodo.sinPartidas', { nombre, juego, periodo: this.i18n.enPeriodo(this.periodoSel()) });
+  });
 
   /** Filas con el ancho de cada barra (la mayor de las dos llena el 100 %). */
   protected readonly filas = computed(() =>
@@ -100,17 +116,13 @@ export class CompararPagina {
   constructor() {
     effect(() => {
       const d = this.comparacion.estado().datos;
-      if (d) this.duende.fijarContexto({ foco: [d.a, d.b], juego: d.juego });
+      if (d) this.duende.fijarContexto({ foco: [d.a, d.b], juego: d.juego, periodo: this.periodoSel() });
     });
   }
 
-  protected nombreJuego(j: Juego): string {
-    return NOMBRE_JUEGO[j];
-  }
-
-  protected cambiar(cambios: { a?: string; b?: string; juego?: Juego }): void {
+  protected cambiar(cambios: { a?: string; b?: string; juego?: Juego; periodo?: Periodo | null }): void {
     this.router.navigate([], {
-      queryParams: { a: this.slugA(), b: this.slugB(), juego: this.juegoSel(), ...cambios },
+      queryParams: { a: this.slugA(), b: this.slugB(), juego: this.juegoSel(), periodo: this.periodoUrl(), ...cambios },
       replaceUrl: true,
     });
   }

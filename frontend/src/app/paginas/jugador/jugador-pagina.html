@@ -32,13 +32,15 @@
               }
             </span>
           }
-          @if (detalle.estado().datos?.resumen; as r) {
-            <span class="small muted">{{ t('comun.ultima', { fecha: i18n.fecha(r.ultimaPartida) }) }}</span>
+          @if (ultimaPartida(); as ultima) {
+            <span class="small muted">{{ t('comun.ultima', { fecha: i18n.fecha(ultima) }) }}</span>
           }
         </div>
       </div>
       <div class="hero-a">
-        <a class="btn" routerLink="/comparar" [queryParams]="{ a: p.slug, juego: juegoActivo() }">{{ t('jugador.comparar') }}</a>
+        <a class="btn" routerLink="/comparar" [queryParams]="{ a: p.slug, juego: juegoActivo(), periodo: periodoUrl() }">
+          {{ t('jugador.comparar') }}
+        </a>
         <button class="btn primary" type="button" (click)="duende.abrir()">
           <app-marca-duende [tam]="20" />
           {{ t('jugador.preguntar') }}
@@ -61,13 +63,16 @@
         <button class="tab" role="tab" type="button" [class.on]="pestana() === 'desglose'" (click)="irA({ tab: 'desglose' })">
           {{ j === 'cs2' ? t('jugador.tabMapas') : t('jugador.tabDioses') }}
         </button>
-        @if (juegos().length > 1) {
-          <div class="seg sm" role="group">
-            @for (g of juegos(); track g) {
-              <button type="button" [class.on]="g === j" (click)="irA({ juego: g })">{{ juegoCorto[g] }}</button>
-            }
-          </div>
-        }
+        <div class="tabs-ctrl">
+          <app-selector-periodo [periodo]="periodoActivo()" (cambio)="irA({ periodo: $event })" />
+          @if (juegos().length > 1) {
+            <div class="seg sm" role="group">
+              @for (g of juegos(); track g) {
+                <button type="button" [class.on]="g === j" (click)="irA({ juego: g })">{{ juegoCorto[g] }}</button>
+              }
+            </div>
+          }
+        </div>
       </div>
 
       @let d = detalle.estado().datos;
@@ -78,6 +83,10 @@
         </div>
       } @else if (!d || d.juego !== j) {
         <div class="skel" style="height: 360px"></div>
+      } @else if (!d.resumen.partidas) {
+        <div class="aviso vacio-periodo">
+          {{ t('periodo.sinPartidas', { nombre: p.nombre, juego: nombreJuego[j], periodo: i18n.enPeriodo(periodoActivo()) }) }}
+        </div>
       } @else {
         @switch (pestana()) {
           @case ('resumen') {
@@ -167,7 +176,9 @@
                             <div class="mb-row">
                               <div class="mb-name">
                                 @if (f.slug) {
-                                  <a [routerLink]="['/jugador', f.slug]" [queryParams]="{ juego: j }">{{ f.nombre }}</a>
+                                  <a [routerLink]="['/jugador', f.slug]" [queryParams]="{ juego: j, periodo: periodoUrl() }">
+                                    {{ f.nombre }}
+                                  </a>
                                 } @else {
                                   <span>{{ t('jugador.solo') }}</span>
                                 }

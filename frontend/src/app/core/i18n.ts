@@ -1,6 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
-import { FormatoValor, Juego } from './modelos';
+import { FormatoValor, Juego, Periodo } from './modelos';
 import { guardarPreferencias } from './preferencias';
 import { Clave, EN, ES } from './textos';
 
@@ -116,6 +116,9 @@ export class I18n {
     const clave = `rol.${rol}`;
     return clave in ES ? this.t(clave as Clave) : rol;
   };
+
+  /** "en los últimos 7 días" para meterlo en una frase; con todas las partidas, nada. */
+  readonly enPeriodo = (periodo: Periodo): string => (periodo === 'todo' ? '' : this.t(`periodo.en.${periodo}`));
 
   /** Nombre de una fila de las sesiones ("3+", "derrota", "noche"...). Si la web no la conoce, la clave tal cual. */
   readonly momento = (clave: string): string => {

@@ -112,6 +112,19 @@ class EstadisticasTest {
     }
 
     @Test
+    void desdeUnInicioSoloCuentanLasPartidasDeEseMomentoEnAdelante() {
+        List<FilaParticipacion> filas = List.of(
+                cs2(1, true, 1, 1, 0, Map.of()), cs2(2, false, 1, 1, 0, Map.of()), cs2(3, true, 1, 1, 0, Map.of()));
+
+        assertThat(Estadisticas.desde(filas, BASE.plusSeconds(2 * 86400L)))
+                .extracting(FilaParticipacion::partidaId)
+                .containsExactly(2L, 3L); // la del mismo instante cuenta
+        assertThat(Estadisticas.desde(filas, null)).isSameAs(filas);
+        assertThat(Estadisticas.desde(filas, BASE.plusSeconds(10 * 86400L))).isEmpty();
+        assertThat(Estadisticas.resumir(Juego.CS2, List.of()).partidas()).isZero(); // y sin partidas, resumen vacío
+    }
+
+    @Test
     void serieCronologicaConLasUltimas() {
         List<FilaParticipacion> filas = List.of(
                 cs2(3, true, 1, 1, 0, Map.of()), cs2(1, true, 1, 1, 0, Map.of()), cs2(2, false, 1, 1, 0, Map.of()));

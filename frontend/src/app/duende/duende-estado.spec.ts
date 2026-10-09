@@ -46,6 +46,19 @@ describe('DuendeEstado', () => {
     expect(duende.saludo()).toContain('Bea');
   });
 
+  it('manda el periodo de la página y lo enseña en la etiqueta; cambiarlo empieza otra conversación', () => {
+    expect(duende.etiqueta()).toBe('Hablando de Ana · CS2');
+    duende.enviar('hola');
+    expect(http.expectOne('/api/duende/chat').request.body.periodo).toBeNull(); // todas las partidas
+    expect(duende.mensajes().length).toBe(1);
+
+    duende.fijarContexto({ foco: [{ slug: 'j1', nombre: 'Ana' }], juego: 'cs2', periodo: '7d' });
+    expect(duende.mensajes()).toEqual([]);
+    expect(duende.etiqueta()).toBe('Hablando de Ana · CS2 · 7 días');
+    duende.enviar('¿Cómo voy?');
+    expect(http.expectOne('/api/duende/chat').request.body.periodo).toBe('7d');
+  });
+
   it('un error se enseña como mensaje del Duende', () => {
     duende.enviar('hola');
     http

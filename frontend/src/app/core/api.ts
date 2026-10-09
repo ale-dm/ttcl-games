@@ -12,6 +12,7 @@ import {
   JugadorVista,
   MensajeChat,
   PaginaPartidas,
+  Periodo,
   Ranking,
   RespuestaChat,
   Sesiones,
@@ -20,7 +21,15 @@ import {
 } from './modelos';
 import { Idioma } from './i18n';
 
-/** Cliente de la API Java. En desarrollo, /api va por el proxy de Angular a localhost:8080. */
+/** Añade `?periodo=` solo si recorta: con todas las partidas, la URL queda como siempre. */
+function conPeriodo(params: HttpParams, periodo: Periodo): HttpParams {
+  return periodo === 'todo' ? params : params.set('periodo', periodo);
+}
+
+/**
+ * Cliente de la API Java. En desarrollo, /api va por el proxy de Angular a localhost:8080. Lo que admite `periodo`
+ * cuenta solo las partidas de esos días (por defecto, todas).
+ */
 @Injectable({ providedIn: 'root' })
 export class Api {
   private readonly http = inject(HttpClient);
@@ -43,40 +52,56 @@ export class Api {
     return this.http.get<JugadorVista>(`/api/jugadores/${encodeURIComponent(slug)}`);
   }
 
-  detalle(slug: string, juego: Juego): Observable<DetalleJuego> {
-    return this.http.get<DetalleJuego>(`/api/jugadores/${encodeURIComponent(slug)}/juegos/${juego}`);
+  detalle(slug: string, juego: Juego, periodo: Periodo = 'todo'): Observable<DetalleJuego> {
+    return this.http.get<DetalleJuego>(`/api/jugadores/${encodeURIComponent(slug)}/juegos/${juego}`, {
+      params: conPeriodo(new HttpParams(), periodo),
+    });
   }
 
-  partidas(slug: string, juego: Juego | null, limite: number, offset: number): Observable<PaginaPartidas> {
+  partidas(
+    slug: string,
+    juego: Juego | null,
+    limite: number,
+    offset: number,
+    periodo: Periodo = 'todo',
+  ): Observable<PaginaPartidas> {
     let params = new HttpParams().set('limite', limite).set('offset', offset);
     if (juego) params = params.set('juego', juego);
-    return this.http.get<PaginaPartidas>(`/api/jugadores/${encodeURIComponent(slug)}/partidas`, { params });
+    return this.http.get<PaginaPartidas>(`/api/jugadores/${encodeURIComponent(slug)}/partidas`, {
+      params: conPeriodo(params, periodo),
+    });
   }
 
-  sinergias(slug: string, juego: Juego): Observable<Sinergias> {
-    return this.http.get<Sinergias>(`/api/jugadores/${encodeURIComponent(slug)}/sinergias`, { params: { juego } });
+  sinergias(slug: string, juego: Juego, periodo: Periodo = 'todo'): Observable<Sinergias> {
+    return this.http.get<Sinergias>(`/api/jugadores/${encodeURIComponent(slug)}/sinergias`, {
+      params: conPeriodo(new HttpParams().set('juego', juego), periodo),
+    });
   }
 
-  sesiones(slug: string, juego: Juego): Observable<Sesiones> {
-    return this.http.get<Sesiones>(`/api/jugadores/${encodeURIComponent(slug)}/sesiones`, { params: { juego } });
+  sesiones(slug: string, juego: Juego, periodo: Periodo = 'todo'): Observable<Sesiones> {
+    return this.http.get<Sesiones>(`/api/jugadores/${encodeURIComponent(slug)}/sesiones`, {
+      params: conPeriodo(new HttpParams().set('juego', juego), periodo),
+    });
   }
 
   grupos(juego: Juego | null): Observable<GruposJuego[]> {
     return this.http.get<GruposJuego[]>('/api/equipo/grupos', { params: juego ? { juego } : {} });
   }
 
-  consejos(slug: string, juego: Juego, lang: Idioma): Observable<ConsejosVista> {
+  consejos(slug: string, juego: Juego, lang: Idioma, periodo: Periodo = 'todo'): Observable<ConsejosVista> {
     return this.http.get<ConsejosVista>(`/api/jugadores/${encodeURIComponent(slug)}/consejos`, {
-      params: { juego, lang },
+      params: conPeriodo(new HttpParams().set('juego', juego).set('lang', lang), periodo),
     });
   }
 
-  comparar(a: string, b: string, juego: Juego): Observable<Comparacion> {
-    return this.http.get<Comparacion>('/api/comparar', { params: { a, b, juego } });
+  comparar(a: string, b: string, juego: Juego, periodo: Periodo = 'todo'): Observable<Comparacion> {
+    return this.http.get<Comparacion>('/api/comparar', {
+      params: conPeriodo(new HttpParams().set('a', a).set('b', b).set('juego', juego), periodo),
+    });
   }
 
-  ranking(juego: Juego): Observable<Ranking> {
-    return this.http.get<Ranking>('/api/ranking', { params: { juego } });
+  ranking(juego: Juego, periodo: Periodo = 'todo'): Observable<Ranking> {
+    return this.http.get<Ranking>('/api/ranking', { params: conPeriodo(new HttpParams().set('juego', juego), periodo) });
   }
 
   chat(peticion: {
@@ -84,6 +109,7 @@ export class Api {
     mensajes: MensajeChat[];
     foco: string[];
     juego: Juego | null;
+    periodo: Periodo | null;
   }): Observable<RespuestaChat> {
     return this.http.post<RespuestaChat>('/api/duende/chat', peticion);
   }

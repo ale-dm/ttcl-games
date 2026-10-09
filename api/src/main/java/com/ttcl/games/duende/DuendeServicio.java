@@ -12,6 +12,7 @@ import com.ttcl.games.servicio.Vistas.ConsejosVista;
 import com.ttcl.games.servicio.Vistas.JugadorVista;
 import com.ttcl.games.servicio.Vistas.TarjetaJugador;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
+import com.ttcl.games.stats.Periodo;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -76,9 +77,12 @@ public class DuendeServicio {
                 .toList();
     }
 
-    /** Recomendaciones de un jugador en un juego. Si el Duende no responde, {@code disponible} es false. */
-    public ConsejosVista consejos(String slug, Juego juego, String lang) {
-        var peticion = equipo.peticionInsights(slug, juego, idioma(lang));
+    /**
+     * Recomendaciones de un jugador en un juego con las partidas del periodo. Si el Duende no responde,
+     * {@code disponible} es false.
+     */
+    public ConsejosVista consejos(String slug, Juego juego, String lang, Periodo periodo) {
+        var peticion = equipo.peticionInsights(slug, juego, idioma(lang), periodo);
         try {
             return new ConsejosVista(true, cliente.insights(peticion));
         } catch (DuendeNoDisponibleException e) {
@@ -87,9 +91,12 @@ public class DuendeServicio {
         }
     }
 
-    /** Pregunta al Duende con el contexto del equipo; {@code foco} son los jugadores de los que va la charla. */
-    public RespuestaChat chat(String lang, List<Mensaje> mensajes, List<String> foco, Juego juego) {
+    /**
+     * Pregunta al Duende con el contexto del equipo; {@code foco} son los jugadores de los que va la charla y
+     * {@code periodo}, el que se ve en la página (el Duende lo usa si la pregunta no dice otro).
+     */
+    public RespuestaChat chat(String lang, List<Mensaje> mensajes, List<String> foco, Juego juego, Periodo periodo) {
         return cliente.chat(new PeticionChat(
-                idioma(lang), mensajes, equipo.slugsValidos(foco), equipo.contextoEquipo(), juego));
+                idioma(lang), mensajes, equipo.slugsValidos(foco), equipo.contextoEquipo(), juego, periodo));
     }
 }

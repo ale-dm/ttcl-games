@@ -118,6 +118,27 @@ def test_chat():
     assert cuerpo["sugerencias"]
 
 
+def test_chat_con_periodos_en_camel_case():
+    semana = {**RESUMEN, "partidas": 6, "victorias": 5, "derrotas": 1, "winrate": 83.3}
+    r = cliente.post(
+        "/v1/chat",
+        json={
+            "lang": "es",
+            "periodo": "7d",
+            "mensajes": [{"rol": "usuario", "texto": "¿Cómo voy?"}],
+            "foco": ["j1"],
+            "equipo": [{"slug": "j1", "nombre": "Jugador 1", "juegos": [
+                {"juego": "cs2", "resumen": RESUMEN, "periodos": [{"periodo": "7d", "resumen": semana, "equipo": None}]}
+            ]}],
+        },
+    )
+    assert r.status_code == 200
+    assert r.json()["respuesta"].startswith(
+        "**Últimos 7 días.** Jugador 1 en Counter-Strike 2: 6 partidas (5 victorias y 1 derrota)."
+    )
+    assert cliente.post("/v1/chat", json={"periodo": "1a", "mensajes": [{"rol": "usuario", "texto": "x"}]}).status_code == 422
+
+
 def test_chat_valida_la_entrada():
     assert cliente.post("/v1/chat", json={"lang": "es", "mensajes": []}).status_code == 422
     assert cliente.post("/v1/chat", json={"lang": "fr", "mensajes": [{"rol": "usuario", "texto": "x"}]}).status_code == 422

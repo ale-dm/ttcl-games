@@ -42,7 +42,10 @@ _CABECERA_DATOS: dict[Idioma, str] = {
         "sus rachas de partidas seguidas (menos de 45 minutos entre una y otra): «porOrden» es la 1ª, la 2ª y de la "
         "3ª en adelante; «trasResultado», la partida que sigue a una victoria o a una derrota; «porFranja», mañana "
         "(6-14 h), tarde (14-20 h), noche (20-24 h) y madrugada (0-6 h); «winrateResto» es el winrate en las demás. "
-        "Con menos de 15 sesiones no saques conclusiones de tilt ni de horarios."
+        "Con menos de 15 sesiones no saques conclusiones de tilt ni de horarios. Todo eso es con todas sus partidas; "
+        "«periodos» trae además el resumen de los últimos 7 días («7d») y 30 días («30d») con la media del equipo en "
+        "esos días: úsalo si preguntan por esta semana o este mes. «periodo_seleccionado» es el que se ve en la "
+        "página (null o «todo»: todas las partidas)."
     ),
     "en": (
         "Available data (JSON). 'foco' are the players this conversation is about; 'equipo' is the whole group. "
@@ -55,7 +58,10 @@ _CABECERA_DATOS: dict[Idioma, str] = {
         "'sesiones' are their back-to-back runs (under 45 minutes between matches): 'porOrden' is the 1st, the 2nd and "
         "the 3rd onwards; 'trasResultado', the match after a win or a loss; 'porFranja', morning (6-14 h), afternoon "
         "(14-20 h), evening (20-24 h) and late night (0-6 h); 'winrateResto' is the win rate in all the others. "
-        "With fewer than 15 sessions, draw no conclusions about tilt or times of day."
+        "With fewer than 15 sessions, draw no conclusions about tilt or times of day. All of that uses every match; "
+        "'periodos' also brings the summary of the last 7 days ('7d') and 30 days ('30d') with the team average for "
+        "those days: use it when they ask about this week or this month. 'periodo_seleccionado' is the one shown on "
+        "the page (null or 'todo': all matches)."
     ),
 }
 

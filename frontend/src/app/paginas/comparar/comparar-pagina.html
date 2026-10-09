@@ -40,6 +40,14 @@
           }
         </div>
       </div>
+      <div class="field">
+        <span>{{ t('periodo.etiqueta') }}</span>
+        <app-selector-periodo
+          [periodo]="periodoSel()"
+          [compacto]="false"
+          (cambio)="cambiar({ periodo: $event === 'todo' ? null : $event })"
+        />
+      </div>
     </div>
 
     @let c = comparacion.estado().datos;
@@ -54,7 +62,7 @@
       <div class="cmp-grid">
         <section class="card h2h">
           <div class="h2h-head">
-            <a class="side-h" [routerLink]="['/jugador', c.a.slug]" [queryParams]="{ juego: c.juego }">
+            <a class="side-h" [routerLink]="['/jugador', c.a.slug]" [queryParams]="{ juego: c.juego, periodo: periodoUrl() }">
               <app-avatar [slug]="c.a.slug" [nombre]="c.a.nombre" />
               <div>
                 <b>{{ c.a.nombre }}</b>
@@ -69,7 +77,7 @@
               <b class="num" [class.lead]="marcador().b > marcador().a">{{ marcador().b }}</b>
               <small>{{ t('comparar.metricas') }}</small>
             </div>
-            <a class="side-h b" [routerLink]="['/jugador', c.b.slug]" [queryParams]="{ juego: c.juego }">
+            <a class="side-h b" [routerLink]="['/jugador', c.b.slug]" [queryParams]="{ juego: c.juego, periodo: periodoUrl() }">
               <div>
                 <b>{{ c.b.nombre }}</b>
                 @if (c.resumenB) {
@@ -80,10 +88,8 @@
             </a>
           </div>
 
-          @if (!c.resumenA || !c.resumenB) {
-            <div class="empty">
-              {{ t('comparar.sinDatos', { nombre: !c.resumenA ? c.a.nombre : c.b.nombre, juego: nombreJuego(c.juego) }) }}
-            </div>
+          @if (sinDatos(); as aviso) {
+            <div class="empty">{{ aviso }}</div>
           } @else {
             @for (f of filas(); track f.metrica) {
               <div class="h2h-row">

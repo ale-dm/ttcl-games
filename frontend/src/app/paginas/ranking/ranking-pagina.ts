@@ -6,12 +6,13 @@ import { Api } from '../../core/api';
 import { cargaReactiva } from '../../core/carga';
 import { I18n, JUEGO_CORTO, NOMBRE_JUEGO } from '../../core/i18n';
 import { COLUMNAS_RANKING, claveTexto, metrica as defMetrica, valorDe } from '../../core/metricas';
-import { JUEGOS, Juego } from '../../core/modelos';
+import { JUEGOS, Juego, Periodo, periodoDe } from '../../core/modelos';
 import { DuendeEstado } from '../../duende/duende-estado';
+import { SelectorPeriodo } from '../../compartido/selector-periodo';
 
 @Component({
   selector: 'app-ranking-pagina',
-  imports: [RouterLink, Avatar, Forma],
+  imports: [RouterLink, Avatar, Forma, SelectorPeriodo],
   template: `
     <div class="wrap page">
       <div class="ph">
@@ -19,12 +20,19 @@ import { DuendeEstado } from '../../duende/duende-estado';
           <h1>{{ t('ranking.titulo') }}</h1>
           <p class="sub">{{ t('ranking.sub') }}</p>
         </div>
-        <div class="seg" role="group">
-          @for (g of juegos; track g) {
-            <button type="button" [class.on]="g === juegoSel()" (click)="cambiar({ juego: g, metrica: null })">
-              {{ juegoCorto[g] }}
-            </button>
-          }
+        <div class="ph-ctrl">
+          <app-selector-periodo
+            [periodo]="periodoSel()"
+            [compacto]="false"
+            (cambio)="cambiar({ periodo: $event === 'todo' ? null : $event })"
+          />
+          <div class="seg" role="group">
+            @for (g of juegos; track g) {
+              <button type="button" [class.on]="g === juegoSel()" (click)="cambiar({ juego: g, metrica: null })">
+                {{ juegoCorto[g] }}
+              </button>
+            }
+          </div>
         </div>
       </div>
 
@@ -37,7 +45,13 @@ import { DuendeEstado } from '../../duende/duende-estado';
       } @else if (!carga.datos || carga.datos.juego !== juegoSel()) {
         <div class="skel" style="height: 300px"></div>
       } @else if (!filas().length) {
-        <div class="aviso">{{ t('ranking.vacio', { juego: nombreJuego[juegoSel()] }) }}</div>
+        <div class="aviso">
+          @if (periodoSel() === 'todo') {
+            {{ t('ranking.vacio', { juego: nombreJuego[juegoSel()] }) }}
+          } @else {
+            {{ t('periodo.nadie', { juego: nombreJuego[juegoSel()], periodo: i18n.enPeriodo(periodoSel()) }) }}
+          }
+        </div>
       } @else {
         <section class="card">
           <div class="tbl-wrap">
@@ -61,7 +75,11 @@ import { DuendeEstado } from '../../duende/duende-estado';
                   <tr>
                     <td><span class="pos" [class.p1]="i === 0">{{ i + 1 }}</span></td>
                     <td>
-                      <a class="side-h" [routerLink]="['/jugador', f.slug]" [queryParams]="{ juego: juegoSel() }">
+                      <a
+                        class="side-h"
+                        [routerLink]="['/jugador', f.slug]"
+                        [queryParams]="{ juego: juegoSel(), periodo: periodoSel() === 'todo' ? null : periodoSel() }"
+                      >
                         <app-avatar [slug]="f.slug" [nombre]="f.nombre" [tam]="30" />
                         <span>{{ f.nombre }}</span>
                       </a>
@@ -92,11 +110,13 @@ export class RankingPagina {
   protected readonly claveTexto = claveTexto;
   protected readonly valor = valorDe;
 
-  /** /ranking?juego=cs2&metrica=kd */
+  /** /ranking?juego=cs2&metrica=kd&periodo=7d */
   readonly juego = input<string | undefined>();
   readonly metrica = input<string | undefined>();
+  readonly periodo = input<string | undefined>();
 
   protected readonly juegoSel = computed<Juego>(() => (this.juego() === 'smite2' ? 'smite2' : 'cs2'));
+  protected readonly periodoSel = computed(() => periodoDe(this.periodo()));
   protected readonly columnas = computed(() => COLUMNAS_RANKING[this.juegoSel()]);
   protected readonly orden = computed(() => {
     const m = this.metrica();
@@ -104,8 +124,8 @@ export class RankingPagina {
   });
 
   protected readonly ranking = cargaReactiva(
-    () => this.juegoSel(),
-    (juego) => this.api.ranking(juego),
+    () => ({ juego: this.juegoSel(), periodo: this.periodoSel() }),
+    (p) => this.api.ranking(p.juego, p.periodo),
   );
 
   /** Ordenadas por la métrica elegida, de mejor a peor (en muertes, menos es mejor). Sin dato, al final. */
@@ -123,14 +143,14 @@ export class RankingPagina {
   });
 
   constructor() {
-    effect(() => this.duende.fijarContexto({ foco: [], juego: this.juegoSel() }));
+    effect(() => this.duende.fijarContexto({ foco: [], juego: this.juegoSel(), periodo: this.periodoSel() }));
   }
 
   protected formato(clave: string) {
     return defMetrica(clave).formato;
   }
 
-  protected cambiar(cambios: { juego?: Juego; metrica?: string | null }): void {
+  protected cambiar(cambios: { juego?: Juego; metrica?: string | null; periodo?: Periodo | null }): void {
     this.router.navigate([], { queryParams: cambios, queryParamsHandling: 'merge', replaceUrl: true });
   }
 }

@@ -12,6 +12,8 @@ Juego = Literal["cs2", "smite2"]
 Idioma = Literal["es", "en"]
 Nivel = Literal["alto", "medio", "bien", "info"]
 Formato = Literal["pct", "dec", "int"]
+# Partidas de los últimos 7 días, de los últimos 30 o todas.
+Periodo = Literal["7d", "30d", "todo"]
 
 
 class Base(BaseModel):
@@ -100,6 +102,14 @@ class Sesiones(Base):
     por_franja: list[FilaMomento] = Field(default_factory=list)
 
 
+class ResumenPeriodo(Base):
+    """Resumen de los últimos días (7 o 30), con la media del resto del equipo en esos mismos días."""
+
+    periodo: Periodo
+    resumen: Resumen
+    equipo: MediasEquipo | None = None
+
+
 class JugadorRef(Base):
     slug: str
     nombre: str
@@ -171,6 +181,8 @@ class JuegoContexto(Base):
     desglose: list[Desglose] = Field(default_factory=list)
     sinergias: Sinergias | None = None
     sesiones: Sesiones | None = None
+    # Los últimos 7 y 30 días, los que tengan partidas: para "¿cómo voy esta semana?". Lo demás, con todas.
+    periodos: list[ResumenPeriodo] = Field(default_factory=list)
 
 
 class JugadorContexto(Base):
@@ -187,6 +199,8 @@ class PeticionChat(Base):
     # Todo el equipo con sus datos, también para preguntas generales ("¿quién tiene mejor K/D?").
     equipo: list[JugadorContexto] = Field(default_factory=list, max_length=50)
     juego: Juego | None = None
+    # El periodo que se ve en la página: se usa si la pregunta no dice otro ("esta semana", "este mes"...).
+    periodo: Periodo | None = None
 
 
 class RespuestaChat(Base):

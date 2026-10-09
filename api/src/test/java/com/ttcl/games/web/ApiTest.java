@@ -23,7 +23,11 @@ import com.ttcl.games.duende.DuendeNoDisponibleException;
 import com.ttcl.games.juego.Juego;
 import com.ttcl.games.stats.Modelos.FilaMomento;
 import com.ttcl.games.stats.Modelos.FilaSinergia;
+import com.ttcl.games.stats.Modelos.ResumenPeriodo;
+import com.ttcl.games.stats.Periodo;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -333,6 +337,99 @@ class ApiTest {
                 .andExpect(status().isOk());
         assertThat(duende.ultimaChat.equipo()).flatExtracting(JugadorContexto::juegos)
                 .allSatisfy(g -> assertThat(g.sesiones().porFranja()).isNotEmpty());
+    }
+
+    @Test
+    void elPeriodoRecortaLasPartidasQueCuentan() throws Exception {
+        // Jugador 3 jugó 5 partidas de CS2 en los últimos 7 días: las de la racha con Jugador 2, todas ganadas.
+        int todas = json("/api/jugadores/j3/juegos/cs2").get("resumen").get("partidas").asInt();
+        int mes = json("/api/jugadores/j3/juegos/cs2?periodo=30d").get("resumen").get("partidas").asInt();
+        JsonNode semana = json("/api/jugadores/j3/juegos/cs2?periodo=7d");
+        assertThat(semana.get("resumen").get("partidas").asInt()).isEqualTo(5);
+        assertThat(semana.get("resumen").get("winrate").asDouble()).isEqualTo(100.0);
+        assertThat(semana.get("serie")).hasSize(5);
+        assertThat(mes).isBetween(6, todas - 1);
+
+        // El mismo recorte en el historial, el perfil, el ranking y el cara a cara.
+        JsonNode historial = json("/api/jugadores/j3/partidas?juego=cs2&periodo=7d");
+        assertThat(historial.get("total").asInt()).isEqualTo(5);
+        Instant hace7Dias = Instant.now().minus(Duration.ofDays(7));
+        historial.get("items").forEach(p -> assertThat(Instant.parse(p.get("jugadaEn").asString())).isAfter(hace7Dias));
+        assertThat(json("/api/jugadores/j3?periodo=7d").get("resumenes").get(0).get("partidas").asInt()).isEqualTo(5);
+        JsonNode ranking = json("/api/ranking?juego=smite2&periodo=7d");
+        assertThat(ranking.get("filas")).hasSize(1); // a SMITE 2, esta semana, solo ha jugado Jugador 4
+        assertThat(ranking.get("filas").get(0).get("slug").asString()).isEqualTo("j4");
+        assertThat(json("/api/comparar?a=j3&b=j1&juego=cs2&periodo=7d").get("resumenA").get("partidas").asInt())
+                .isEqualTo(5);
+
+        mvc.perform(get("/api/ranking?juego=cs2&periodo=1a")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void unPeriodoSinPartidasDaDatosVaciosYNoUn404() throws Exception {
+        // Jugador 1 lleva semanas sin jugar a SMITE 2.
+        JsonNode d = json("/api/jugadores/j1/juegos/smite2?periodo=7d");
+        assertThat(d.get("resumen").get("partidas").asInt()).isZero();
+        assertThat(d.get("serie")).isEmpty();
+        assertThat(d.get("desglose")).isEmpty();
+        assertThat(json("/api/jugadores/j1/sinergias?juego=smite2&periodo=7d").get("companeros")).isEmpty();
+        assertThat(json("/api/jugadores/j1/sesiones?juego=smite2&periodo=7d").get("sesiones").asInt()).isZero();
+        assertThat(json("/api/jugadores/j1/partidas?juego=smite2&periodo=7d").get("total").asInt()).isZero();
+        List<String> juegos = new ArrayList<>();
+        json("/api/jugadores/j1?periodo=7d").get("resumenes").forEach(r -> juegos.add(r.get("juego").asString()));
+        assertThat(juegos).containsExactly("cs2");
+        mvc.perform(get("/api/comparar?a=j1&b=j4&juego=smite2&periodo=7d"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resumenA").doesNotExist())
+                .andExpect(jsonPath("$.filas", hasSize(0)));
+
+        mvc.perform(get("/api/jugadores/j1/consejos?juego=smite2&periodo=7d")).andExpect(status().isOk());
+        assertThat(duende.ultimaInsights.resumen().partidas()).isZero();
+
+        // Quien no ha jugado nunca a ese juego sigue siendo un 404, pida el periodo que pida.
+        mvc.perform(get("/api/jugadores/j3/juegos/smite2?periodo=7d")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void elChatRecibeLosUltimosDiasYElPeriodoDeLaPagina() throws Exception {
+        duende.respuesta = new RespuestaChat("Hola", "reglas", null, List.of());
+        mvc.perform(post("/api/duende/chat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"periodo": "7d", "foco": ["j4"],
+                                 "mensajes": [{"rol": "usuario", "texto": "¿Cómo voy esta semana?"}]}
+                                """))
+                .andExpect(status().isOk());
+        assertThat(duende.ultimaChat.periodo()).isEqualTo(Periodo.SIETE_DIAS);
+
+        JuegoContexto cuatro = juegoDe(duende.ultimaChat, "j4", Juego.SMITE2);
+        assertThat(cuatro.periodos()).extracting(ResumenPeriodo::periodo)
+                .containsExactly(Periodo.SIETE_DIAS, Periodo.TREINTA_DIAS);
+        assertThat(cuatro.periodos().getFirst().resumen().partidas()).isEqualTo(5);
+        assertThat(cuatro.periodos().getFirst().equipo()).isNull(); // nadie más jugó a SMITE 2 esta semana
+        assertThat(cuatro.periodos().get(1).equipo().jugadores()).isEqualTo(2);
+        // Jugador 1, sin SMITE 2 esta semana: solo el resumen del mes.
+        assertThat(juegoDe(duende.ultimaChat, "j1", Juego.SMITE2).periodos()).extracting(ResumenPeriodo::periodo)
+                .containsExactly(Periodo.TREINTA_DIAS);
+
+        mvc.perform(post("/api/duende/chat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mensajes\": [{\"rol\": \"usuario\", \"texto\": \"hola\"}]}"))
+                .andExpect(status().isOk());
+        assertThat(duende.ultimaChat.periodo()).isNull();
+        mvc.perform(post("/api/duende/chat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"periodo\": \"siempre\", \"mensajes\": [{\"rol\": \"usuario\", \"texto\": \"hola\"}]}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    private static JuegoContexto juegoDe(PeticionChat chat, String slug, Juego juego) {
+        return chat.equipo().stream()
+                .filter(j -> j.slug().equals(slug))
+                .flatMap(j -> j.juegos().stream())
+                .filter(g -> g.juego() == juego)
+                .findFirst()
+                .orElseThrow();
     }
 
     @Test

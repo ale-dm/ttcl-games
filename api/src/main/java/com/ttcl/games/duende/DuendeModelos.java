@@ -5,8 +5,10 @@ import com.ttcl.games.juego.Juego;
 import com.ttcl.games.stats.Modelos.FilaDesglose;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
+import com.ttcl.games.stats.Modelos.ResumenPeriodo;
 import com.ttcl.games.stats.Modelos.Sesiones;
 import com.ttcl.games.stats.Modelos.Sinergias;
+import com.ttcl.games.stats.Periodo;
 import java.util.List;
 
 /** Contrato con el servicio Python del Duende (duende/app/modelos.py). Mismos nombres de campo, en camelCase. */
@@ -67,14 +69,21 @@ public final class DuendeModelos {
     /** @param rol "usuario" o "duende" */
     public record Mensaje(String rol, String texto) {}
 
+    /**
+     * Datos de un jugador en un juego para el chat, con todas sus partidas.
+     *
+     * @param periodos resumen de los últimos 7 y 30 días, los que tengan partidas ("¿cómo voy esta semana?")
+     */
     public record JuegoContexto(
             Juego juego, String rol, ResumenJuego resumen, ResumenJuego reciente, MediasEquipo equipo,
-            List<FilaDesglose> desglose, Sinergias sinergias, Sesiones sesiones) {}
+            List<FilaDesglose> desglose, Sinergias sinergias, Sesiones sesiones, List<ResumenPeriodo> periodos) {}
 
     public record JugadorContexto(String slug, String nombre, List<JuegoContexto> juegos) {}
 
+    /** @param periodo el que se está viendo en la página (null o "todo": todas las partidas) */
     public record PeticionChat(
-            String lang, List<Mensaje> mensajes, List<String> foco, List<JugadorContexto> equipo, Juego juego) {}
+            String lang, List<Mensaje> mensajes, List<String> foco, List<JugadorContexto> equipo, Juego juego,
+            Periodo periodo) {}
 
     /** @param origen "gemini" o "reglas" (sin clave, sin cuota o si Gemini falla) */
     @JsonIgnoreProperties(ignoreUnknown = true)

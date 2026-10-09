@@ -4,6 +4,7 @@ import com.ttcl.games.duende.DuendeModelos.Mensaje;
 import com.ttcl.games.duende.DuendeModelos.RespuestaChat;
 import com.ttcl.games.duende.DuendeServicio;
 import com.ttcl.games.juego.Juego;
+import com.ttcl.games.stats.Periodo;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -33,14 +34,15 @@ public class DuendeController {
      *
      * @param foco slugs de los jugadores de los que va la conversación (0, 1 o 2)
      * @param juego juego seleccionado en la página, si hay
+     * @param periodo periodo seleccionado en la página (7d, 30d o todo), si hay
      */
     public record PeticionChatWeb(
             String lang, @NotEmpty @Size(max = 30) List<@Valid MensajeWeb> mensajes, @Size(max = 2) List<String> foco,
-            Juego juego) {}
+            Juego juego, Periodo periodo) {}
 
     @PostMapping("/chat")
     public RespuestaChat chat(@Valid @RequestBody PeticionChatWeb peticion) {
         List<Mensaje> mensajes = peticion.mensajes().stream().map(m -> new Mensaje(m.rol(), m.texto())).toList();
-        return duende.chat(peticion.lang(), mensajes, peticion.foco(), peticion.juego());
+        return duende.chat(peticion.lang(), mensajes, peticion.foco(), peticion.juego(), peticion.periodo());
     }
 }

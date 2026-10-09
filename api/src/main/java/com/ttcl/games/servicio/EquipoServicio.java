@@ -27,20 +27,25 @@ import com.ttcl.games.stats.Modelos.FilaParticipacion;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
 import com.ttcl.games.stats.Modelos.Presencia;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
+import com.ttcl.games.stats.Modelos.ResumenPeriodo;
 import com.ttcl.games.stats.Modelos.Sesiones;
 import com.ttcl.games.stats.Modelos.Sinergias;
+import com.ttcl.games.stats.Periodo;
 import java.text.Normalizer;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -68,15 +73,55 @@ public class EquipoServicio {
         this.zona = props.zona();
     }
 
-    /** Foto del equipo: jugadores, cuentas, participaciones por jugador y juego, y quién jugó cada partida. */
+    /**
+     * Foto del equipo: jugadores, cuentas, participaciones por jugador y juego, y quién jugó cada partida. Se puede
+     * recortar a un periodo ({@link #desde}); {@code juegos} sigue diciendo a qué ha jugado cada uno alguna vez.
+     */
     record Instantanea(
             List<Jugador> jugadores,
             Map<Long, List<Cuenta>> cuentas,
             Map<Long, Map<Juego, List<FilaParticipacion>>> filas,
-            Map<Juego, Map<Long, List<Presencia>>> presencias) {
+            Map<Juego, Map<Long, List<Presencia>>> presencias,
+            Map<Long, Set<Juego>> juegos) {
 
         List<FilaParticipacion> filas(Jugador j, Juego juego) {
             return filas.getOrDefault(j.getId(), Map.of()).getOrDefault(juego, List.of());
+        }
+
+        /** Si tiene partidas de ese juego, aunque no sean del periodo de la foto. */
+        boolean juega(Jugador j, Juego juego) {
+            return juegos.getOrDefault(j.getId(), Set.of()).contains(juego);
+        }
+
+        /** La misma foto solo con las partidas jugadas desde {@code inicio}; con null, igual. */
+        Instantanea desde(Instant inicio) {
+            if (inicio == null) {
+                return this;
+            }
+            Map<Long, Map<Juego, List<FilaParticipacion>>> recortadas = new HashMap<>();
+            Set<Long> partidas = new HashSet<>();
+            filas.forEach((jugador, porJuego) -> porJuego.forEach((juego, lista) -> {
+                List<FilaParticipacion> dentro = Estadisticas.desde(lista, inicio);
+                if (!dentro.isEmpty()) {
+                    recortadas.computeIfAbsent(jugador, k -> new EnumMap<>(Juego.class)).put(juego, dentro);
+                    dentro.forEach(f -> partidas.add(f.partidaId()));
+                }
+            }));
+            Map<Juego, Map<Long, List<Presencia>>> presentes = new EnumMap<>(Juego.class);
+            presencias.forEach((juego, porPartida) -> porPartida.forEach((id, lista) -> {
+                if (partidas.contains(id)) {
+                    presentes.computeIfAbsent(juego, k -> new HashMap<>()).put(id, lista);
+                }
+            }));
+            return new Instantanea(jugadores, cuentas, recortadas, presentes, juegos);
+        }
+
+        /** Lanza un 404 si no tiene ni una partida de ese juego (en un periodo sin partidas, los datos van vacíos). */
+        void exigirPartidas(Jugador j, Juego juego) {
+            if (!juega(j, juego)) {
+                throw new NoEncontradoException(
+                        j.getNombre() + " no tiene partidas guardadas de " + juego.nombre() + ".");
+            }
         }
 
         /** Quién del equipo jugó cada partida de un juego, por id de partida. */
@@ -122,7 +167,14 @@ public class EquipoServicio {
                     .computeIfAbsent(p.getPartida().getId(), k -> new ArrayList<>())
                     .add(new Presencia(p.getJugador().getSlug(), p.getJugador().getNombre(), p.getGano()));
         }
-        return new Instantanea(lista, porJugador, filas, presencias);
+        Map<Long, Set<Juego>> juegos = new HashMap<>();
+        filas.forEach((jugador, porJuego) -> juegos.put(jugador, Set.copyOf(porJuego.keySet())));
+        return new Instantanea(lista, porJugador, filas, presencias, juegos);
+    }
+
+    /** La foto con solo las partidas del periodo (contado hacia atrás desde ahora). */
+    Instantanea instantanea(Periodo periodo) {
+        return instantanea().desde(periodo.inicio(Instant.now()));
     }
 
     // ─── Vistas de jugador ──────────────────────────────────────────────────
@@ -154,8 +206,9 @@ public class EquipoServicio {
         return foto.jugadores().stream().map(j -> vista(foto, j)).toList();
     }
 
-    public JugadorVista jugador(String slug) {
-        Instantanea foto = instantanea();
+    /** Perfil con el resumen de cada juego en el periodo (los juegos sin partidas en él no salen). */
+    public JugadorVista jugador(String slug, Periodo periodo) {
+        Instantanea foto = instantanea(periodo);
         return vista(foto, foto.porSlug(slug));
     }
 
@@ -197,7 +250,7 @@ public class EquipoServicio {
         return Estadisticas.mediasEquipo(otros);
     }
 
-    private JuegoContexto contexto(Instantanea foto, Jugador j, Juego juego) {
+    private JuegoContexto contexto(Instantanea foto, Jugador j, Juego juego, List<ResumenPeriodo> periodos) {
         List<FilaParticipacion> filas = foto.filas(j, juego);
         return new JuegoContexto(
                 juego,
@@ -207,29 +260,24 @@ public class EquipoServicio {
                 mediasSin(foto, j, juego),
                 Estadisticas.desglose(juego, filas),
                 Estadisticas.sinergias(juego, j.getSlug(), filas, foto.presencias(juego)),
-                Estadisticas.sesiones(juego, filas, zona));
+                Estadisticas.sesiones(juego, filas, zona),
+                periodos);
     }
 
-    /** Con quién del equipo juega mejor un jugador en un juego (y cómo le va solo). */
-    public Sinergias sinergias(String slug, Juego juego) {
-        Instantanea foto = instantanea();
+    /** Con quién del equipo juega mejor un jugador en un juego (y cómo le va solo), en el periodo. */
+    public Sinergias sinergias(String slug, Juego juego, Periodo periodo) {
+        Instantanea foto = instantanea(periodo);
         Jugador j = foto.porSlug(slug);
-        List<FilaParticipacion> filas = foto.filas(j, juego);
-        if (filas.isEmpty()) {
-            throw new NoEncontradoException(j.getNombre() + " no tiene partidas guardadas de " + juego.nombre() + ".");
-        }
-        return Estadisticas.sinergias(juego, slug, filas, foto.presencias(juego));
+        foto.exigirPartidas(j, juego);
+        return Estadisticas.sinergias(juego, slug, foto.filas(j, juego), foto.presencias(juego));
     }
 
-    /** Cómo le va según cuándo juega: orden en la sesión, después de ganar o de perder y hora del día. */
-    public Sesiones sesiones(String slug, Juego juego) {
-        Instantanea foto = instantanea();
+    /** Cómo le va según cuándo juega (orden en la sesión, después de ganar o de perder, hora del día), en el periodo. */
+    public Sesiones sesiones(String slug, Juego juego, Periodo periodo) {
+        Instantanea foto = instantanea(periodo);
         Jugador j = foto.porSlug(slug);
-        List<FilaParticipacion> filas = foto.filas(j, juego);
-        if (filas.isEmpty()) {
-            throw new NoEncontradoException(j.getNombre() + " no tiene partidas guardadas de " + juego.nombre() + ".");
-        }
-        return Estadisticas.sesiones(juego, filas, zona);
+        foto.exigirPartidas(j, juego);
+        return Estadisticas.sesiones(juego, foto.filas(j, juego), zona);
     }
 
     /** Dúos y tríos del equipo en un juego, o en todos los que tengan partidas si {@code juego} es null. */
@@ -242,21 +290,22 @@ public class EquipoServicio {
                 .toList();
     }
 
-    public DetalleJuego detalle(String slug, Juego juego) {
-        Instantanea foto = instantanea();
+    /**
+     * Resumen, últimas partidas, media del resto del equipo (en el mismo periodo), desglose y serie. Si en el periodo
+     * no jugó, todo va vacío (0 partidas); el 404 es solo para quien no ha jugado nunca a ese juego.
+     */
+    public DetalleJuego detalle(String slug, Juego juego, Periodo periodo) {
+        Instantanea foto = instantanea(periodo);
         Jugador j = foto.porSlug(slug);
-        List<FilaParticipacion> filas = foto.filas(j, juego);
-        if (filas.isEmpty()) {
-            throw new NoEncontradoException(j.getNombre() + " no tiene partidas guardadas de " + juego.nombre() + ".");
-        }
-        JuegoContexto c = contexto(foto, j, juego);
+        foto.exigirPartidas(j, juego);
+        JuegoContexto c = contexto(foto, j, juego, List.of());
         return new DetalleJuego(juego, c.resumen(), c.reciente(), c.equipo(), c.desglose(),
-                Estadisticas.serie(juego, filas, PUNTOS_GRAFICA));
+                Estadisticas.serie(juego, foto.filas(j, juego), PUNTOS_GRAFICA));
     }
 
-    /** Historial de partidas, la más reciente primero, con los compañeros del equipo que estaban. */
-    public PaginaPartidas partidas(String slug, Juego juego, int limite, int offset) {
-        Instantanea foto = instantanea();
+    /** Historial de partidas del periodo, la más reciente primero, con los compañeros del equipo que estaban. */
+    public PaginaPartidas partidas(String slug, Juego juego, int limite, int offset, Periodo periodo) {
+        Instantanea foto = instantanea(periodo);
         Jugador j = foto.porSlug(slug);
         List<FilaParticipacion> filas = (juego == null ? foto.todas(j) : foto.filas(j, juego)).stream()
                 .sorted(Comparator.comparing(FilaParticipacion::jugadaEn).reversed())
@@ -277,8 +326,9 @@ public class EquipoServicio {
 
     // ─── Comparación y ranking ──────────────────────────────────────────────
 
-    public Comparacion comparar(String slugA, String slugB, Juego juego) {
-        Instantanea foto = instantanea();
+    /** Cara a cara en el periodo. Quien no jugó en él lleva el resumen a null. */
+    public Comparacion comparar(String slugA, String slugB, Juego juego, Periodo periodo) {
+        Instantanea foto = instantanea(periodo);
         Jugador a = foto.porSlug(slugA);
         Jugador b = foto.porSlug(slugB);
         List<FilaParticipacion> fa = foto.filas(a, juego);
@@ -294,9 +344,9 @@ public class EquipoServicio {
                 ra == null || rb == null ? List.of() : Estadisticas.comparar(ra, rb));
     }
 
-    /** Jugadores con partidas en el juego. La web ordena por la métrica que se elija. */
-    public Ranking ranking(Juego juego) {
-        Instantanea foto = instantanea();
+    /** Jugadores con partidas en el juego dentro del periodo. La web ordena por la métrica que se elija. */
+    public Ranking ranking(Juego juego, Periodo periodo) {
+        Instantanea foto = instantanea(periodo);
         List<FilaRanking> filas = foto.jugadores().stream()
                 .filter(j -> !foto.filas(j, juego).isEmpty())
                 .map(j -> new FilaRanking(j.getSlug(), j.getNombre(), Estadisticas.resumir(juego, foto.filas(j, juego))))
@@ -306,18 +356,16 @@ public class EquipoServicio {
 
     // ─── Para el Duende ─────────────────────────────────────────────────────
 
-    /** Petición de recomendaciones de un jugador en un juego. */
-    public PeticionInsights peticionInsights(String slug, Juego juego, String lang) {
-        Instantanea foto = instantanea();
+    /** Petición de recomendaciones de un jugador en un juego, con las partidas del periodo. */
+    public PeticionInsights peticionInsights(String slug, Juego juego, String lang, Periodo periodo) {
+        Instantanea foto = instantanea(periodo);
         Jugador j = foto.porSlug(slug);
-        if (foto.filas(j, juego).isEmpty()) {
-            throw new NoEncontradoException(j.getNombre() + " no tiene partidas guardadas de " + juego.nombre() + ".");
-        }
+        foto.exigirPartidas(j, juego);
         return peticion(foto, j, juego, lang);
     }
 
     private PeticionInsights peticion(Instantanea foto, Jugador j, Juego juego, String lang) {
-        JuegoContexto c = contexto(foto, j, juego);
+        JuegoContexto c = contexto(foto, j, juego, List.of());
         return new PeticionInsights(lang, new JugadorRef(j.getSlug(), j.getNombre()), juego, c.rol(), c.resumen(),
                 c.reciente(), c.equipo(), c.desglose(), c.sinergias(), c.sesiones());
     }
@@ -336,18 +384,36 @@ public class EquipoServicio {
         return lista;
     }
 
-    /** Todo el equipo con sus datos por juego, para el chat. */
+    /**
+     * Todo el equipo con sus datos por juego, para el chat. Con todas las partidas y, además, un resumen de los últimos
+     * 7 y 30 días (con la media del equipo en esos días) para preguntas como "¿cómo voy esta semana?".
+     */
     public List<JugadorContexto> contextoEquipo() {
         Instantanea foto = instantanea();
+        Instant ahora = Instant.now();
+        Map<Periodo, Instantanea> recortes = new EnumMap<>(Periodo.class);
+        Periodo.RECORTADOS.forEach(p -> recortes.put(p, foto.desde(p.inicio(ahora))));
         return foto.jugadores().stream()
                 .map(j -> new JugadorContexto(
                         j.getSlug(),
                         j.getNombre(),
                         Arrays.stream(Juego.values())
                                 .filter(juego -> !foto.filas(j, juego).isEmpty())
-                                .map(juego -> contexto(foto, j, juego))
+                                .map(juego -> contexto(foto, j, juego, periodos(recortes, j, juego)))
                                 .toList()))
                 .toList();
+    }
+
+    /** Resumen de cada periodo en el que jugó (los que no tienen partidas no van). */
+    private static List<ResumenPeriodo> periodos(Map<Periodo, Instantanea> recortes, Jugador j, Juego juego) {
+        List<ResumenPeriodo> lista = new ArrayList<>();
+        recortes.forEach((periodo, foto) -> {
+            List<FilaParticipacion> filas = foto.filas(j, juego);
+            if (!filas.isEmpty()) {
+                lista.add(new ResumenPeriodo(periodo, Estadisticas.resumir(juego, filas), mediasSin(foto, j, juego)));
+            }
+        });
+        return lista;
     }
 
     /** Comprueba que los slugs existen (el chat no debe hablar de alguien que no está). */

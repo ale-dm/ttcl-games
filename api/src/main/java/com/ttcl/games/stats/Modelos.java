@@ -129,6 +129,13 @@ public final class Modelos {
             int sesiones, Double partidasPorSesion, List<FilaMomento> porOrden, List<FilaMomento> trasResultado,
             List<FilaMomento> porFranja) {}
 
+    /**
+     * Resumen de un jugador en los últimos días, para el chat ("¿cómo voy esta semana?").
+     *
+     * @param equipo media del resto del equipo en ese mismo periodo (null si nadie más jugó)
+     */
+    public record ResumenPeriodo(Periodo periodo, ResumenJuego resumen, MediasEquipo equipo) {}
+
     /** Un punto de la gráfica de partidas. */
     public record PuntoSerie(
             long partidaId, Instant fecha, Boolean gano, Integer kills, Integer muertes, Integer asistencias,

@@ -1,9 +1,9 @@
 from app import chat, gemini
 from app.config import get_config
 from app.modelos import Desglose, Mensaje, PeticionChat
-from app.reglas_chat import detectar_intencion, detectar_juego, insights_de
+from app.reglas_chat import detectar_intencion, detectar_juego, detectar_periodo, insights_de
 
-from .conftest import Sinergias, companero, equipo_cs2, jugador, momento, resumen_cs2, sesiones
+from .conftest import Sinergias, companero, en_periodo, equipo_cs2, jugador, momento, resumen_cs2, sesiones
 
 
 def equipo():
@@ -266,6 +266,127 @@ def test_las_sesiones_llegan_a_gemini(monkeypatch):
     assert '"clave":"3+","partidas":15,"victorias":5,"winrate":33.3' in sistema
     assert "Con menos de 15 sesiones no saques conclusiones" in sistema
     assert "Las sesiones largas se te atragantan" in sistema  # y la recomendación ya calculada
+
+
+# ─── Periodos ────────────────────────────────────────────────────────────────
+
+
+def test_detectar_periodo():
+    assert detectar_periodo("¿Cómo voy esta semana?", None) == "7d"
+    assert detectar_periodo("how did I do last week?", None) == "7d"
+    assert detectar_periodo("¿Y en los últimos 30 días?", None) == "30d"
+    assert detectar_periodo("¿qué tal este mes?", "7d") == "30d"  # la pregunta manda sobre la página
+    assert detectar_periodo("¿Cuál es mi K/D en total?", "7d") == "todo"
+    assert detectar_periodo("¿Qué hago bien?", "7d") == "7d"
+    assert detectar_periodo("¿Qué hago bien?", None) is None
+
+
+def equipo_con_semana():
+    """Ana, en la media con todas sus partidas, va como un tiro esta semana; Bea no ha jugado estos días."""
+    semana = en_periodo(
+        "7d",
+        resumen_cs2(partidas=8, victorias=6, derrotas=2, winrate=75.0, kd=1.4,
+                    datos_medios={"adr": 90.0, "hs_pct": 30.0, "kr": 0.8, "entry_pct": 50.0, "clutch_pct": 25.0}),
+        equipo_cs2(jugadores=1),
+    )
+    return [
+        jugador("j1", "Ana", resumen_cs2(), equipo_cs2(), periodos=[semana]),
+        jugador("j2", "Bea", resumen_cs2(kd=1.2, winrate=60.0), equipo_cs2()),
+    ]
+
+
+def preguntar_con(texto: str, equipo, foco=None, lang="es", periodo=None) -> str:
+    return chat.responder(
+        PeticionChat(lang=lang, mensajes=[Mensaje(rol="usuario", texto=texto)], foco=foco or [], equipo=equipo,
+                     periodo=periodo)
+    ).respuesta
+
+
+def test_como_voy_esta_semana_frente_a_siempre():
+    r = preguntar_con("¿Cómo voy esta semana?", equipo_con_semana(), foco=["j1"])
+    assert r.split("\n") == [
+        "**Últimos 7 días.** Ana en Counter-Strike 2: 8 partidas (6 victorias y 2 derrotas).",
+        "",
+        "- Winrate: **75,0 %** (con todas: 50,0 %)",
+        "- K/D: **1,40** (con todas: 1,00)",
+        "- ADR: **90** (con todas: 80)",
+        "- % headshot: **30,0 %** (con todas: 45,0 %)",
+        "",
+        "Mejor que de costumbre. Sigue así.",
+    ]
+    en = preguntar_con("How am I doing this week?", equipo_con_semana(), foco=["j1"], lang="en")
+    assert en.startswith("**Last 7 days.** Ana in Counter-Strike 2: 8 matches (6 wins and 2 losses).")
+
+
+def test_con_un_periodo_los_consejos_son_de_esos_dias():
+    # Con todas sus partidas, Ana va en la media; esta semana, la puntería no acompaña.
+    assert "Pocos headshots" not in preguntar_con("¿En qué tengo que mejorar?", equipo_con_semana(), foco=["j1"])
+    r = preguntar_con("¿En qué tengo que mejorar esta semana?", equipo_con_semana(), foco=["j1"])
+    assert r.startswith("**Últimos 7 días.** Esto es lo que yo trabajaría en Counter-Strike 2, Ana:")
+    assert "- **Pocos headshots.**" in r
+
+
+def test_el_periodo_de_la_pagina_vale_si_la_pregunta_no_dice_otro():
+    con_pagina = preguntar_con("¿Qué hago bien?", equipo_con_semana(), foco=["j1"], periodo="7d")
+    assert con_pagina.startswith("**Últimos 7 días.**")
+    en_total = preguntar_con("¿Qué hago bien en total?", equipo_con_semana(), foco=["j1"], periodo="7d")
+    assert not en_total.startswith("**")
+    assert not preguntar_con("¿Qué hago bien?", equipo_con_semana(), foco=["j1"], periodo="todo").startswith("**")
+
+
+def test_sin_partidas_en_esos_dias():
+    assert preguntar_con("¿Cómo voy esta semana?", equipo_con_semana(), foco=["j2"]) == (
+        "**Últimos 7 días.** Bea no ha jugado en estos días."
+    )
+    assert preguntar_con("¿Cómo voy en smite este mes?", equipo_con_semana(), foco=["j1"]) == (
+        "**Últimos 30 días.** Ana no ha jugado a SMITE 2 en estos días."
+    )
+    assert preguntar_con("¿Qué hago bien esta semana?", equipo_con_semana(), foco=["j2"]) == (
+        "**Últimos 7 días.** Bea no tiene partidas."
+    )
+    sin_nadie = [jugador("j2", "Bea", resumen_cs2(), equipo_cs2())]
+    assert preguntar_con("¿Cómo vamos este mes?", sin_nadie) == (
+        "**Últimos 30 días.** Nadie del equipo ha jugado en estos días."
+    )
+
+
+def test_el_equipo_esta_semana():
+    # Sin nadie en el foco, la clasificación de esos días: Bea no ha jugado, así que solo sale Ana.
+    r = preguntar_con("¿Quién es el mejor esta semana?", equipo_con_semana())
+    assert r.startswith("**Últimos 7 días.** Así está el equipo en Counter-Strike 2:")
+    assert "**Ana** (75,0 %)" in r and "Bea" not in r
+    assert preguntar_con("¿Cómo vamos esta semana?", equipo_con_semana()).startswith(
+        "**Últimos 7 días.** Así está el equipo"
+    )
+
+
+def test_companeros_desglose_y_sesiones_siempre_con_todas():
+    r = preguntar_con("¿Con quién juego mejor esta semana?", equipo_con_sinergias(), foco=["j1"])
+    assert r.startswith("Esto lo miro con todas las partidas: por días solo separo los números generales.")
+    assert "- **Bea**: ganas el 65,0 % (13 de 20)" in r
+
+
+def test_los_ultimos_dias_llegan_a_gemini(monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "clave-de-prueba")
+    get_config.cache_clear()
+    sistemas = []
+
+    def falso(sistema, contenidos, temperatura=0.8):
+        sistemas.append(sistema)
+        return "Respuesta de Gemini", "gemini-falso"
+
+    monkeypatch.setattr(gemini, "generar", falso)
+    equipo = equipo_con_semana()
+    equipo[1].juegos[0].periodos = [en_periodo("30d", resumen_cs2(partidas=12, winrate=58.3))]
+    chat.responder(
+        PeticionChat(lang="es", mensajes=[Mensaje(rol="usuario", texto="¿Cómo voy esta semana? (Gemini)")],
+                     foco=["j1"], equipo=equipo, periodo="30d")
+    )
+    sistema = sistemas[0]
+    assert '"periodo_seleccionado":"30d"' in sistema
+    assert '"periodos":[{"periodo":"7d","resumen":{"juego":"cs2","partidas":8' in sistema  # Ana, con todo
+    assert '"periodos":[{"periodo":"30d","resumen":{"juego":"cs2","partidas":12' in sistema  # Bea, solo el resumen
+    assert "«periodos» trae además el resumen de los últimos 7 días" in sistema
 
 
 def test_mejorar_tiene_en_cuenta_el_rol():

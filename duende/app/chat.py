@@ -71,7 +71,12 @@ def _datos_para_prompt(p: PeticionChat) -> dict:
 
     def juego_basico(g) -> dict:
         basico = g.resumen.model_dump(by_alias=True, exclude_none=True)
-        return {**basico, "rol": g.rol} if g.rol else basico
+        if g.rol:
+            basico["rol"] = g.rol
+        if g.periodos:
+            # Para "¿quién va mejor esta semana?" también hacen falta los últimos días del resto.
+            basico["periodos"] = [pr.model_dump(by_alias=True, exclude_none=True, exclude={"equipo"}) for pr in g.periodos]
+        return basico
 
     def jugador_completo(j: JugadorContexto) -> dict:
         return {
@@ -92,6 +97,7 @@ def _datos_para_prompt(p: PeticionChat) -> dict:
     return {
         "idioma": p.lang,
         "juego_seleccionado": p.juego,
+        "periodo_seleccionado": p.periodo,
         "foco": [jugador_completo(j) for j in foco],
         "equipo": [
             {"nombre": j.nombre, "juegos": [juego_basico(g) for g in j.juegos]} for j in p.equipo if j not in foco

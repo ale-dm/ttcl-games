@@ -213,6 +213,16 @@ export const ES = {
   'rol.guardian': 'Guardián',
   'rol.carry': 'Carry',
 
+  // Periodo (?periodo=7d|30d en la URL)
+  'periodo.etiqueta': 'Periodo',
+  'periodo.7d': '7 días',
+  'periodo.30d': '30 días',
+  'periodo.todo': 'Todo',
+  'periodo.en.7d': 'en los últimos 7 días',
+  'periodo.en.30d': 'en los últimos 30 días',
+  'periodo.sinPartidas': '{nombre} no ha jugado a {juego} {periodo}.',
+  'periodo.nadie': 'Nadie del equipo ha jugado a {juego} {periodo}.',
+
   // Filas de las sesiones (las claves que manda la API)
   'momento.1': '1ª',
   'momento.2': '2ª',
@@ -424,6 +434,15 @@ export const EN: Record<Clave, string> = {
   'rol.mid': 'Mid',
   'rol.guardian': 'Guardian',
   'rol.carry': 'Carry',
+
+  'periodo.etiqueta': 'Period',
+  'periodo.7d': '7 days',
+  'periodo.30d': '30 days',
+  'periodo.todo': 'All',
+  'periodo.en.7d': 'in the last 7 days',
+  'periodo.en.30d': 'in the last 30 days',
+  'periodo.sinPartidas': "{nombre} hasn't played {juego} {periodo}.",
+  'periodo.nadie': 'Nobody on the team has played {juego} {periodo}.',
 
   'momento.1': '1st',
   'momento.2': '2nd',

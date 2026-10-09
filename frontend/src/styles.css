@@ -152,6 +152,7 @@ button, input, select { font: inherit; color: inherit; }
 /* ─── Página ──────────────────────────────────────────────────────────────── */
 .page { padding: 36px 24px 96px; }
 .ph { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-bottom: 24px; }
+.ph-ctrl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .ph-r { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 h1 { font-size: 34px; letter-spacing: -0.03em; margin: 0; font-weight: 700; line-height: 1.1; }
 .sub { color: var(--muted); margin: 10px 0 0; max-width: 62ch; }
@@ -231,6 +232,8 @@ h1 { font-size: 34px; letter-spacing: -0.03em; margin: 0; font-weight: 700; line
 .hero-a { display: flex; gap: 8px; flex-wrap: wrap; }
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 26px 0 22px; overflow-x: auto; overflow-y: hidden; align-items: center; }
 .tabs .seg { margin-left: auto; margin-bottom: 6px; flex: none; }
+.tabs-ctrl { margin-left: auto; margin-bottom: 6px; display: flex; gap: 6px; flex: none; }
+.tabs .tabs-ctrl .seg { margin: 0; }
 .tab { padding: 11px 14px; border: 0; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--muted); cursor: pointer; font-weight: 600; white-space: nowrap; }
 .tab:hover { color: var(--text); }
 .tab.on { color: var(--text); border-color: var(--acc); }
@@ -476,6 +479,9 @@ select {
   .hero-a { width: 100%; }
   .hero-a .btn { flex: 1; }
   .tabs .seg { margin-left: 8px; }
+  /* Periodo y juego, en su propia fila encima de las pestañas. */
+  .tabs { flex-wrap: wrap; }
+  .tabs-ctrl { order: -1; width: 100%; margin: 0 0 6px; justify-content: flex-end; }
 }
 @media (max-width: 420px) {
   .hide-xs { display: none; }

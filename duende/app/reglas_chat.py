@@ -17,8 +17,10 @@ from .modelos import (
     JuegoContexto,
     JugadorContexto,
     JugadorRef,
+    Periodo,
     PeticionChat,
     PeticionInsights,
+    ResumenPeriodo,
 )
 from .textos import NOMBRES_MOMENTO, NOMBRES_ROL
 
@@ -490,28 +492,164 @@ def _equipo_mejorar(equipo: list[JugadorContexto], juego: Juego | None, lang: Id
 AYUDA = {
     "es": "Puedo decirte en qué mejorar, qué haces bien, cómo vas últimamente, qué mapa o dios se te da peor, "
     "con quién juegas mejor, cuándo juegas mejor (si te tilteas, a qué hora rindes más) o comparar a dos del equipo. "
-    "Pregúntame algo de eso.",
+    "Y si dices «esta semana» o «este mes», miro solo esos días. Pregúntame algo de eso.",
     "en": "I can tell you what to improve, what you do well, how you've been doing lately, your worst map or god, "
     "who you play best with, when you play best (whether you tilt, what time suits you) or compare two teammates. "
-    "Ask me any of that.",
+    "And if you say 'this week' or 'this month', I'll look at just those days. Ask me any of that.",
 }
+
+# ─── Periodos ────────────────────────────────────────────────────────────────
+
+ETIQUETA_PERIODO: dict[str, dict[Idioma, str]] = {
+    "7d": {"es": "Últimos 7 días", "en": "Last 7 days"},
+    "30d": {"es": "Últimos 30 días", "en": "Last 30 days"},
+}
+# Esto solo se calcula con todas las partidas: con unos pocos días no hay muestra.
+SOLO_CON_TODAS = ("companeros", "desglose", "sesiones")
+
+
+def detectar_periodo(pregunta: str, por_defecto: Periodo | None) -> Periodo | None:
+    """El periodo del que habla la pregunta o, si no dice ninguno, el de la página."""
+    t = normalizar(pregunta)
+    if _contiene(t, ["esta semana", "ultima semana", "semana pasada", "7 dias", "siete dias", "this week",
+                     "last week", "past week", "7 days", "seven days"]):
+        return "7d"
+    if _contiene(t, ["este mes", "ultimo mes", "mes pasado", "30 dias", "treinta dias", "this month", "last month",
+                     "past month", "30 days", "thirty days"]):
+        return "30d"
+    if _contiene(t, ["desde siempre", "de siempre", "en total", "todas las partidas", "all time", "all-time",
+                     "overall"]):
+        return "todo"
+    return por_defecto
+
+
+def _resumen_de(g: JuegoContexto, periodo: Periodo) -> ResumenPeriodo | None:
+    return next((pr for pr in g.periodos if pr.periodo == periodo), None)
+
+
+def _en_periodo(equipo: list[JugadorContexto], periodo: Periodo) -> list[JugadorContexto]:
+    """El equipo con los números de esos días: cada juego con su resumen y la media del equipo en esos días. Lo que
+    solo hay con todas las partidas (desglose, compañeros, sesiones) no va, y los juegos sin partidas, tampoco."""
+    return [
+        j.model_copy(
+            update={
+                "juegos": [
+                    JuegoContexto(juego=g.juego, rol=g.rol, resumen=pr.resumen, equipo=pr.equipo)
+                    for g in j.juegos
+                    if (pr := _resumen_de(g, periodo))
+                ]
+            }
+        )
+        for j in equipo
+    ]
+
+
+def _como_voy(j: JugadorContexto, periodo: Periodo, juego: Juego | None, lang: Idioma) -> str:
+    """Los números de esos días frente a los de siempre, en el juego pedido o en el que más ha jugado estos días."""
+    con_datos = [
+        (g, pr) for g in j.juegos if (pr := _resumen_de(g, periodo)) and (juego is None or g.juego == juego)
+    ]
+    if not con_datos:
+        if juego:
+            return _t(
+                lang,
+                f"{j.nombre} no ha jugado a {NOMBRE_JUEGO[juego]} en estos días.",
+                f"{j.nombre} hasn't played {NOMBRE_JUEGO[juego]} in that time.",
+            )
+        return _t(lang, f"{j.nombre} no ha jugado en estos días.", f"{j.nombre} hasn't played in that time.")
+    g, pr = max(con_datos, key=lambda x: x[1].resumen.partidas)
+    r, siempre = pr.resumen, g.resumen
+
+    def cuenta(n: int, es: str, en: str) -> str:
+        """Número con su palabra en singular o plural: cada texto va como "singular|plural"."""
+        uno, varios = _t(lang, es, en).split("|")
+        return f"{n} {uno if n == 1 else varios}"
+
+    texto = _t(lang, f"{j.nombre} en {NOMBRE_JUEGO[g.juego]}: ", f"{j.nombre} in {NOMBRE_JUEGO[g.juego]}: ") + (
+        f"{cuenta(r.partidas, 'partida|partidas', 'match|matches')} ("
+        f"{cuenta(r.victorias, 'victoria|victorias', 'win|wins')} {_t(lang, 'y', 'and')} "
+        f"{cuenta(r.derrotas, 'derrota|derrotas', 'loss|losses')})."
+    )
+    lineas = []
+    for clave in _metricas_clave(g.juego):
+        m = metrica(g.juego, clave)
+        assert m is not None
+        if (valor := m.valor(r)) is None:
+            continue
+        lineas.append(
+            f"- {m.nombre(lang)}: **{formatear(valor, m.formato, lang)}** "
+            f"({_t(lang, 'con todas', 'all matches')}: {formatear(m.valor(siempre), m.formato, lang)})"
+        )
+    texto += "\n\n" + "\n".join(lineas)
+    if r.winrate is not None and siempre.winrate is not None:
+        diferencia = r.winrate - siempre.winrate
+        if diferencia >= 5:
+            texto += "\n\n" + _t(lang, "Mejor que de costumbre. Sigue así.", "Better than usual. Keep it up.")
+        elif diferencia <= -5:
+            texto += "\n\n" + _t(
+                lang, "Peor que de costumbre: algo ha cambiado estos días.", "Worse than usual: something's changed lately."
+            )
+        else:
+            texto += "\n\n" + _t(lang, "En tu línea de siempre.", "Right at your usual level.")
+    return texto
 
 
 def responder(p: PeticionChat) -> str:
-    """Respuesta por reglas a la última pregunta del usuario."""
+    """Respuesta por reglas a la última pregunta del usuario.
+
+    Si la pregunta habla de unos días ("esta semana", "este mes") o en la página hay un periodo elegido, los números
+    generales son los de esos días; "¿cómo voy?" los compara con los de siempre.
+    """
     lang = p.lang
     pregunta = next((m.texto for m in reversed(p.mensajes) if m.rol == "usuario"), "")
+    periodo = detectar_periodo(pregunta, p.periodo)
+    if periodo not in ETIQUETA_PERIODO:
+        return _responder(p, pregunta)
+    assert periodo is not None
+    foco, intencion = _foco_e_intencion(p, pregunta)
+    if intencion == "hola":
+        return _responder(p, pregunta)
+    if intencion in SOLO_CON_TODAS:
+        aviso = _t(
+            lang,
+            "Esto lo miro con todas las partidas: por días solo separo los números generales.",
+            "I look at this with all matches: I only split the overall numbers by days.",
+        )
+        return aviso + "\n\n" + _responder(p, pregunta)
+
+    etiqueta = f"**{ETIQUETA_PERIODO[periodo][lang]}.** "
+    recortado = p.model_copy(update={"equipo": _en_periodo(p.equipo, periodo)})
+    juego = detectar_juego(pregunta, p.juego)
+    if intencion in ("ayuda", "racha"):
+        if foco:
+            return etiqueta + _como_voy(foco[0], periodo, juego, lang)
+        # Sin nadie en concreto: cómo está el equipo en esos días.
+        juego_r = juego or next((g.juego for j in recortado.equipo for g in j.juegos), None)
+        if not juego_r:
+            return etiqueta + _t(lang, "Nadie del equipo ha jugado en estos días.", "Nobody on the team has played in that time.")
+        return etiqueta + _ranking(recortado.equipo, juego_r, pregunta, lang)
+    return etiqueta + _responder(recortado, pregunta)
+
+
+def _foco_e_intencion(p: PeticionChat, pregunta: str) -> tuple[list[JugadorContexto], Intencion]:
+    """De quién va la pregunta (la página o quien se nombre) y qué se pregunta."""
     por_slug = {j.slug: j for j in p.equipo}
     foco = [por_slug[s] for s in p.foco if s in por_slug]
     mencionado = buscar_jugador(pregunta, p.equipo)
     if not foco and mencionado:
         foco = [mencionado]
-
-    juego = detectar_juego(pregunta, p.juego)
     intencion = detectar_intencion(pregunta, len(foco))
     # "¿En qué tiene que mejorar Bea?" desde el perfil de Ana: la pregunta manda sobre la página.
     if mencionado and intencion != "comparar" and foco[0] is not mencionado:
         foco = [mencionado]
+    return foco, intencion
+
+
+def _responder(p: PeticionChat, pregunta: str) -> str:
+    """Respuesta con los datos que vengan en la petición (todas las partidas o las de un periodo)."""
+    lang = p.lang
+    foco, intencion = _foco_e_intencion(p, pregunta)
+    juego = detectar_juego(pregunta, p.juego)
 
     if intencion == "hola":
         return _t(lang, "¡Buenas! Soy el Duende. ", "Hey! I'm the Duende. ") + AYUDA[lang]
@@ -542,7 +680,9 @@ def responder(p: PeticionChat) -> str:
     principal = foco[0]
     g = _juego_de(principal, juego)
     if not g:
-        nombre_juego = NOMBRE_JUEGO[juego] if juego else ""
+        if not juego:
+            return _t(lang, f"{principal.nombre} no tiene partidas.", f"{principal.nombre} has no matches.")
+        nombre_juego = NOMBRE_JUEGO[juego]
         return _t(lang, f"{principal.nombre} no tiene partidas de {nombre_juego}.", f"{principal.nombre} has no {nombre_juego} matches.")
     f = Foco(principal, g)
 
@@ -596,4 +736,6 @@ def sugerencias(p: PeticionChat) -> list[str]:
     return preguntas[:4]
 
 
-__all__ = ["responder", "sugerencias", "detectar_intencion", "detectar_juego", "insights_de", "METRICAS"]
+__all__ = [
+    "responder", "sugerencias", "detectar_intencion", "detectar_juego", "detectar_periodo", "insights_de", "METRICAS"
+]

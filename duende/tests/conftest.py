@@ -9,6 +9,7 @@ from app.modelos import (
     JugadorContexto,
     MediasEquipo,
     Resumen,
+    ResumenPeriodo,
     Sesiones,
     Sinergias,
 )
@@ -102,6 +103,7 @@ def jugador(
     rol=None,
     sinergias=None,
     sesiones=None,
+    periodos=None,
 ):
     return JugadorContexto(
         slug=slug,
@@ -115,9 +117,16 @@ def jugador(
                 desglose=desglose or [],
                 sinergias=sinergias,
                 sesiones=sesiones,
+                periodos=periodos or [],
             )
         ],
     )
 
 
-__all__ = ["resumen_cs2", "equipo_cs2", "companero", "momento", "sesiones", "jugador", "Desglose", "Sinergias"]
+def en_periodo(periodo: str, resumen: Resumen, equipo: MediasEquipo | None = None) -> ResumenPeriodo:
+    return ResumenPeriodo(periodo=periodo, resumen=resumen, equipo=equipo)
+
+
+__all__ = [
+    "resumen_cs2", "equipo_cs2", "companero", "momento", "sesiones", "jugador", "en_periodo", "Desglose", "Sinergias"
+]

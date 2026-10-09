@@ -5,11 +5,12 @@ import { Avatar } from '../../compartido/avatar';
 import { Forma } from '../../compartido/forma';
 import { Grafica } from '../../compartido/grafica';
 import { MarcaDuende } from '../../compartido/marca-duende';
+import { SelectorPeriodo } from '../../compartido/selector-periodo';
 import { Api } from '../../core/api';
 import { cargaReactiva } from '../../core/carga';
 import { I18n, JUEGO_CORTO, NOMBRE_JUEGO } from '../../core/i18n';
 import { KPIS, claveTexto, metrica, valorDe } from '../../core/metricas';
-import { FilaDesglose, FilaMomento, Juego, PartidaVista } from '../../core/modelos';
+import { FilaDesglose, FilaMomento, Juego, PartidaVista, Periodo, periodoDe } from '../../core/modelos';
 import { Clave } from '../../core/textos';
 import { TituloTraducido } from '../../core/titulo';
 import { DuendeEstado } from '../../duende/duende-estado';
@@ -23,7 +24,7 @@ const MIN_DESGLOSE = 3;
 
 @Component({
   selector: 'app-jugador-pagina',
-  imports: [NgTemplateOutlet, RouterLink, Avatar, Forma, Grafica, MarcaDuende, PanelConsejos, TablaPartidas],
+  imports: [NgTemplateOutlet, RouterLink, Avatar, Forma, Grafica, MarcaDuende, PanelConsejos, SelectorPeriodo, TablaPartidas],
   templateUrl: './jugador-pagina.html',
 })
 export class JugadorPagina {
@@ -37,10 +38,11 @@ export class JugadorPagina {
   protected readonly juegoCorto = JUEGO_CORTO;
   protected readonly claveTexto = claveTexto;
 
-  /** /jugador/:slug?juego=cs2&tab=partidas */
+  /** /jugador/:slug?juego=cs2&tab=partidas&periodo=7d */
   readonly slug = input.required<string>();
   readonly juego = input<string | undefined>();
   readonly tab = input<string | undefined>();
+  readonly periodo = input<string | undefined>();
 
   protected readonly perfil = cargaReactiva(
     () => this.slug(),
@@ -58,28 +60,37 @@ export class JugadorPagina {
     return t === 'partidas' || t === 'desglose' ? t : 'resumen';
   });
 
+  /** Todo lo de la página (cifras, consejos, partidas, con quién y cuándo) cuenta solo las partidas del periodo. */
+  protected readonly periodoActivo = computed(() => periodoDe(this.periodo()));
+  /** El periodo para los enlaces a otras páginas (sin parámetro si son todas las partidas). */
+  protected readonly periodoUrl = computed(() => (this.periodoActivo() === 'todo' ? null : this.periodoActivo()));
+  /** Última partida del juego, con todas las partidas: no depende del periodo elegido. */
+  protected readonly ultimaPartida = computed(
+    () => this.perfil.estado().datos?.resumenes.find((r) => r.juego === this.juegoActivo())?.ultimaPartida ?? null,
+  );
+
   private readonly clave = computed(() => {
     const juego = this.juegoActivo();
-    return juego ? { slug: this.slug(), juego } : null;
+    return juego ? { slug: this.slug(), juego, periodo: this.periodoActivo() } : null;
   });
-  protected readonly detalle = cargaReactiva(this.clave, (p) => this.api.detalle(p.slug, p.juego));
+  protected readonly detalle = cargaReactiva(this.clave, (p) => this.api.detalle(p.slug, p.juego, p.periodo));
   protected readonly consejos = cargaReactiva(
     () => {
       const c = this.clave();
       return c ? { ...c, lang: this.i18n.idioma() } : null;
     },
-    (p) => this.api.consejos(p.slug, p.juego, p.lang),
+    (p) => this.api.consejos(p.slug, p.juego, p.lang, p.periodo),
   );
   protected readonly paginaPartidas = cargaReactiva(this.clave, (p) =>
-    this.api.partidas(p.slug, p.juego, POR_PAGINA, 0),
+    this.api.partidas(p.slug, p.juego, POR_PAGINA, 0, p.periodo),
   );
-  protected readonly sinergias = cargaReactiva(this.clave, (p) => this.api.sinergias(p.slug, p.juego));
+  protected readonly sinergias = cargaReactiva(this.clave, (p) => this.api.sinergias(p.slug, p.juego, p.periodo));
   /** Filas de "Con quién": cada compañero (el que más partidas juntos primero) y, al final, solo. */
   protected readonly conQuien = computed(() => {
     const s = this.sinergias.estado().datos;
     return s ? [...s.companeros, ...(s.solo ? [s.solo] : [])] : [];
   });
-  protected readonly sesiones = cargaReactiva(this.clave, (p) => this.api.sesiones(p.slug, p.juego));
+  protected readonly sesiones = cargaReactiva(this.clave, (p) => this.api.sesiones(p.slug, p.juego, p.periodo));
   /** Bloques de "Cuándo juegas mejor": orden en la sesión, según la anterior y hora del día (los que tengan filas). */
   protected readonly bloquesSesion = computed(() => {
     const s = this.sesiones.estado().datos;
@@ -139,7 +150,11 @@ export class JugadorPagina {
       const p = this.perfil.estado().datos;
       if (p) {
         this.titulo.fijar(p.nombre);
-        this.duende.fijarContexto({ foco: [{ slug: p.slug, nombre: p.nombre }], juego: this.juegoActivo() });
+        this.duende.fijarContexto({
+          foco: [{ slug: p.slug, nombre: p.nombre }],
+          juego: this.juegoActivo(),
+          periodo: this.periodoActivo(),
+        });
       }
     });
     // Página nueva de partidas: lo cargado con "Cargar más" ya no vale.
@@ -149,10 +164,11 @@ export class JugadorPagina {
     });
   }
 
-  protected irA(cambios: { juego?: Juego; tab?: Pestana }): void {
+  protected irA(cambios: { juego?: Juego; tab?: Pestana; periodo?: Periodo }): void {
     const params: Record<string, string | null> = {};
     if (cambios.juego) params['juego'] = cambios.juego;
     if (cambios.tab) params['tab'] = cambios.tab === 'resumen' ? null : cambios.tab;
+    if (cambios.periodo) params['periodo'] = cambios.periodo === 'todo' ? null : cambios.periodo;
     this.router.navigate([], { queryParams: params, queryParamsHandling: 'merge', replaceUrl: true });
   }
 
@@ -160,7 +176,7 @@ export class JugadorPagina {
     const c = this.clave();
     if (!c || this.cargandoMas()) return;
     this.cargandoMas.set(true);
-    this.api.partidas(c.slug, c.juego, POR_PAGINA, this.partidas().length).subscribe({
+    this.api.partidas(c.slug, c.juego, POR_PAGINA, this.partidas().length, c.periodo).subscribe({
       next: (r) => {
         this.masPartidas.update((m) => [...m, ...r.items]);
         this.cargandoMas.set(false);

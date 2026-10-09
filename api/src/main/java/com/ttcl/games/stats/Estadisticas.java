@@ -15,6 +15,7 @@ import com.ttcl.games.stats.Modelos.ResumenJuego;
 import com.ttcl.games.stats.Modelos.Sesiones;
 import com.ttcl.games.stats.Modelos.Sinergias;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -142,6 +143,11 @@ public final class Estadisticas {
             }
         }
         return minutos > 0 ? redondear(valor / minutos, 1) : null;
+    }
+
+    /** Las participaciones jugadas desde {@code inicio} (incluido) o, si es null, todas. */
+    public static List<FilaParticipacion> desde(List<FilaParticipacion> filas, Instant inicio) {
+        return inicio == null ? filas : filas.stream().filter(f -> !f.jugadaEn().isBefore(inicio)).toList();
     }
 
     /** Las {@code n} participaciones más recientes. */
