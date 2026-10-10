@@ -8,9 +8,20 @@
       "port": 8000
     },
     {
+      "name": "analisis",
+      "runtimeExecutable": "analisis/.venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--app-dir", "analisis", "--port", "8001"],
+      "port": 8001
+    },
+    {
       "name": "api",
       "runtimeExecutable": "java",
-      "runtimeArgs": ["-jar", "api/target/ttcl-api-0.1.0.jar", "--ttcl.equipo-json=config/equipo.json"],
+      "runtimeArgs": [
+        "-jar",
+        "api/target/ttcl-api-0.1.0.jar",
+        "--ttcl.equipo-json=config/equipo.json",
+        "--ttcl.analisis.carpeta=demos"
+      ],
       "port": 8080
     },
     {

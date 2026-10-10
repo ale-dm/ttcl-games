@@ -1,7 +1,10 @@
 package com.ttcl.games.web;
 
+import com.ttcl.games.analisis.AnalisisCliente;
 import com.ttcl.games.config.TtclProperties;
+import com.ttcl.games.dominio.Demo;
 import com.ttcl.games.dominio.Repositorios.CuentaRepo;
+import com.ttcl.games.dominio.Repositorios.DemoRepo;
 import com.ttcl.games.dominio.Repositorios.JugadorRepo;
 import com.ttcl.games.duende.DuendeCliente;
 import com.ttcl.games.duende.DuendeServicio;
@@ -10,6 +13,7 @@ import com.ttcl.games.servicio.EquipoServicio;
 import com.ttcl.games.servicio.Vistas.BusquedaVista;
 import com.ttcl.games.servicio.Vistas.Comparacion;
 import com.ttcl.games.servicio.Vistas.Estado;
+import com.ttcl.games.servicio.Vistas.EstadoAnalisis;
 import com.ttcl.games.servicio.Vistas.EstadoDuende;
 import com.ttcl.games.servicio.Vistas.GruposJuego;
 import com.ttcl.games.servicio.Vistas.Ranking;
@@ -31,6 +35,8 @@ public class EquipoController {
     private final DuendeCliente duendeCliente;
     private final CuentaRepo cuentas;
     private final JugadorRepo jugadores;
+    private final DemoRepo demos;
+    private final AnalisisCliente analisis;
     private final TtclProperties props;
 
     public EquipoController(
@@ -39,16 +45,20 @@ public class EquipoController {
             DuendeCliente duendeCliente,
             CuentaRepo cuentas,
             JugadorRepo jugadores,
+            DemoRepo demos,
+            AnalisisCliente analisis,
             TtclProperties props) {
         this.equipo = equipo;
         this.duende = duende;
         this.duendeCliente = duendeCliente;
         this.cuentas = cuentas;
         this.jugadores = jugadores;
+        this.demos = demos;
+        this.analisis = analisis;
         this.props = props;
     }
 
-    /** Última sincronización, fuentes configuradas y si el Duende responde. */
+    /** Última sincronización, fuentes configuradas, si el Duende responde y cómo va el análisis de demos (P12). */
     @GetMapping("/estado")
     public Estado estado() {
         EstadoDuende estadoDuende = duendeCliente.salud()
@@ -60,7 +70,13 @@ public class EquipoController {
                 Map.of(
                         Juego.CS2.codigo(), props.faceit().configurada(),
                         Juego.SMITE2.codigo(), props.smite2().configurada()),
-                estadoDuende);
+                estadoDuende,
+                new EstadoAnalisis(
+                        analisis.configurado(),
+                        props.faceit().descargas(),
+                        demos.countByEstado(Demo.ANALIZADA),
+                        demos.countByEstado(Demo.PENDIENTE),
+                        demos.countByEstado(Demo.FALLIDA)));
     }
 
     /** Tarjetas del equipo. Con {@code juego}, solo ese juego y solo quien lo juega. */

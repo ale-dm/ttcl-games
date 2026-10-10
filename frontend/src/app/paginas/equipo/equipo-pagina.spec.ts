@@ -24,7 +24,7 @@ describe('EquipoPagina · los que mejor se entienden', () => {
     const pagina = TestBed.createComponent(EquipoPagina);
     await pagina.whenStable();
     http.expectOne((r) => r.url === '/api/equipo').flush([]);
-    http.expectOne('/api/estado').flush({ ultimaSync: null, demo: true, fuentes: {}, duende: {} });
+    http.expectOne('/api/estado').flush({ ultimaSync: null, demo: true, fuentes: {}, duende: {}, analisis: {} });
     const peticion = http.expectOne((r) => r.url === '/api/equipo/grupos');
     expect(peticion.request.params.has('juego')).toBe(false); // sin filtro, todos los juegos
     peticion.flush(grupos);

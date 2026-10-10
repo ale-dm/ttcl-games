@@ -37,6 +37,10 @@ ttcl:
   faceit:
     api-key: ${FACEIT_API_KEY:}
     base: ${FACEIT_API_BASE:https://open.faceit.com/data/v4}
+    # API de descargas de FACEIT (P12): un token aparte, con permiso de descargas (se pide a FACEIT). Sin él, las demos
+    # solo se analizan si se dejan en la carpeta de demos.
+    downloads-token: ${FACEIT_DOWNLOADS_TOKEN:}
+    downloads-base: ${FACEIT_DOWNLOADS_BASE:https://open.faceit.com/download/v2}
   smite2:
     base: ${SMITE2_API_BASE:}
     dev-id: ${SMITE2_DEV_ID:}
@@ -51,3 +55,11 @@ ttcl:
     lang: ${DISCORD_LANG:es}
     # Cuándo se publica el resumen de la semana, en la zona del equipo (cron de Spring: segundo minuto hora día mes día-semana).
     resumen-semanal: ${DISCORD_RESUMEN_SEMANAL:0 0 10 * * MON}
+  # Análisis de demos de CS2 (P12): el trabajador de analisis/ lee las demos pendientes y la API guarda cada ronda. Sin
+  # URL, no se analiza nada. La carpeta es la de las demos dejadas a mano (la misma para la API y el trabajador).
+  analisis:
+    url: ${ANALISIS_URL:http://localhost:8001}
+    timeout-ms: ${ANALISIS_TIMEOUT_MS:600000}
+    intervalo-min: ${ANALISIS_INTERVALO_MIN:15}
+    lote: ${ANALISIS_LOTE:3}
+    carpeta: ${TTCL_DEMOS_DIR:../demos}

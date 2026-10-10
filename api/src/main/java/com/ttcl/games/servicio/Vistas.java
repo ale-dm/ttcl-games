@@ -5,8 +5,10 @@ import com.ttcl.games.duende.DuendeModelos.JugadorRef;
 import com.ttcl.games.juego.Juego;
 import com.ttcl.games.stats.Modelos.FilaComparacion;
 import com.ttcl.games.stats.Modelos.FilaDesglose;
+import com.ttcl.games.stats.Modelos.FilaRonda;
 import com.ttcl.games.stats.Modelos.Grupo;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
+import com.ttcl.games.stats.Modelos.MetricasRondas;
 import com.ttcl.games.stats.Modelos.PuntoSerie;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
 import com.ttcl.games.stats.Modelos.SemanaJuego;
@@ -56,7 +58,10 @@ public final class Vistas {
             List<FilaDesglose> desglose,
             List<PuntoSerie> serie) {}
 
-    /** @param comentario lo que dice el Duende de la partida (P10), o null si no hay nada especial o no responde */
+    /**
+     * @param analizada si su demo está analizada (P12): entonces se pueden pedir sus rondas
+     * @param comentario lo que dice el Duende de la partida (P10), o null si no hay nada especial o no responde
+     */
     public record PartidaVista(
             long partidaId,
             Juego juego,
@@ -68,13 +73,18 @@ public final class Vistas {
             Integer asistencias,
             Map<String, Object> datos,
             List<String> companeros,
+            boolean analizada,
             String comentario) {
 
         public PartidaVista conComentario(String texto) {
             return new PartidaVista(
-                    partidaId, juego, jugadaEn, modo, gano, kills, muertes, asistencias, datos, companeros, texto);
+                    partidaId, juego, jugadaEn, modo, gano, kills, muertes, asistencias, datos, companeros, analizada,
+                    texto);
         }
     }
+
+    /** Lo que hizo un jugador en cada ronda de una partida analizada (P12), con el resumen de la partida. */
+    public record RondasPartida(long partidaId, String mapa, MetricasRondas metricas, List<FilaRonda> rondas) {}
 
     public record PaginaPartidas(List<PartidaVista> items, int total) {}
 
@@ -102,7 +112,17 @@ public final class Vistas {
 
     public record EstadoDuende(boolean disponible, boolean gemini, String modelo) {}
 
-    public record Estado(Instant ultimaSync, boolean demo, Map<String, Boolean> fuentes, EstadoDuende duende) {}
+    /**
+     * El análisis de demos (P12).
+     *
+     * @param activo si hay trabajador de análisis configurado
+     * @param descargas si hay token de la API de descargas de FACEIT (sin él, solo las demos de la carpeta)
+     */
+    public record EstadoAnalisis(boolean activo, boolean descargas, long analizadas, long pendientes, long fallidas) {}
+
+    public record Estado(
+            Instant ultimaSync, boolean demo, Map<String, Boolean> fuentes, EstadoDuende duende,
+            EstadoAnalisis analisis) {}
 
     public record ConsejosVista(boolean disponible, List<Insight> insights) {}
 

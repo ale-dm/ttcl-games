@@ -8,11 +8,14 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Literal
 
+from .informes import nombre_clave
 from .insights import (
     MEJORA_CONSEJO,
+    MIN_PARTIDAS_DEMO,
     MIN_SESIONES,
     aviso_de,
     companeros_destacados,
+    demos_destacadas,
     efecto,
     generar_insights,
     seguimiento_destacado,
@@ -34,9 +37,17 @@ from .modelos import (
 from .textos import NOMBRES_MOMENTO, NOMBRES_ROL
 
 Intencion = Literal[
-    "hola", "seguimiento", "companeros", "sesiones", "nivel", "ranking", "comparar", "racha", "desglose", "fuerte",
-    "mejorar", "stats", "ayuda",
+    "hola", "seguimiento", "companeros", "sesiones", "demos", "nivel", "ranking", "comparar", "racha", "desglose",
+    "fuerte", "mejorar", "stats", "ayuda",
 ]
+
+# Lo que solo sale de las demos (P12): las rondas, CT y T, la economía, dónde muere.
+PALABRAS_DEMOS = [
+    "kast", "rating", "trade", "apertura", "opening", "primer duelo", "first duel", "ronda", "round", "economia",
+    "economy", "eco", "forzada", "force buy", "pistola", "pistol", "donde muero", "donde me matan", "donde mueres",
+    "where do i die", "where i die", "mapa de calor", "heatmap", "heat map", "demo", "flash",
+]
+LADOS_DEMOS = re.compile(r"\b(de|como|as|on|lado) (ct|t)\b|\b(ct|t) side\b|\bct\b")
 
 
 def normalizar(texto: str) -> str:
@@ -91,6 +102,9 @@ def detectar_intencion(pregunta: str, num_foco: int) -> Intencion:
          "when should i play", "despues de perder", "tras perder", "after losing", "after a loss"],
     ):
         return "sesiones"
+    # Antes que "mapa" y "mejor": "¿en qué mapa muero sin trade?" o "¿cómo voy de T?" van de las demos.
+    if _contiene(t, PALABRAS_DEMOS) or LADOS_DEMOS.search(t):
+        return "demos"
     # Antes que "quién" y "mejor": "¿cómo voy para mi nivel?" o "¿quién tiene más ELO?" van del nivel de FACEIT. Pero
     # "¿qué mejoro para subir de nivel?" es de mejorar.
     if _contiene(t, ["nivel", "elo", "faceit", "percentil", "level", "percentile"]) and not _contiene(
@@ -170,6 +184,7 @@ def _peticion(j: JugadorContexto, g: JuegoContexto, lang: Idioma) -> PeticionIns
         sesiones=g.sesiones,
         seguimiento=g.seguimiento,
         nivel=g.nivel,
+        demos=g.demos,
     )
 
 
@@ -540,6 +555,120 @@ def _nivel(f: Foco, lang: Idioma) -> str:
     return texto
 
 
+COMPRAS: dict[str, dict[Idioma, str]] = {
+    "completa": {"es": "completa", "en": "full buy"},
+    "forzada": {"es": "forzada", "en": "force buy"},
+    "eco": {"es": "eco", "en": "eco"},
+    "pistola": {"es": "pistola", "en": "pistol"},
+}
+
+
+def _demos(f: Foco, lang: Idioma) -> str:
+    """Lo que dicen las rondas de sus demos (P12): rating, KAST, aperturas, trades, CT y T, economía y dónde muere."""
+    g, nombre = f.juego, f.jugador.nombre
+    if g.juego != "cs2":
+        return _t(lang, "Las demos solo las analizo en CS2.", "I only analyse demos for CS2.")
+    d = g.demos
+    if not d or not d.metricas.partidas:
+        return _t(
+            lang,
+            f"Aún no tengo ninguna demo analizada de {nombre}. Se analizan solas con el token de descargas de FACEIT, "
+            "o si se deja la demo en la carpeta de demos.",
+            f"I don't have any analysed demos from {nombre} yet. They're analysed automatically with the FACEIT "
+            "downloads token, or when the demo is dropped in the demos folder.",
+        )
+    m, e = d.metricas, d.equipo
+
+    def con_equipo(clave: str, formato: str) -> str:
+        valor = formatear(getattr(m, clave), formato, lang)  # type: ignore[arg-type]
+        extra = f" ({_t(lang, 'equipo', 'team')} {formatear(getattr(e, clave), formato, lang)})" if e else ""  # type: ignore[arg-type]
+        return f"**{valor}**{extra}"
+
+    de = _t(lang, "de", "of")
+    lineas = [
+        f"- Rating: {con_equipo('rating', 'dec')}",
+        f"- KAST: {con_equipo('kast', 'pct')}",
+    ]
+    if m.aperturas:
+        lineas.append(
+            _t(lang, "- Duelos de apertura: ganas ", "- Opening duels: you win ")
+            + f"**{m.aperturas_ganadas} {de} {m.aperturas}** ({formatear(m.apertura_pct, 'pct', lang)})"
+        )
+    lineas.append(
+        _t(lang, "- Trades: ", "- Trades: ")
+        + f"**{formatear(m.trades_partida, 'dec', lang)}** "
+        + _t(lang, "por partida; te tradean el ", "per match; you get traded on ")
+        + f"**{formatear(m.tradeadas_pct, 'pct', lang)}**"
+        + _t(lang, " de tus muertes", " of your deaths")
+    )
+    lineas.append(
+        _t(lang, "- Asistencias de flash: ", "- Flash assists: ")
+        + f"**{formatear(m.flash_partida, 'dec', lang)}** "
+        + _t(lang, "por partida", "per match")
+    )
+    lados = [
+        f"{_t(lang, 'de', 'on')} {lado.lado}: rating {formatear(lado.rating, 'dec', lang)}, "
+        + _t(lang, f"ganas el {formatear(lado.winrate, 'pct', lang)} de las rondas", f"you win {formatear(lado.winrate, 'pct', lang)} of rounds")
+        for lado in d.lados
+    ]
+    if lados:
+        lineas.append("- " + " · ".join(x[:1].upper() + x[1:] for x in lados))
+    if d.economia:
+        compras = sorted(d.economia, key=lambda c: list(COMPRAS).index(c.compra) if c.compra in COMPRAS else 9)
+        lineas.append(
+            _t(lang, "- Rondas ganadas según la compra: ", "- Rounds won by buy: ")
+            + " · ".join(
+                f"{COMPRAS.get(c.compra, {}).get(lang, c.compra)} {formatear(c.winrate, 'pct', lang)}" for c in compras
+            )
+        )
+    texto = (
+        f"**{nombre} · "
+        + _t(lang, f"{m.partidas} partidas con demo ({m.rondas} rondas)", f"{m.partidas} matches with a demo ({m.rondas} rounds)")
+        + "**\n\n"
+        + "\n".join(lineas)
+    )
+    # Dónde muere más sin trade, de todos los mapas.
+    zonas = [(mp, z) for mp in d.mapas if mp.muertes for z in mp.zonas if z.sin_trade]
+    if zonas:
+        mp, z = max(zonas, key=lambda x: (x[1].sin_trade / x[0].muertes, x[1].sin_trade))
+        texto += "\n\n" + _t(
+            lang,
+            f"Donde más mueres sin que te tradeen: **{z.zona}** en {nombre_clave(mp.mapa)} ({z.sin_trade} de tus "
+            f"{mp.muertes} muertes en ese mapa).",
+            f"Where you die untraded the most: **{z.zona}** on {nombre_clave(mp.mapa)} ({z.sin_trade} of your "
+            f"{mp.muertes} deaths on that map).",
+        )
+    if m.partidas < MIN_PARTIDAS_DEMO:
+        texto += "\n\n" + _t(
+            lang,
+            f"Con {m.partidas} partidas analizadas aún no saco conclusiones: a partir de {MIN_PARTIDAS_DEMO}, sí.",
+            f"With {m.partidas} analysed matches I can't draw conclusions yet: from {MIN_PARTIDAS_DEMO} on, I will.",
+        )
+        return texto
+    # Sin el tope del panel: aquí se pregunta justo por esto.
+    for i in [x for x in demos_destacadas(_peticion(f.jugador, g, lang)) if x.nivel in ("alto", "medio")][:2]:
+        texto += f"\n\n**{i.titulo}.** {i.texto} {i.consejo or ''}".rstrip()
+    return texto
+
+
+def _demos_equipo(equipo: list[JugadorContexto], lang: Idioma) -> str:
+    """El rating de las demos de cada uno, el más alto primero."""
+    filas = [(j.nombre, g.demos) for j in equipo for g in j.juegos if g.demos and g.demos.metricas.partidas]
+    if not filas:
+        return _t(
+            lang,
+            "Aún no tengo ninguna demo analizada del equipo (solo CS2).",
+            "I don't have any analysed demos from the team yet (CS2 only).",
+        )
+    filas.sort(key=lambda x: x[1].metricas.rating or 0, reverse=True)
+    lineas = [
+        f"- {nombre}: **{formatear(d.metricas.rating, 'dec', lang)}** (KAST {formatear(d.metricas.kast, 'pct', lang)}, "
+        + _t(lang, f"{d.metricas.partidas} partidas)", f"{d.metricas.partidas} matches)")
+        for nombre, d in filas
+    ]
+    return _t(lang, "Rating de las demos del equipo:", "The team's demo ratings:") + "\n\n" + "\n".join(lineas)
+
+
 def _niveles_equipo(equipo: list[JugadorContexto], lang: Idioma) -> str:
     """El nivel de FACEIT de cada uno, el de más ELO primero."""
     con_nivel = [(j.nombre, g.nivel) for j in equipo for g in j.juegos if g.nivel]
@@ -666,12 +795,13 @@ def _equipo_mejorar(equipo: list[JugadorContexto], juego: Juego | None, lang: Id
 AYUDA = {
     "es": "Puedo decirte en qué mejorar, qué haces bien, cómo vas últimamente, qué mapa o dios se te da peor, "
     "con quién juegas mejor, cuándo juegas mejor (si te tilteas, a qué hora rindes más), si ha funcionado lo que te "
-    "dije, cómo vas para tu nivel de FACEIT o comparar a dos del equipo. Y si dices «esta semana» o «este mes», miro "
-    "solo esos días. Pregúntame algo de eso.",
+    "dije, cómo vas para tu nivel de FACEIT, qué dicen tus demos de CS2 (rating, KAST, trades, CT y T, dónde mueres) "
+    "o comparar a dos del equipo. Y si dices «esta semana» o «este mes», miro solo esos días. Pregúntame algo de eso.",
     "en": "I can tell you what to improve, what you do well, how you've been doing lately, your worst map or god, "
     "who you play best with, when you play best (whether you tilt, what time suits you), whether my advice worked, "
-    "how you're doing for your FACEIT level or compare two teammates. And if you say 'this week' or 'this month', "
-    "I'll look at just those days. Ask me any of that.",
+    "how you're doing for your FACEIT level, what your CS2 demos say (rating, KAST, trades, CT and T, where you die) "
+    "or compare two teammates. And if you say 'this week' or 'this month', I'll look at just those days. Ask me any "
+    "of that.",
 }
 
 # ─── Periodos ────────────────────────────────────────────────────────────────
@@ -681,7 +811,7 @@ ETIQUETA_PERIODO: dict[str, dict[Idioma, str]] = {
     "30d": {"es": "Últimos 30 días", "en": "Last 30 days"},
 }
 # Esto solo se calcula con todas las partidas: con unos pocos días no hay muestra.
-SOLO_CON_TODAS = ("companeros", "desglose", "sesiones", "seguimiento", "nivel")
+SOLO_CON_TODAS = ("companeros", "desglose", "sesiones", "seguimiento", "nivel", "demos")
 
 
 def detectar_periodo(pregunta: str, por_defecto: Periodo | None) -> Periodo | None:
@@ -845,6 +975,10 @@ def _responder(p: PeticionChat, pregunta: str) -> str:
             return _t(lang, "Aún no hay partidas guardadas.", "There are no saved matches yet.")
         return _mejores_duos(p.equipo, juego_d, lang)
 
+    # "¿Quién tiene mejor rating?" o sin nadie en concreto: las demos de todos.
+    if intencion == "demos" and (not foco or _contiene(normalizar(pregunta), ["quien", "who", "cada uno", "each of"])):
+        return _demos_equipo(p.equipo, lang)
+
     # "¿Quién tiene más nivel?": el de todos.
     if intencion == "nivel" and (not foco or _contiene(normalizar(pregunta), ["quien", "who", "cada uno", "each of"])):
         return _niveles_equipo(p.equipo, lang)
@@ -870,6 +1004,9 @@ def _responder(p: PeticionChat, pregunta: str) -> str:
     if intencion == "nivel" and not juego:
         # El nivel es de FACEIT: si la página no dice juego, el que lo tenga.
         juego = next((g.juego for g in principal.juegos if g.nivel), None)
+    if intencion == "demos" and not juego:
+        # Las demos son de CS2.
+        juego = "cs2" if any(g.juego == "cs2" for g in principal.juegos) else None
     g = _juego_de(principal, juego)
     if not g:
         if not juego:
@@ -890,6 +1027,8 @@ def _responder(p: PeticionChat, pregunta: str) -> str:
         return _seguimiento(f, lang)
     if intencion == "nivel":
         return _nivel(f, lang)
+    if intencion == "demos":
+        return _demos(f, lang)
     if intencion == "fuerte":
         return _fuerte(f, lang)
     if intencion == "racha":
@@ -921,6 +1060,11 @@ def sugerencias(p: PeticionChat) -> list[str]:
         # Si ya le ha dado consejos, preguntar si han funcionado va arriba.
         seguimiento = [_t(lang, "¿Ha funcionado lo que me dijiste?", "Did your advice work?")] if g and g.seguimiento else []
         nivel = [_t(lang, "¿Cómo voy para mi nivel?", "How am I doing for my level?")] if g and g.nivel else []
+        demos = (
+            [_t(lang, "¿Dónde muero más?", "Where do I die most?")]
+            if g and g.demos and g.demos.metricas.partidas
+            else []
+        )
         return [
             _t(lang, "¿En qué tengo que mejorar?", "What should I improve?"),
             *seguimiento,
@@ -928,6 +1072,7 @@ def sugerencias(p: PeticionChat) -> list[str]:
             _t(lang, "¿Cómo voy últimamente?", "How have I been doing lately?"),
             _t(lang, "¿Con quién juego mejor?", "Who do I play best with?"),
             _t(lang, "¿Cuándo juego mejor?", "When do I play best?"),
+            *demos,
             *nivel,
             _t(lang, f"¿Qué {que} se me da peor?", f"What's my worst {que}?"),
         ]

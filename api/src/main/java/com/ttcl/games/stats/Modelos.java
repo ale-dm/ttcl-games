@@ -1,6 +1,7 @@
 package com.ttcl.games.stats;
 
 import com.ttcl.games.dominio.Participacion;
+import com.ttcl.games.dominio.Ronda;
 import com.ttcl.games.juego.Juego;
 import java.time.Instant;
 import java.util.List;
@@ -193,6 +194,127 @@ public final class Modelos {
      * partidas; el peor es null si solo llega uno).
      */
     public record SemanaJuego(Juego juego, int partidas, List<FilaSemana> jugadores, FilaSemana mejor, FilaSemana peor) {}
+
+    // ─── Demos (P12) ────────────────────────────────────────────────────────
+
+    /**
+     * Lo que hizo un jugador en una ronda, ya leído de la base (P12).
+     *
+     * @param mapa el de la partida
+     * @param lado "CT" o "T"
+     * @param gano si su equipo ganó la ronda
+     * @param muerteZona dónde murió, para leer ("Top of Mid", "Bombsite A"): ver {@link Rondas#nombreZona}
+     * @param apertura "ganada" o "perdida" si el primer duelo de la ronda fue suyo; si no, null
+     * @param compra "pistola", "eco", "forzada" o "completa"
+     */
+    public record FilaRonda(
+            long partidaId,
+            Instant jugadaEn,
+            String mapa,
+            int ronda,
+            String lado,
+            Boolean gano,
+            int kills,
+            int asistencias,
+            int asistenciasFlash,
+            int dano,
+            int danoUtilidad,
+            boolean murio,
+            Double muerteX,
+            Double muerteY,
+            String muerteZona,
+            boolean tradeado,
+            int trades,
+            String apertura,
+            Integer equipamiento,
+            String compra,
+            boolean kast) {
+
+        public static FilaRonda de(Ronda r) {
+            return new FilaRonda(
+                    r.getPartida().getId(), r.getPartida().getJugadaEn(), r.getPartida().getModo(), r.getRonda(),
+                    r.getLado(), r.getGano(), r.getKills(), r.getAsistencias(), r.getAsistenciasFlash(), r.getDano(),
+                    r.getDanoUtilidad(), r.isMurio(), r.getMuerteX(), r.getMuerteY(),
+                    Rondas.nombreZona(r.getMuerteZona()), r.isTradeado(), r.getTrades(), r.getApertura(),
+                    r.getEquipamiento(), r.getCompra(), r.isKast());
+        }
+    }
+
+    /**
+     * Lo que dicen las rondas de unas partidas analizadas (P12). Los porcentajes, de 0 a 100.
+     *
+     * @param rating rating propio al estilo del 2.0 de HLTV (1,00 es lo normal): ver {@link Rondas#rating}
+     * @param kast % de rondas con kill, asistencia, sobreviviendo o siendo tradeado
+     * @param adr daño por ronda, como mucho 100 por rival
+     * @param aperturas primeros duelos de la ronda en los que estuvo, y cuántos ganó
+     * @param trades kills a rivales que acababan de matar a un compañero (en menos de 5 s)
+     * @param muertesTradeadas sus muertes que un compañero vengó en menos de 5 s
+     * @param flashPartida asistencias de flash por partida
+     * @param utilidadRonda daño de granadas y molotov por ronda
+     * @param winrateRondas % de rondas ganadas
+     */
+    public record MetricasRondas(
+            int partidas,
+            int rondas,
+            Double rating,
+            Double kast,
+            Double adr,
+            Double kpr,
+            Double dpr,
+            int aperturas,
+            int aperturasGanadas,
+            Double aperturaPct,
+            int trades,
+            Double tradesPartida,
+            int muertes,
+            int muertesTradeadas,
+            Double tradeadasPct,
+            Double flashPartida,
+            Double utilidadRonda,
+            Double winrateRondas) {}
+
+    /** Cómo le va de CT o de T. */
+    public record FilaLado(String lado, int rondas, int ganadas, Double winrate, Double rating, Double kast, Double adr) {}
+
+    /** Cómo le va según la compra de la ronda: pistola, eco, forzada o completa. */
+    public record FilaCompra(String compra, int rondas, int ganadas, Double winrate, Double kpr) {}
+
+    /** Cuántas veces muere en una zona de un mapa y cuántas sin que le tradeen. */
+    public record ZonaMuerte(String zona, int muertes, int sinTrade) {}
+
+    /** Sus muertes en un mapa: en total, sin trade y por zona (las que más sin trade primero). */
+    public record MapaMuertes(String mapa, int partidas, int muertes, int sinTrade, List<ZonaMuerte> zonas) {}
+
+    /**
+     * Todo lo de sus demos (P12).
+     *
+     * @param equipo la media del resto del equipo (cada jugador pesa igual; partidas y rondas, sumadas), o null si
+     *     nadie más tiene partidas analizadas
+     * @param lados CT y T, los que tengan rondas
+     * @param economia por tipo de compra, los que tengan rondas
+     * @param mapas sus muertes por mapa, el de más muertes primero
+     */
+    public record ResumenDemos(
+            MetricasRondas metricas, MetricasRondas equipo, List<FilaLado> lados, List<FilaCompra> economia,
+            List<MapaMuertes> mapas) {}
+
+    public record Punto(double x, double y) {}
+
+    /** Dónde murió (coordenadas del juego) y si le tradearon. */
+    public record PuntoMuerte(double x, double y, String zona, boolean tradeado) {}
+
+    /** Dónde poner el nombre de una zona en el dibujo del mapa. */
+    public record EtiquetaZona(String zona, double x, double y) {}
+
+    /**
+     * Mapa de calor de sus muertes en un mapa (P12).
+     *
+     * @param mapas los mapas en los que tiene muertes analizadas, el de más primero
+     * @param fondo dónde muere la gente en ese mapa (todas las partidas analizadas, sin decir quién): dibuja el mapa
+     * @param zonas el nombre de cada zona, en el centro de sus muertes
+     */
+    public record CalorMapa(
+            String mapa, List<String> mapas, List<PuntoMuerte> muertes, List<Punto> fondo, List<EtiquetaZona> zonas) {}
 
     /** Un punto de la gráfica de partidas. */
     public record PuntoSerie(

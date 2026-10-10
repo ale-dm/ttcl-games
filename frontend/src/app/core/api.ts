@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
   BusquedaVista,
+  CalorMapa,
   Comparacion,
   ConsejosVista,
   DetalleJuego,
@@ -14,7 +15,9 @@ import {
   PaginaPartidas,
   Periodo,
   Ranking,
+  ResumenDemos,
   RespuestaChat,
+  RondasPartida,
   Sesiones,
   Sinergias,
   TarjetaJugador,
@@ -86,6 +89,25 @@ export class Api {
     return this.http.get<Sesiones>(`/api/jugadores/${encodeURIComponent(slug)}/sesiones`, {
       params: conPeriodo(new HttpParams().set('juego', juego), periodo),
     });
+  }
+
+  /** Lo que dicen las rondas de sus demos de CS2 analizadas (P12). */
+  demos(slug: string, periodo: Periodo = 'todo'): Observable<ResumenDemos> {
+    return this.http.get<ResumenDemos>(`/api/jugadores/${encodeURIComponent(slug)}/demos`, {
+      params: conPeriodo(new HttpParams(), periodo),
+    });
+  }
+
+  /** Mapa de calor de dónde muere en un mapa (sin mapa, en el que más rondas tiene analizadas). */
+  calor(slug: string, mapa: string | null, periodo: Periodo = 'todo'): Observable<CalorMapa> {
+    let params = conPeriodo(new HttpParams(), periodo);
+    if (mapa) params = params.set('mapa', mapa);
+    return this.http.get<CalorMapa>(`/api/jugadores/${encodeURIComponent(slug)}/demos/calor`, { params });
+  }
+
+  /** Lo que hizo en cada ronda de una partida con la demo analizada. */
+  rondas(slug: string, partidaId: number): Observable<RondasPartida> {
+    return this.http.get<RondasPartida>(`/api/jugadores/${encodeURIComponent(slug)}/partidas/${partidaId}/rondas`);
   }
 
   grupos(juego: Juego | null): Observable<GruposJuego[]> {

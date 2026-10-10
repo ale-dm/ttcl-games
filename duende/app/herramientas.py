@@ -1,5 +1,6 @@
 """Herramientas del chat con Gemini (P9): consultas a la API Java para lo que no está en los resúmenes ("¿cómo voy en
-Mirage este mes?", "¿qué pasó en mis dos últimas derrotas?", "¿con quién juego mejor esta semana?").
+Mirage este mes?", "¿qué pasó en mis dos últimas derrotas?", "¿con quién juego mejor esta semana?", "¿cómo voy de T
+este mes?", que sale de las demos, P12).
 
 Devuelven los datos de la API tal cual (recortados para no gastar tokens), nunca texto: todo número sale de la API.
 """
@@ -20,6 +21,8 @@ PERIODOS = ["7d", "30d", "todo"]
 MAX_PARTIDAS = 10
 # Lo que no le sirve a Gemini de cada partida.
 SOBRA_EN_PARTIDA = {"partidaId", "juego"}
+# Zonas de cada mapa que se le pasan de las demos (las de más muertes sin trade).
+MAX_ZONAS = 3
 
 
 def _periodo() -> dict:
@@ -31,7 +34,7 @@ def _periodo() -> dict:
 
 
 def declaraciones(nombres: list[str]) -> types.Tool:
-    """Las cuatro herramientas, con los nombres del equipo como únicos jugadores posibles."""
+    """Las cinco herramientas, con los nombres del equipo como únicos jugadores posibles."""
     jugador = {"type": "string", "enum": nombres, "description": "Nombre del jugador del equipo."}
     juego = {"type": "string", "enum": JUEGOS, "description": "cs2 (Counter-Strike 2) o smite2 (SMITE 2)."}
     return types.Tool(
@@ -94,6 +97,19 @@ def declaraciones(nombres: list[str]) -> types.Tool:
                     "required": ["jugador", "juego"],
                 },
             ),
+            types.FunctionDeclaration(
+                name="demos",
+                description=(
+                    "Lo que dicen las rondas de las demos analizadas de CS2 de un jugador: rating, KAST, duelos de "
+                    "apertura, trades, asistencias de flash, CT y T, rondas ganadas según la compra y dónde muere en "
+                    "cada mapa (y cuántas veces sin trade), con la media del resto del equipo. Solo CS2."
+                ),
+                parameters_json_schema={
+                    "type": "object",
+                    "properties": {"jugador": jugador, "periodo": _periodo()},
+                    "required": ["jugador"],
+                },
+            ),
         ]
     )
 
@@ -139,6 +155,7 @@ class Herramientas:
             "desglose": self._desglose,
             "comparar": self._comparar,
             "sinergias": self._sinergias,
+            "demos": self._demos,
         }
         if nombre not in funciones:
             return {"error": f"No existe la herramienta {nombre}."}
@@ -204,6 +221,15 @@ class Herramientas:
             "partidas_b": (datos.get("resumenB") or {}).get("partidas", 0),
             "filas": datos.get("filas", []),
         }
+
+    def _demos(self, jugador, periodo=None) -> dict:
+        datos = _objeto(
+            api_ttcl.consultar(
+                f"/api/jugadores/{self._slug(jugador)}/demos", {"periodo": _periodo_api(periodo)}
+            )
+        )
+        mapas = [{**m, "zonas": (m.get("zonas") or [])[:MAX_ZONAS]} for m in datos.get("mapas", [])]
+        return {**datos, "mapas": mapas}
 
     def _sinergias(self, jugador, juego, periodo=None) -> dict:
         return _objeto(

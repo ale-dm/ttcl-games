@@ -72,6 +72,11 @@
         <button class="tab" role="tab" type="button" [class.on]="pestana() === 'desglose'" (click)="irA({ tab: 'desglose' })">
           {{ j === 'cs2' ? t('jugador.tabMapas') : t('jugador.tabDioses') }}
         </button>
+        @if (j === 'cs2') {
+          <button class="tab" role="tab" type="button" [class.on]="pestana() === 'demos'" (click)="irA({ tab: 'demos' })">
+            {{ t('jugador.tabDemos') }}
+          </button>
+        }
         <div class="tabs-ctrl">
           <app-selector-periodo [periodo]="periodoActivo()" (cambio)="irA({ periodo: $event })" />
           @if (juegos().length > 1) {
@@ -260,12 +265,61 @@
                   </section>
                 }
 
+                @if (j === 'cs2' && demos.estado().datos?.metricas; as dm) {
+                  @if (dm.partidas) {
+                    <section class="card demos-breve">
+                      <div class="card-h">
+                        <div>
+                          <div class="card-t">{{ t('demos.titulo') }}</div>
+                          <div class="small muted">{{ t('demos.sub', { partidas: dm.partidas, rondas: dm.rondas }) }}</div>
+                        </div>
+                        <button class="btn ghost sm" type="button" (click)="irA({ tab: 'demos' })">{{ t('demos.verDemos') }}</button>
+                      </div>
+                      <div class="card-b">
+                        <div class="demos-breve-g">
+                          <div class="stat" [attr.title]="t('demos.ratingAyuda')">
+                            <div class="v num">{{ i18n.num(dm.rating, 2, 2) }}</div>
+                            <div class="l">{{ t('demos.rating') }}</div>
+                          </div>
+                          <div class="stat" [attr.title]="t('demos.kastAyuda')">
+                            <div class="v num">{{ i18n.pct(dm.kast, 0) }}</div>
+                            <div class="l">{{ t('demos.kast') }}</div>
+                          </div>
+                          <div class="stat">
+                            <div class="v num">{{ i18n.num(dm.tradesPartida, 2, 2) }}</div>
+                            <div class="l">{{ t('demos.trades') }}</div>
+                          </div>
+                          <div class="stat">
+                            <div class="v num">{{ i18n.pct(dm.tradeadasPct, 0) }}</div>
+                            <div class="l">{{ t('demos.tradeadas') }}</div>
+                          </div>
+                        </div>
+                        @if (demos.estado().datos!.lados.length === 2) {
+                          <p class="small muted demos-breve-l num">
+                            {{
+                              t('demos.ladosBreve', {
+                                ct: i18n.num(demos.estado().datos!.lados[0].rating, 2, 2),
+                                t: i18n.num(demos.estado().datos!.lados[1].rating, 2, 2),
+                              })
+                            }}
+                          </p>
+                        }
+                        @if (peorZona(); as z) {
+                          <p class="small muted demos-breve-l">
+                            {{ t('demos.peorZona', { zona: z.zona, mapa: i18n.mapa(z.mapa) }) }}
+                          </p>
+                        }
+                      </div>
+                    </section>
+                  }
+                }
+
                 <section class="card">
                   <div class="card-h">
                     <div class="card-t">{{ t('jugador.recientes') }}</div>
                     <button class="btn ghost sm" type="button" (click)="irA({ tab: 'partidas' })">{{ t('comun.verTodas') }}</button>
                   </div>
-                  <app-tabla-partidas [partidas]="partidas().slice(0, 6)" [juego]="j" />
+                  <app-tabla-partidas [partidas]="partidas().slice(0, 6)" [juego]="j" [slug]="slug()" />
                 </section>
               </div>
             </div>
@@ -277,7 +331,7 @@
               <div class="card-h">
                 <div class="card-t">{{ t('jugador.historial', { total: totalPartidas() }) }}</div>
               </div>
-              <app-tabla-partidas [partidas]="partidas()" [juego]="j" />
+              <app-tabla-partidas [partidas]="partidas()" [juego]="j" [slug]="slug()" />
               @if (partidas().length < totalPartidas()) {
                 <div class="tbl-more">
                   <button class="btn sm" type="button" [disabled]="cargandoMas()" (click)="cargarMas()">
@@ -286,6 +340,30 @@
                 </div>
               }
             </section>
+          }
+
+          @case ('demos') {
+            <!-- ─── Demos (P12) ─────────────────────────────────────── -->
+            @let dd = demos.estado();
+            @if (dd.error !== null) {
+              <div class="aviso">
+                <p>{{ t('comun.errorApi') }}</p>
+                <button class="btn sm" type="button" (click)="demos.recargar()">{{ t('comun.reintentar') }}</button>
+              </div>
+            } @else if (!dd.datos) {
+              <div class="skel" style="height: 360px"></div>
+            } @else if (!dd.datos.metricas.partidas) {
+              <div class="aviso demos-vacio">
+                {{
+                  t('demos.vacio', {
+                    nombre: p.nombre,
+                    periodo: periodoActivo() === 'todo' ? '' : ' ' + i18n.enPeriodo(periodoActivo()),
+                  })
+                }}
+              </div>
+            } @else {
+              <app-panel-demos [slug]="slug()" [periodo]="periodoActivo()" [datos]="dd.datos" />
+            }
           }
 
           @case ('desglose') {

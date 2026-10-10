@@ -136,6 +136,84 @@ class ComparativaNivel(Base):
     metricas: list[MetricaNivel] = Field(default_factory=list)
 
 
+# ─── Demos de CS2 (P12) ──────────────────────────────────────────────────────
+
+
+class MetricasRondas(Base):
+    """Lo que dicen las rondas de sus demos analizadas (lo calcula la API). Porcentajes de 0 a 100. «rating» es un
+    rating propio al estilo del 2.0 de HLTV (1,00 es lo normal); «kast», el % de rondas con kill, asistencia,
+    sobreviviendo o siendo tradeado; «tradeadas_pct», el % de sus muertes que un compañero vengó en menos de 5 s;
+    «trades_partida», las veces por partida que él vengó a un compañero; «flash_partida», sus asistencias de flash por
+    partida; «apertura_pct», el % de primeros duelos de la ronda que gana."""
+
+    partidas: int = 0
+    rondas: int = 0
+    rating: float | None = None
+    kast: float | None = None
+    adr: float | None = None
+    kpr: float | None = None
+    dpr: float | None = None
+    aperturas: int = 0
+    aperturas_ganadas: int = 0
+    apertura_pct: float | None = None
+    trades: int = 0
+    trades_partida: float | None = None
+    muertes: int = 0
+    muertes_tradeadas: int = 0
+    tradeadas_pct: float | None = None
+    flash_partida: float | None = None
+    utilidad_ronda: float | None = None
+    winrate_rondas: float | None = None
+
+
+class FilaLado(Base):
+    """De CT o de T: rondas, % ganadas y su rating, KAST y ADR en ellas."""
+
+    lado: str
+    rondas: int
+    ganadas: int = 0
+    winrate: float | None = None
+    rating: float | None = None
+    kast: float | None = None
+    adr: float | None = None
+
+
+class FilaCompra(Base):
+    """Por tipo de compra de la ronda (pistola, eco, forzada, completa): rondas y % ganadas."""
+
+    compra: str
+    rondas: int
+    ganadas: int = 0
+    winrate: float | None = None
+    kpr: float | None = None
+
+
+class ZonaMuerte(Base):
+    zona: str
+    muertes: int
+    sin_trade: int = 0
+
+
+class MapaMuertes(Base):
+    """Sus muertes en un mapa ("de_inferno"): en total, sin trade y por zona (las de más muertes sin trade primero)."""
+
+    mapa: str
+    partidas: int = 0
+    muertes: int = 0
+    sin_trade: int = 0
+    zonas: list[ZonaMuerte] = Field(default_factory=list)
+
+
+class ResumenDemos(Base):
+    """Todo lo de sus demos (P12), con la media del resto del equipo («equipo», cada jugador pesa igual)."""
+
+    metricas: MetricasRondas
+    equipo: MetricasRondas | None = None
+    lados: list[FilaLado] = Field(default_factory=list)
+    economia: list[FilaCompra] = Field(default_factory=list)
+    mapas: list[MapaMuertes] = Field(default_factory=list)
+
+
 class ResumenPeriodo(Base):
     """Resumen de los últimos días (7 o 30), con la media del resto del equipo en esos mismos días."""
 
@@ -182,6 +260,8 @@ class PeticionInsights(Base):
     seguimiento: list[SeguimientoConsejo] = Field(default_factory=list)
     # Su nivel de FACEIT y lo normal en él (P8): con él se compara en vez de con las referencias fijas.
     nivel: ComparativaNivel | None = None
+    # Lo que dicen las rondas de sus demos de CS2 analizadas (P12), si tiene alguna.
+    demos: ResumenDemos | None = None
 
 
 class RespuestaInsights(Base):
@@ -286,6 +366,7 @@ class JuegoContexto(Base):
     periodos: list[ResumenPeriodo] = Field(default_factory=list)
     seguimiento: list[SeguimientoConsejo] = Field(default_factory=list)
     nivel: ComparativaNivel | None = None
+    demos: ResumenDemos | None = None
 
 
 class JugadorContexto(Base):

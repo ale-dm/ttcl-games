@@ -221,6 +221,55 @@ DEBILIDADES: dict[str, dict[Idioma, T]] = {
             "consejo": "If you play solo or guardian, buy defensive items earlier and stand in front during fights.",
         },
     },
+    # ─── Demos de CS2 (P12) ──
+    "rating": {
+        "es": {
+            "titulo": "Rating por debajo",
+            "frase": "Sumando kills, muertes, daño y supervivencia ronda a ronda, aportas menos de lo que toca.",
+            "consejo": "Mira tus rondas en el historial: busca las que mueres sin hacer nada y qué tenían en común.",
+        },
+        "en": {
+            "titulo": "Rating below the bar",
+            "frase": "Adding up kills, deaths, damage and survival round by round, you're bringing less than you should.",
+            "consejo": "Check your rounds in the match history: find the ones where you die for nothing and what they share.",
+        },
+    },
+    "kast": {
+        "es": {
+            "titulo": "Demasiadas rondas sin aportar nada",
+            "frase": "En muchas rondas ni matas, ni asistes, ni sobrevives, ni te vengan.",
+            "consejo": "Si no vas a ganar el duelo, juega para sobrevivir y pasar información, o para que te tradeen.",
+        },
+        "en": {
+            "titulo": "Too many rounds with nothing to show",
+            "frase": "In lots of rounds you don't kill, assist, survive or get traded.",
+            "consejo": "If you won't win the duel, play to survive and pass info, or so that someone can trade you.",
+        },
+    },
+    "tradeadas_pct": {
+        "es": {
+            "titulo": "Mueres solo",
+            "frase": "Cuando caes, casi nunca hay nadie cerca para vengarte.",
+            "consejo": "Juega a distancia de trade de un compañero (que pueda ver a quien te mata) y avisa antes de asomar.",
+        },
+        "en": {
+            "titulo": "You die alone",
+            "frase": "When you go down, there's hardly ever anyone close enough to avenge you.",
+            "consejo": "Play within trade distance of a teammate (so they can see your killer) and call it before you peek.",
+        },
+    },
+    "trades_partida": {
+        "es": {
+            "titulo": "Pocos trades",
+            "frase": "Tus compañeros caen y el que los mata se va de rositas.",
+            "consejo": "Ponte detrás del que entra, con la mira donde aparecerá quien le mate, y castiga al momento.",
+        },
+        "en": {
+            "titulo": "Not enough trades",
+            "frase": "Your teammates go down and their killer walks away.",
+            "consejo": "Stay behind whoever goes in, crosshair where their killer will show up, and punish right away.",
+        },
+    },
 }
 
 # ─── Fortalezas por métrica ──────────────────────────────────────────────────
@@ -285,6 +334,27 @@ FORTALEZAS: dict[str, dict[Idioma, dict[str, str]]] = {
     "mitigado": {
         "es": {"titulo": "Aguantas lo que te echen", "consejo": "Inicia tú las peleas: el equipo puede pegar mientras tú absorbes."},
         "en": {"titulo": "You soak everything", "consejo": "Start the fights yourself: your team can hit while you absorb."},
+    },
+    # ─── Demos de CS2 (P12) ──
+    "rating": {
+        "es": {"titulo": "Rating de los buenos", "consejo": "Ronda a ronda eres de lo que más aporta: pide los recursos que te sacan partido."},
+        "en": {"titulo": "A proper rating", "consejo": "Round for round you're one of the top contributors: ask for the resources that suit you."},
+    },
+    "kast": {
+        "es": {"titulo": "Siempre aportas algo", "consejo": "Casi ninguna ronda se te va en blanco: sigue jugando así de ordenado."},
+        "en": {"titulo": "Always chipping in", "consejo": "Hardly any round goes by without you contributing: keep playing this tidy."},
+    },
+    "tradeadas_pct": {
+        "es": {"titulo": "Nunca te dejan solo", "consejo": "Jugáis juntos de verdad: cuando caes, el equipo cobra la venganza."},
+        "en": {"titulo": "Never left alone", "consejo": "You really play together: when you fall, the team collects the payback."},
+    },
+    "trades_partida": {
+        "es": {"titulo": "Vengas a tus compañeros", "consejo": "Sabes estar detrás del que entra: eso gana rondas aunque no salga en el K/D."},
+        "en": {"titulo": "You avenge your teammates", "consejo": "You know how to back up whoever goes in: that wins rounds even if K/D doesn't show it."},
+    },
+    "flash_partida": {
+        "es": {"titulo": "Flashes que matan", "consejo": "Tus flashes regalan kills: enséñale al resto cuáles tiras y cuándo."},
+        "en": {"titulo": "Flashes that kill", "consejo": "Your flashes hand out kills: show the others which ones you throw and when."},
     },
 }
 
@@ -482,6 +552,50 @@ ESPECIALES: dict[str, dict[Idioma, T]] = {
             "consejo": "Time to keep at it or try something else: this isn't enough.",
         },
     },
+    # ─── Demos de CS2 (P12) ──
+    "zona_sin_trade": {
+        "es": {
+            "titulo": "En {zona} te quedas solo",
+            "frase": "En {mapa}, el {pct} de tus muertes son en {zona} y sin que nadie te tradee ({sin} de {muertes}).",
+            "consejo": "Entra a {zona} con alguien detrás para el trade, o cambia de ruta: esa ya te la tienen leída.",
+        },
+        "en": {
+            "titulo": "You're left alone at {zona}",
+            "frase": "On {mapa}, {pct} of your deaths happen at {zona} with no one trading you ({sin} of {muertes}).",
+            "consejo": "Go into {zona} with someone behind you for the trade, or switch routes: they've read that one.",
+        },
+    },
+    "lado_debil": {
+        "es": {
+            "titulo": "De {lado} te apagas",
+            "frase": "De {lado} tu rating es {malo}; de {otro}, {bueno}. De {lado} ganas el {winrate} de las rondas ({rondas}).",
+            # El consejo, según el lado flojo.
+            "consejo": {
+                "T": "De T, entra detrás del entry para el trade y guarda la utilidad para la ejecución, no para el principio.",
+                "CT": "De CT, no regales la posición: juega con apoyo, cambia de sitio tras cada kill y pide la rotación antes de que caiga el site.",
+            },
+        },
+        "en": {
+            "titulo": "You switch off on {lado}",
+            "frase": "On {lado} your rating is {malo}; on {otro}, {bueno}. On {lado} you win {winrate} of rounds ({rondas}).",
+            "consejo": {
+                "T": "On T, go in right behind your entry for the trade and save utility for the execute, not the opening.",
+                "CT": "On CT, don't give away your spot: play with support, reposition after each kill and call the rotation before the site falls.",
+            },
+        },
+    },
+    "forzadas_malas": {
+        "es": {
+            "titulo": "Las forzadas no salen",
+            "frase": "Ganas el {winrate} de las rondas forzadas ({rondas}); con compra completa, el {completa}.",
+            "consejo": "Si no llega para comprar entero, ahorra de verdad: una forzada perdida te deja dos rondas sin nada.",
+        },
+        "en": {
+            "titulo": "Force buys aren't paying off",
+            "frase": "You win {winrate} of force-buy rounds ({rondas}); on full buys, {completa}.",
+            "consejo": "If you can't full-buy, save properly: a lost force buy leaves you with nothing for two rounds.",
+        },
+    },
     "desglose_bueno": {
         "es": {
             "titulo": "{clave} es tu casa",
@@ -531,6 +645,11 @@ FRASES: dict[Idioma, dict[str, str]] = {
         "rol_pesa_debil": "Y en tu rol de {rol}, esto es lo que más cuenta.",
         "rol_pesa_fuerte": "Justo lo que pide tu rol de {rol}.",
         "rol_tolera": "En tu rol de {rol} se perdona algo, pero no tanto.",
+        "en_zona": "En {zona}",
+        "resto_mapa": "Resto de {mapa}",
+        "de_lado": "De {lado}",
+        "forzadas": "Forzadas",
+        "completas": "Completas",
     },
     "en": {
         "tu": "You",
@@ -558,6 +677,11 @@ FRASES: dict[Idioma, dict[str, str]] = {
         "rol_pesa_debil": "And in your {rol} role, this is what counts most.",
         "rol_pesa_fuerte": "Exactly what your {rol} role calls for.",
         "rol_tolera": "Your {rol} role buys you some slack, but not this much.",
+        "en_zona": "At {zona}",
+        "resto_mapa": "Rest of {mapa}",
+        "de_lado": "On {lado}",
+        "forzadas": "Force buys",
+        "completas": "Full buys",
     },
 }
 

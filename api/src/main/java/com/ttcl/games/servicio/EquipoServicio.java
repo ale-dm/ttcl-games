@@ -9,8 +9,11 @@ import com.ttcl.games.dominio.Participacion;
 import com.ttcl.games.dominio.Repositorios.ConsejoDadoRepo;
 import com.ttcl.games.dominio.Repositorios.CuentaRepo;
 import com.ttcl.games.dominio.Repositorios.JugadorRepo;
+import com.ttcl.games.dominio.Repositorios.MuerteMapaRepo;
 import com.ttcl.games.dominio.Repositorios.MuestraRepo;
 import com.ttcl.games.dominio.Repositorios.ParticipacionRepo;
+import com.ttcl.games.dominio.Repositorios.RondaRepo;
+import com.ttcl.games.dominio.Ronda;
 import com.ttcl.games.duende.DuendeModelos.JuegoContexto;
 import com.ttcl.games.duende.DuendeModelos.JugadorContexto;
 import com.ttcl.games.duende.DuendeModelos.JugadorRef;
@@ -28,21 +31,26 @@ import com.ttcl.games.servicio.Vistas.Novedad;
 import com.ttcl.games.servicio.Vistas.PaginaPartidas;
 import com.ttcl.games.servicio.Vistas.PartidaVista;
 import com.ttcl.games.servicio.Vistas.Ranking;
+import com.ttcl.games.servicio.Vistas.RondasPartida;
 import com.ttcl.games.stats.Estadisticas;
 import com.ttcl.games.stats.FiltroPartidas;
 import com.ttcl.games.stats.Informes;
+import com.ttcl.games.stats.Modelos.CalorMapa;
 import com.ttcl.games.stats.Modelos.ConsejoAnterior;
 import com.ttcl.games.stats.Modelos.FilaParticipacion;
+import com.ttcl.games.stats.Modelos.FilaRonda;
 import com.ttcl.games.stats.Modelos.FilaSemana;
 import com.ttcl.games.stats.Modelos.Hecho;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
 import com.ttcl.games.stats.Modelos.Presencia;
+import com.ttcl.games.stats.Modelos.ResumenDemos;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
 import com.ttcl.games.stats.Modelos.ResumenPeriodo;
 import com.ttcl.games.stats.Modelos.SemanaJuego;
 import com.ttcl.games.stats.Modelos.Sesiones;
 import com.ttcl.games.stats.Modelos.Sinergias;
 import com.ttcl.games.stats.Periodo;
+import com.ttcl.games.stats.Rondas;
 import java.text.Normalizer;
 import java.time.Duration;
 import java.time.Instant;
@@ -85,17 +93,22 @@ public class EquipoServicio {
     private final ParticipacionRepo participaciones;
     private final ConsejoDadoRepo consejosDados;
     private final MuestraRepo muestras;
+    private final RondaRepo rondas;
+    private final MuerteMapaRepo muertesMapa;
     /** Zona del equipo: con ella se sabe a qué hora del día se jugó cada partida. */
     private final ZoneId zona;
 
     public EquipoServicio(
             JugadorRepo jugadores, CuentaRepo cuentas, ParticipacionRepo participaciones,
-            ConsejoDadoRepo consejosDados, MuestraRepo muestras, TtclProperties props) {
+            ConsejoDadoRepo consejosDados, MuestraRepo muestras, RondaRepo rondas, MuerteMapaRepo muertesMapa,
+            TtclProperties props) {
         this.jugadores = jugadores;
         this.cuentas = cuentas;
         this.participaciones = participaciones;
         this.consejosDados = consejosDados;
         this.muestras = muestras;
+        this.rondas = rondas;
+        this.muertesMapa = muertesMapa;
         this.zona = props.zona();
     }
 
@@ -296,10 +309,12 @@ public class EquipoServicio {
 
     /**
      * Todo lo de un jugador en un juego. {@code muestras} son las partidas de jugadores de cada nivel (P8), para
-     * compararle con los de su nivel; {@link MuestrasPorNivel#NINGUNA} si no hace falta.
+     * compararle con los de su nivel, y {@code rondas}, las de las demos analizadas (P12);
+     * {@link MuestrasPorNivel#NINGUNA} y {@link RondasEquipo#NINGUNA} si no hacen falta.
      */
     private JuegoContexto contexto(
-            Instantanea foto, Jugador j, Juego juego, List<ResumenPeriodo> periodos, MuestrasPorNivel muestras) {
+            Instantanea foto, Jugador j, Juego juego, List<ResumenPeriodo> periodos, MuestrasPorNivel muestras,
+            RondasEquipo rondas) {
         List<FilaParticipacion> filas = foto.filas(j, juego);
         ResumenJuego resumen = Estadisticas.resumir(juego, filas);
         Integer nivel = foto.nivel(j, juego);
@@ -315,7 +330,42 @@ public class EquipoServicio {
                 Estadisticas.sesiones(juego, filas, zona),
                 periodos,
                 Estadisticas.seguimiento(juego, filas, foto.consejos(j, juego), Instant.now()),
-                Estadisticas.comparativaNivel(juego, nivel, elo, resumen, muestras.de(juego, nivel)));
+                Estadisticas.comparativaNivel(juego, nivel, elo, resumen, muestras.de(juego, nivel)),
+                juego == Juego.CS2 ? rondas.resumen(foto, j) : null);
+    }
+
+    /** Las rondas de las demos analizadas de cada jugador del equipo, por id de jugador (P12). */
+    record RondasEquipo(Map<Long, List<FilaRonda>> porJugador) {
+        static final RondasEquipo NINGUNA = new RondasEquipo(Map.of());
+
+        List<FilaRonda> de(Jugador j) {
+            return porJugador.getOrDefault(j.getId(), List.of());
+        }
+
+        /** Lo de sus demos frente al resto del equipo de la foto, o null si no tiene ninguna analizada. */
+        ResumenDemos resumen(Instantanea foto, Jugador j) {
+            List<FilaRonda> suyas = de(j);
+            if (suyas.isEmpty()) {
+                return null;
+            }
+            List<List<FilaRonda>> otros = foto.jugadores().stream()
+                    .filter(o -> !o.getId().equals(j.getId()))
+                    .map(this::de)
+                    .toList();
+            return Rondas.resumen(suyas, otros);
+        }
+    }
+
+    /** Las rondas analizadas de las partidas jugadas desde {@code inicio} (null: todas), por jugador. */
+    private RondasEquipo rondas(Instant inicio) {
+        Map<Long, List<FilaRonda>> porJugador = new HashMap<>();
+        for (Ronda r : rondas.findDesde(inicio == null ? Instant.EPOCH : inicio)) {
+            porJugador.computeIfAbsent(r.getJugador().getId(), k -> new ArrayList<>()).add(FilaRonda.de(r));
+        }
+        porJugador.values().forEach(l -> l.sort(
+                Comparator.comparing(FilaRonda::jugadaEn).thenComparingLong(FilaRonda::partidaId)
+                        .thenComparingInt(FilaRonda::ronda)));
+        return new RondasEquipo(porJugador);
     }
 
     /** Partidas de jugadores que no son del equipo, por juego y nivel (P8). */
@@ -381,7 +431,7 @@ public class EquipoServicio {
         Instantanea foto = instantanea(periodo);
         Jugador j = foto.porSlug(slug);
         foto.exigirPartidas(j, juego);
-        JuegoContexto c = contexto(foto, j, juego, List.of(), MuestrasPorNivel.NINGUNA);
+        JuegoContexto c = contexto(foto, j, juego, List.of(), MuestrasPorNivel.NINGUNA, RondasEquipo.NINGUNA);
         return new DetalleJuego(juego, c.resumen(), c.reciente(), c.equipo(), c.desglose(),
                 Estadisticas.serie(juego, foto.filas(j, juego), PUNTOS_GRAFICA));
     }
@@ -393,16 +443,25 @@ public class EquipoServicio {
         List<FilaParticipacion> filas = (juego == null ? foto.todas(j) : foto.filas(j, juego)).stream()
                 .sorted(Comparator.comparing(FilaParticipacion::jugadaEn).reversed())
                 .toList();
+        Set<Long> analizadas = analizadas(j);
         List<PartidaVista> items = filas.stream()
                 .skip(Math.max(0, offset))
                 .limit(Math.clamp(limite, 1, 100))
-                .map(f -> partidaVista(foto, j, f))
+                .map(f -> partidaVista(foto, j, f, analizadas))
                 .toList();
         return new PaginaPartidas(items, filas.size());
     }
 
-    /** Una partida con los compañeros del equipo que estaban (sin comentario del Duende: lo pone DuendeServicio). */
-    private static PartidaVista partidaVista(Instantanea foto, Jugador j, FilaParticipacion f) {
+    /** Las partidas de un jugador con la demo analizada (P12). */
+    private Set<Long> analizadas(Jugador j) {
+        return Set.copyOf(rondas.partidasAnalizadas(j));
+    }
+
+    /**
+     * Una partida con los compañeros del equipo que estaban y si su demo está analizada (sin comentario del Duende: lo
+     * pone DuendeServicio).
+     */
+    private static PartidaVista partidaVista(Instantanea foto, Jugador j, FilaParticipacion f, Set<Long> analizadas) {
         return new PartidaVista(
                 f.partidaId(), f.juego(), f.jugadaEn(), f.modo(), f.gano(), f.kills(), f.muertes(), f.asistencias(),
                 f.datos(),
@@ -410,6 +469,7 @@ public class EquipoServicio {
                         .filter(p -> !p.slug().equals(j.getSlug()))
                         .map(Presencia::nombre)
                         .toList(),
+                analizadas.contains(f.partidaId()),
                 null);
     }
 
@@ -456,7 +516,9 @@ public class EquipoServicio {
                 .map(p -> {
                     Jugador j = p.getJugador();
                     FilaParticipacion f = FilaParticipacion.de(p);
-                    Novedad novedad = new Novedad(new JugadorRef(j.getSlug(), j.getNombre()), partidaVista(foto, j, f));
+                    // Una novedad acaba de guardarse: su demo se analiza después.
+                    Novedad novedad =
+                            new Novedad(new JugadorRef(j.getSlug(), j.getNombre()), partidaVista(foto, j, f, Set.of()));
                     return new NovedadConHechos(novedad, Informes.hechos(f.juego(), f, foto.filas(j, f.juego())));
                 })
                 .toList();
@@ -497,11 +559,61 @@ public class EquipoServicio {
                 .filter(f -> !f.isEmpty())
                 .map(f -> Estadisticas.resumir(juego, f))
                 .toList();
+        Set<Long> analizadas = analizadas(j);
         return new ConsultaPartidas(
                 juego,
                 Estadisticas.resumir(juego, filas),
                 Estadisticas.mediasEquipo(otros),
-                filas.stream().limit(Math.clamp(limite, 1, 20)).map(f -> partidaVista(foto, j, f)).toList());
+                filas.stream().limit(Math.clamp(limite, 1, 20)).map(f -> partidaVista(foto, j, f, analizadas)).toList());
+    }
+
+    // ─── Demos (P12) ────────────────────────────────────────────────────────
+
+    /**
+     * Lo de sus demos analizadas del periodo, con la media del resto del equipo en ese periodo. Sin partidas
+     * analizadas, todo a 0 y vacío; el 404 es solo para quien no ha jugado nunca a CS2.
+     */
+    public ResumenDemos demos(String slug, Periodo periodo) {
+        Instant inicio = periodo.inicio(Instant.now());
+        Instantanea foto = instantanea().desde(inicio);
+        Jugador j = foto.porSlug(slug);
+        foto.exigirPartidas(j, Juego.CS2);
+        ResumenDemos resumen = rondas(inicio).resumen(foto, j);
+        return resumen != null ? resumen : Rondas.resumen(List.of(), List.of());
+    }
+
+    /**
+     * Mapa de calor de sus muertes en un mapa (sin {@code mapa}, en el que más rondas tiene analizadas), en el periodo.
+     * El fondo son las muertes de todos en ese mapa, sin decir quién.
+     */
+    public CalorMapa calor(String slug, String mapa, Periodo periodo) {
+        Instant inicio = periodo.inicio(Instant.now());
+        Instantanea foto = instantanea().desde(inicio);
+        Jugador j = foto.porSlug(slug);
+        foto.exigirPartidas(j, Juego.CS2);
+        List<FilaRonda> suyas = rondas(inicio).de(j);
+        List<String> mapas = Rondas.mapasJugados(suyas);
+        String elegido = mapa != null && !mapa.isBlank()
+                ? mapas.stream().filter(m -> m.equalsIgnoreCase(mapa.trim())).findFirst().orElse(mapa.trim())
+                : mapas.stream().findFirst().orElse(null);
+        if (elegido == null) {
+            return new CalorMapa(null, mapas, List.of(), List.of(), List.of());
+        }
+        List<Rondas.PuntoFondo> fondo = muertesMapa.findByMapa(elegido).stream()
+                .map(m -> new Rondas.PuntoFondo(m.getX(), m.getY(), Rondas.nombreZona(m.getZona())))
+                .toList();
+        return Rondas.calor(elegido, mapas, suyas, fondo);
+    }
+
+    /** Lo que hizo en cada ronda de una partida analizada. 404 si no la jugó o no está analizada. */
+    public RondasPartida rondasPartida(String slug, long partidaId) {
+        Jugador j = jugadores.findBySlug(slug)
+                .orElseThrow(() -> new NoEncontradoException("No hay ningún jugador con el slug \"" + slug + "\"."));
+        List<FilaRonda> filas = rondas.findDePartida(partidaId, j).stream().map(FilaRonda::de).toList();
+        if (filas.isEmpty()) {
+            throw new NoEncontradoException("La demo de esa partida no está analizada.");
+        }
+        return new RondasPartida(partidaId, filas.getFirst().mapa(), Rondas.metricas(filas), filas);
     }
 
     /** Hoy en la zona del equipo ("2026-10-10"), para que el chat sepa a qué días se refiere "ayer" o "este mes". */
@@ -543,28 +655,32 @@ public class EquipoServicio {
 
     /** Petición de recomendaciones de un jugador en un juego, con las partidas del periodo. */
     public PeticionInsights peticionInsights(String slug, Juego juego, String lang, Periodo periodo) {
-        Instantanea foto = instantanea(periodo);
+        Instant inicio = periodo.inicio(Instant.now());
+        Instantanea foto = instantanea().desde(inicio);
         Jugador j = foto.porSlug(slug);
         foto.exigirPartidas(j, juego);
-        return peticion(foto, j, juego, lang, muestras(foto));
+        RondasEquipo rondasPeriodo = juego == Juego.CS2 ? rondas(inicio) : RondasEquipo.NINGUNA;
+        return peticion(foto, j, juego, lang, muestras(foto), rondasPeriodo);
     }
 
     private PeticionInsights peticion(
-            Instantanea foto, Jugador j, Juego juego, String lang, MuestrasPorNivel muestras) {
-        JuegoContexto c = contexto(foto, j, juego, List.of(), muestras);
+            Instantanea foto, Jugador j, Juego juego, String lang, MuestrasPorNivel muestras, RondasEquipo rondas) {
+        JuegoContexto c = contexto(foto, j, juego, List.of(), muestras, rondas);
         return new PeticionInsights(lang, new JugadorRef(j.getSlug(), j.getNombre()), juego, c.rol(), c.resumen(),
-                c.reciente(), c.equipo(), c.desglose(), c.sinergias(), c.sesiones(), c.seguimiento(), c.nivel());
+                c.reciente(), c.equipo(), c.desglose(), c.sinergias(), c.sesiones(), c.seguimiento(), c.nivel(),
+                c.demos());
     }
 
     /** Peticiones de recomendaciones de todo el equipo (una por jugador y juego), para las tarjetas. */
     public List<PeticionInsights> peticionesEquipo(Juego soloJuego, String lang) {
         Instantanea foto = instantanea();
         MuestrasPorNivel muestras = muestras(foto);
+        RondasEquipo todas = soloJuego == null || soloJuego == Juego.CS2 ? rondas(null) : RondasEquipo.NINGUNA;
         List<PeticionInsights> lista = new ArrayList<>();
         for (Jugador j : foto.jugadores()) {
             for (Juego juego : Juego.values()) {
                 if ((soloJuego == null || soloJuego == juego) && !foto.filas(j, juego).isEmpty()) {
-                    lista.add(peticion(foto, j, juego, lang, muestras));
+                    lista.add(peticion(foto, j, juego, lang, muestras, todas));
                 }
             }
         }
@@ -578,6 +694,7 @@ public class EquipoServicio {
     public List<JugadorContexto> contextoEquipo() {
         Instantanea foto = instantanea();
         MuestrasPorNivel muestras = muestras(foto);
+        RondasEquipo todas = rondas(null);
         Instant ahora = Instant.now();
         Map<Periodo, Instantanea> recortes = new EnumMap<>(Periodo.class);
         Periodo.RECORTADOS.forEach(p -> recortes.put(p, foto.desde(p.inicio(ahora))));
@@ -587,7 +704,7 @@ public class EquipoServicio {
                         j.getNombre(),
                         Arrays.stream(Juego.values())
                                 .filter(juego -> !foto.filas(j, juego).isEmpty())
-                                .map(juego -> contexto(foto, j, juego, periodos(recortes, j, juego), muestras))
+                                .map(juego -> contexto(foto, j, juego, periodos(recortes, j, juego), muestras, todas))
                                 .toList()))
                 .toList();
     }

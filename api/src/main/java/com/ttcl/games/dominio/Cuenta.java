@@ -41,6 +41,9 @@ public class Cuenta {
     /** ELO de FACEIT en la última sincronización. */
     private Integer elo;
 
+    /** Steamid de la cuenta de CS2 (P12: con él se le encuentra en las demos). Lo da FACEIT en el perfil. */
+    private String steamId;
+
     private Instant ultimaSync;
 
     protected Cuenta() {}
@@ -99,6 +102,14 @@ public class Cuenta {
     public void setNivel(Integer nivel, Integer elo) {
         this.nivel = nivel;
         this.elo = elo;
+    }
+
+    public String getSteamId() {
+        return steamId;
+    }
+
+    public void setSteamId(String steamId) {
+        this.steamId = steamId;
     }
 
     public Instant getUltimaSync() {

@@ -4,12 +4,15 @@ Es determinista y no necesita Gemini: compara cada métrica con la media del res
 (lo normal en su nivel de FACEIT si la API lo sabe; si no, la fija de metricas.py), y añade reglas con más contexto
 (kills que no dan victorias, rachas, tendencia reciente, mapas o dioses flojos, compañeros, tilt en las sesiones
 largas, la mejor hora del día y si los consejos de antes han funcionado).
+Con demos de CS2 analizadas (P12), también lo que dicen sus rondas: rating, KAST, trades, asistencias de flash, la
+zona de cada mapa donde muere sin que le tradeen, el lado (CT o T) en el que rinde mucho menos y las rondas forzadas.
 Si se conoce el rol del jugador, cada métrica pesa lo que pide ese rol (metricas.AJUSTES_ROL).
 """
 
 from dataclasses import dataclass
 
-from .metricas import METRICAS, NOMBRE_JUEGO, Metrica, factor_rol, formatear, rol_de
+from .informes import nombre_clave
+from .metricas import METRICAS, METRICAS_DEMO, NOMBRE_JUEGO, Metrica, MetricaDemo, factor_rol, formatear, rol_de
 from .metricas import metrica as metrica_de
 from .modelos import (
     Barra,
@@ -20,6 +23,7 @@ from .modelos import (
     Nivel,
     PeticionInsights,
     Resumen,
+    ResumenDemos,
     SeguimientoConsejo,
 )
 from .textos import DEBILIDADES, ESPECIALES, FORTALEZAS, FRASES, NOMBRES_MOMENTO, NOMBRES_ROL, consejo_para
@@ -43,6 +47,20 @@ DIFERENCIA_HORARIO = 20
 # métrica (como en el resto de reglas: 5 puntos en porcentajes, un 10 % en lo demás) para decir que ha funcionado.
 DIAS_SEGUIMIENTO = 7
 MEJORA_CONSEJO = 0.1
+# Demos (P12): partidas analizadas para hablar de sus rondas.
+MIN_PARTIDAS_DEMO = 5
+# Zona donde muere sin trade: muertes en el mapa, muertes sin trade en la zona y qué parte de sus muertes del mapa son.
+MIN_MUERTES_MAPA = 15
+MIN_SIN_TRADE_ZONA = 6
+PARTE_ZONA = 0.25
+PARTE_ZONA_GRAVE = 0.4
+# CT frente a T: rondas a cada lado y diferencia de rating para decir que de un lado rinde mucho menos.
+MIN_RONDAS_LADO = 60
+DIFERENCIA_LADO = 0.25
+DIFERENCIA_LADO_GRAVE = 0.4
+# Rondas forzadas: cuántas hacen falta y por debajo de qué % de rondas ganadas se avisa.
+MIN_RONDAS_FORZADA = 30
+FORZADAS_MALAS = 30
 
 ORDEN_NIVEL: dict[Nivel, int] = {"info": 0, "alto": 1, "medio": 2, "bien": 3}
 
@@ -151,82 +169,81 @@ def _nota_rol(rol: str | None, factor: float, debilidad: bool, lang: Idioma) -> 
 def _por_metrica(p: PeticionInsights, ocupadas: set[str]) -> list[Candidato]:
     """Debilidades y fortalezas métrica a métrica, frente al equipo y la referencia (la de su nivel, si se sabe),
     según lo que pide su rol."""
+    candidatos: list[Candidato] = []
+    for metrica in METRICAS[p.juego]:
+        if metrica.clave in ocupadas or (tu := metrica.valor(p.resumen)) is None:
+            continue
+        if c := _candidato_metrica(p, metrica, tu, metrica.valor(p.equipo), referencia_de(p, metrica)):
+            candidatos.append(c)
+    return candidatos
+
+
+def _candidato_metrica(
+    p: PeticionInsights, metrica: Metrica, tu: float, equipo: float | None, ref: Referencia | None
+) -> Candidato | None:
+    """La debilidad o la fortaleza de una métrica (o nada), frente al equipo y la referencia, según su rol."""
     lang, juego = p.lang, p.juego
     rol = rol_de(juego, p.rol)
-    candidatos: list[Candidato] = []
-    for metrica in METRICAS[juego]:
-        if metrica.clave in ocupadas:
-            continue
-        tu = metrica.valor(p.resumen)
-        if tu is None:
-            continue
-        equipo = metrica.valor(p.equipo)
-        ref = referencia_de(p, metrica)
-        d_equipo = _desviacion(metrica, tu, equipo)
-        d_ref = _desviacion(metrica, tu, ref.valor if ref else None)
-        disponibles = [d for d in (d_equipo, d_ref) if d is not None]
-        if not disponibles:
-            continue
+    d_equipo = _desviacion(metrica, tu, equipo)
+    d_ref = _desviacion(metrica, tu, ref.valor if ref else None)
+    disponibles = [d for d in (d_equipo, d_ref) if d is not None]
+    if not disponibles:
+        return None
 
-        # Con el rol, lo que no le toca no cuenta (o cuenta menos) y lo suyo, más.
-        factor = factor_rol(juego, rol, metrica.clave)
-        peor = min(disponibles) * factor
-        nivel = _nivel_debilidad(peor)
-        if nivel == "alto" and ref and ref.nivel and d_ref is not None and not _nivel_debilidad(d_ref * factor):
-            # Frente a su nivel no habría aviso (va en lo normal de su nivel): lo que le separe del equipo es para
-            # vigilar, no para mejorar ya.
-            nivel = "medio"
-        if nivel:
-            textos = DEBILIDADES.get(metrica.clave, {}).get(lang)
-            if textos:
-                titulo = str(textos["titulo"])
-                frase = f"{textos['frase']} "
-            else:
-                titulo = metrica.nombre(lang)
-                frase = ""
-            candidatos.append(
-                Candidato(
-                    Insight(
-                        id=f"debil_{metrica.clave}",
-                        nivel=nivel,
-                        metrica=metrica.clave,
-                        titulo=titulo,
-                        texto=frase
-                        + _comparativa(metrica, tu, equipo, ref, lang)
-                        + _nota_rol(rol, factor, True, lang),
-                        consejo=consejo_para(textos, juego) if textos else None,
-                        barras=_barras(metrica, tu, equipo, ref, lang),
-                        formato=metrica.formato,
-                    ),
-                    abs(peor),
-                )
-            )
-            continue
-
-        # Fortaleza: claramente por encima del equipo y sin estar por debajo de la referencia.
-        # Sin equipo con quien comparar, vale con superar bien la referencia. Si es lo suyo, se reconoce antes.
-        refuerzo = max(factor, 1.0)
-        fuerte = (d_equipo is not None and d_equipo * refuerzo >= 0.1 and (d_ref is None or d_ref >= 0)) or (
-            d_equipo is None and d_ref is not None and d_ref * refuerzo >= 0.15
+    # Con el rol, lo que no le toca no cuenta (o cuenta menos) y lo suyo, más.
+    factor = factor_rol(juego, rol, metrica.clave)
+    peor = min(disponibles) * factor
+    nivel = _nivel_debilidad(peor)
+    if isinstance(metrica, MetricaDemo) and metrica.solo_fortaleza:
+        nivel = None
+    if nivel == "alto" and ref and ref.nivel and d_ref is not None and not _nivel_debilidad(d_ref * factor):
+        # Frente a su nivel no habría aviso (va en lo normal de su nivel): lo que le separe del equipo es para
+        # vigilar, no para mejorar ya.
+        nivel = "medio"
+    if nivel:
+        textos = DEBILIDADES.get(metrica.clave, {}).get(lang)
+        if textos:
+            titulo = str(textos["titulo"])
+            frase = f"{textos['frase']} "
+        else:
+            titulo = metrica.nombre(lang)
+            frase = ""
+        return Candidato(
+            Insight(
+                id=f"debil_{metrica.clave}",
+                nivel=nivel,
+                metrica=metrica.clave,
+                titulo=titulo,
+                texto=frase + _comparativa(metrica, tu, equipo, ref, lang) + _nota_rol(rol, factor, True, lang),
+                consejo=consejo_para(textos, juego) if textos else None,
+                barras=_barras(metrica, tu, equipo, ref, lang),
+                formato=metrica.formato,
+            ),
+            abs(peor),
         )
-        textos_f = FORTALEZAS.get(metrica.clave, {}).get(lang)
-        if fuerte and textos_f:
-            candidatos.append(
-                Candidato(
-                    Insight(
-                        id=f"fuerte_{metrica.clave}",
-                        nivel="bien",
-                        metrica=metrica.clave,
-                        titulo=textos_f["titulo"],
-                        texto=_comparativa(metrica, tu, equipo, ref, lang) + _nota_rol(rol, factor, False, lang),
-                        consejo=textos_f["consejo"],
-                        barras=_barras(metrica, tu, equipo, ref, lang),
-                        formato=metrica.formato,
-                    ),
-                    max(disponibles) * refuerzo,
-                )
-            )
-    return candidatos
+
+    # Fortaleza: claramente por encima del equipo y sin estar por debajo de la referencia.
+    # Sin equipo con quien comparar, vale con superar bien la referencia. Si es lo suyo, se reconoce antes.
+    refuerzo = max(factor, 1.0)
+    fuerte = (d_equipo is not None and d_equipo * refuerzo >= 0.1 and (d_ref is None or d_ref >= 0)) or (
+        d_equipo is None and d_ref is not None and d_ref * refuerzo >= 0.15
+    )
+    textos_f = FORTALEZAS.get(metrica.clave, {}).get(lang)
+    if fuerte and textos_f:
+        return Candidato(
+            Insight(
+                id=f"fuerte_{metrica.clave}",
+                nivel="bien",
+                metrica=metrica.clave,
+                titulo=textos_f["titulo"],
+                texto=_comparativa(metrica, tu, equipo, ref, lang) + _nota_rol(rol, factor, False, lang),
+                consejo=textos_f["consejo"],
+                barras=_barras(metrica, tu, equipo, ref, lang),
+                formato=metrica.formato,
+            ),
+            max(disponibles) * refuerzo,
+        )
+    return None
 
 
 def _especial(regla: str, lang: Idioma, juego: str, nivel: Nivel, /, **valores: object) -> Insight:
@@ -568,6 +585,163 @@ def seguimiento_destacado(p: PeticionInsights) -> list[Insight]:
     return [c.insight for c in _seguimiento(p)]
 
 
+# ─── Demos de CS2 (P12) ──────────────────────────────────────────────────────
+
+
+def demos_validas(p: PeticionInsights) -> ResumenDemos | None:
+    """Sus demos, si hay partidas analizadas suficientes para decir algo."""
+    d = p.demos
+    return d if d and d.metricas.partidas >= MIN_PARTIDAS_DEMO else None
+
+
+def _por_metrica_demo(p: PeticionInsights, ocupadas: set[str]) -> list[Candidato]:
+    """Rating, KAST, trades y asistencias de flash frente al equipo y a una referencia fija, según su rol."""
+    d = demos_validas(p)
+    if not d:
+        return []
+    candidatos: list[Candidato] = []
+    for metrica in METRICAS_DEMO[p.juego]:
+        if metrica.clave in ocupadas or (tu := metrica.valor(d.metricas)) is None:
+            continue
+        ref = Referencia(metrica.referencia) if metrica.referencia is not None else None
+        if c := _candidato_metrica(p, metrica, tu, metrica.valor(d.equipo), ref):
+            candidatos.append(c)
+    return candidatos
+
+
+def _pct(parte: float, lang: Idioma) -> str:
+    return formatear(100 * parte, "pct", lang)
+
+
+def zona_sin_trade(p: PeticionInsights) -> Insight | None:
+    """La zona de un mapa donde más se le muere sin que le tradeen, si es una parte grande de sus muertes en ese mapa
+    (el lurker juega solo a propósito: a él no se le dice)."""
+    d = demos_validas(p)
+    if not d or factor_rol(p.juego, rol_de(p.juego, p.rol), "tradeadas_pct") == 0:
+        return None
+    candidatos = [
+        (m, z, z.sin_trade / m.muertes)
+        for m in d.mapas
+        if m.muertes >= MIN_MUERTES_MAPA
+        for z in m.zonas
+        if z.sin_trade >= MIN_SIN_TRADE_ZONA
+    ]
+    if not candidatos:
+        return None
+    m, z, parte = max(candidatos, key=lambda x: (x[2], x[1].sin_trade))
+    if parte < PARTE_ZONA:
+        return None
+    lang = p.lang
+    mapa = nombre_clave(m.mapa)
+    insight = _especial(
+        "zona_sin_trade",
+        lang,
+        p.juego,
+        "alto" if parte >= PARTE_ZONA_GRAVE else "medio",
+        zona=z.zona,
+        mapa=mapa,
+        pct=_pct(parte, lang),
+        sin=z.sin_trade,
+        muertes=m.muertes,
+    )
+    f = FRASES[lang]
+    resto = (m.sin_trade - z.sin_trade) / m.muertes
+    insight.metrica = "tradeadas_pct"
+    insight.formato = "pct"
+    insight.barras = [
+        Barra(etiqueta=f["en_zona"].format(zona=z.zona), valor=round(100 * parte, 1), tuyo=True),
+        Barra(etiqueta=f["resto_mapa"].format(mapa=mapa), valor=round(100 * resto, 1)),
+    ]
+    return insight
+
+
+def lado_debil(p: PeticionInsights) -> Insight | None:
+    """CT o T: si de un lado su rating cae mucho frente al otro, con rondas suficientes a cada lado."""
+    d = demos_validas(p)
+    if not d:
+        return None
+    lados = {l.lado: l for l in d.lados if l.rondas >= MIN_RONDAS_LADO and l.rating is not None}
+    if set(lados) != {"CT", "T"}:
+        return None
+    ct, t = lados["CT"], lados["T"]
+    assert ct.rating is not None and t.rating is not None
+    if abs(ct.rating - t.rating) < DIFERENCIA_LADO:
+        return None
+    malo, bueno = (ct, t) if ct.rating < t.rating else (t, ct)
+    assert malo.rating is not None and bueno.rating is not None
+    lang = p.lang
+    # El consejo depende del lado: va como «juego» para que consejo_para elija el de CT o el de T.
+    insight = _especial(
+        "lado_debil",
+        lang,
+        malo.lado,
+        "alto" if bueno.rating - malo.rating >= DIFERENCIA_LADO_GRAVE else "medio",
+        lado=malo.lado,
+        otro=bueno.lado,
+        malo=formatear(malo.rating, "dec", lang),
+        bueno=formatear(bueno.rating, "dec", lang),
+        rondas=malo.rondas,
+        winrate=formatear(malo.winrate, "pct", lang),
+    )
+    f = FRASES[lang]
+    insight.metrica = "rating"
+    insight.formato = "dec"
+    insight.barras = [
+        Barra(etiqueta=f["de_lado"].format(lado=malo.lado), valor=malo.rating, tuyo=True),
+        Barra(etiqueta=f["de_lado"].format(lado=bueno.lado), valor=bueno.rating),
+    ]
+    return insight
+
+
+def forzadas_malas(p: PeticionInsights) -> Insight | None:
+    """Si casi nunca gana las rondas forzadas (y hay unas cuantas), mejor ahorrar."""
+    d = demos_validas(p)
+    if not d:
+        return None
+    filas = {c.compra: c for c in d.economia}
+    forzada = filas.get("forzada")
+    if not forzada or forzada.rondas < MIN_RONDAS_FORZADA or forzada.winrate is None:
+        return None
+    if forzada.winrate > FORZADAS_MALAS:
+        return None
+    lang = p.lang
+    completa = filas.get("completa")
+    insight = _especial(
+        "forzadas_malas",
+        lang,
+        p.juego,
+        "medio",
+        rondas=forzada.rondas,
+        winrate=formatear(forzada.winrate, "pct", lang),
+        completa=formatear(completa.winrate if completa else None, "pct", lang),
+    )
+    f = FRASES[lang]
+    insight.formato = "pct"
+    insight.barras = [Barra(etiqueta=f["forzadas"], valor=forzada.winrate, tuyo=True)]
+    if completa and completa.winrate is not None:
+        insight.barras.append(Barra(etiqueta=f["completas"], valor=completa.winrate))
+    return insight
+
+
+def _demos(p: PeticionInsights) -> list[Candidato]:
+    """Las reglas de las demos con más miga: dónde muere solo, el lado flojo y las forzadas."""
+    candidatos: list[Candidato] = []
+    if z := zona_sin_trade(p):
+        candidatos.append(Candidato(z, 1 + (z.barras[0].valor / 100 if z.barras else 0)))
+    if lado := lado_debil(p):
+        candidatos.append(Candidato(lado, abs(lado.barras[1].valor - lado.barras[0].valor)))
+    if f := forzadas_malas(p):
+        candidatos.append(Candidato(f, (50 - f.barras[0].valor) / 50))
+    return candidatos
+
+
+def demos_destacadas(p: PeticionInsights) -> list[Insight]:
+    """Lo que dicen sus demos, sin el tope del panel, para cuando se pregunta por ellas."""
+    especiales = _demos(p)
+    ocupadas = {c.insight.metrica for c in especiales if c.insight.id == "zona_sin_trade" and c.insight.metrica}
+    return [c.insight for c in especiales + _por_metrica_demo(p, ocupadas)]
+
+
 def generar_insights(p: PeticionInsights) -> list[Insight]:
     """Recomendaciones ordenadas: aviso de muestra, debilidades graves, medias y, al final, lo que hace bien."""
     if p.resumen.partidas == 0:
@@ -587,10 +761,18 @@ def generar_insights(p: PeticionInsights) -> list[Insight]:
         + _sinergias(p)
         + _sesiones(p)
         + _seguimiento(p)
+        + _demos(p)
     )
-    # Si una regla especial ya habla de una métrica (el winrate, o un consejo que no ha funcionado), la genérica sobra.
-    ocupadas = {c.insight.metrica for c in especiales if c.insight.id in ("kd_sin_victorias", "consejo_no_funciona")}
-    candidatos = especiales + _por_metrica(p, {m for m in ocupadas if m})
+    # Si una regla especial ya habla de una métrica (el winrate, un consejo que no ha funcionado, la zona donde muere
+    # sin trade), la genérica sobra.
+    ocupadas = {
+        c.insight.metrica
+        for c in especiales
+        if c.insight.id in ("kd_sin_victorias", "consejo_no_funciona", "zona_sin_trade")
+    }
+    candidatos = (
+        especiales + _por_metrica(p, {m for m in ocupadas if m}) + _por_metrica_demo(p, {m for m in ocupadas if m})
+    )
 
     debiles = sorted(
         (c for c in candidatos if c.insight.nivel in ("alto", "medio")),

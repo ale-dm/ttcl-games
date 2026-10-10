@@ -1,0 +1,6 @@
+fastapi>=0.140,<1
+uvicorn[standard]>=0.50,<1
+pydantic>=2.12,<3
+httpx>=0.28,<1
+demoparser2>=0.42,<0.43
+zstandard>=0.25,<1

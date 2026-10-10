@@ -8,7 +8,7 @@ FACEIT del jugador y tiene partidas suficientes de ese nivel (P8), se compara co
 from dataclasses import dataclass
 from typing import Literal
 
-from .modelos import Formato, Idioma, Juego, MediasEquipo, Resumen
+from .modelos import Formato, Idioma, Juego, MediasEquipo, MetricasRondas, Resumen
 
 CAMPOS_COMUNES = {"winrate", "kd", "kills_media", "muertes_media", "asistencias_media"}
 
@@ -62,6 +62,34 @@ METRICAS: dict[Juego, list[Metrica]] = {
 
 NOMBRE_JUEGO: dict[Juego, str] = {"cs2": "Counter-Strike 2", "smite2": "SMITE 2"}
 
+
+@dataclass(frozen=True)
+class MetricaDemo(Metrica):
+    """Una métrica de las rondas de las demos (P12): su valor sale de MetricasRondas, no del resumen.
+
+    `solo_fortaleza`: no es trabajo de todos (las asistencias de flash son del soporte), así que tenerla baja no es una
+    debilidad; tenerla alta sí se reconoce."""
+
+    solo_fortaleza: bool = False
+
+    def valor(self, fuente: Resumen | MediasEquipo | MetricasRondas | None) -> float | None:  # type: ignore[override]
+        return getattr(fuente, self.clave, None) if isinstance(fuente, MetricasRondas) else None
+
+
+# Lo nuevo que dicen las demos y que FACEIT no da (el ADR, la utilidad y las entradas ya se juzgan con lo de FACEIT).
+# Referencias orientativas de un jugador normal (Leetify y HLTV andan por ahí).
+METRICAS_DEMO: dict[Juego, list[MetricaDemo]] = {
+    "cs2": [
+        MetricaDemo("rating", "alto", "dec", "Rating", "Rating", 1.0),
+        MetricaDemo("kast", "alto", "pct", "KAST", "KAST", 70),
+        MetricaDemo("tradeadas_pct", "alto", "pct", "Muertes tradeadas", "Traded deaths", 25),
+        MetricaDemo("trades_partida", "alto", "dec", "Trades / partida", "Trades / match"),
+        MetricaDemo("flash_partida", "alto", "dec", "Asistencias de flash / partida", "Flash assists / match",
+                    solo_fortaleza=True),
+    ],
+    "smite2": [],
+}
+
 # ─── Roles ───────────────────────────────────────────────────────────────────
 # Cuánto cuenta cada métrica según el rol. Las que no aparecen cuentan lo normal (1). Los roles son los mismos que
 # acepta la API (Juego.java) y que traduce la web (textos.ts).
@@ -79,6 +107,7 @@ AJUSTES_ROL: dict[Juego, dict[str, dict[str, float]]] = {
             "dano_utilidad": TOLERA,
             "kr": PESA_MAS,
             "entry_pct": PESA_MAS,
+            "rating": PESA_MAS,
         },
         "soporte": {
             "kills_media": NO_SE_JUZGA,
@@ -86,13 +115,19 @@ AJUSTES_ROL: dict[Juego, dict[str, dict[str, float]]] = {
             "adr": TOLERA,
             "kr": TOLERA,
             "entry_pct": TOLERA,
+            "rating": TOLERA,
             "asistencias_media": PESA_MAS,
             "dano_utilidad": PESA_MAS,
+            "flash_partida": PESA_MAS,
+            "trades_partida": PESA_MAS,
         },
         "lurker": {
             "asistencias_media": NO_SE_JUZGA,
             "entry_pct": NO_SE_JUZGA,
+            # Juega lejos del resto a propósito: que no le tradeen es parte del rol.
+            "tradeadas_pct": NO_SE_JUZGA,
             "dano_utilidad": TOLERA,
+            "trades_partida": TOLERA,
             "clutch_pct": PESA_MAS,
             "kr": PESA_MAS,
         },
@@ -102,10 +137,12 @@ AJUSTES_ROL: dict[Juego, dict[str, dict[str, float]]] = {
             "adr": TOLERA,
             "kr": TOLERA,
             "hs_pct": TOLERA,
+            "rating": TOLERA,
             "winrate": PESA_MAS,
             "dano_utilidad": PESA_MAS,
+            "flash_partida": PESA_MAS,
         },
-        "rifler": {"adr": PESA_MAS, "kr": PESA_MAS},
+        "rifler": {"adr": PESA_MAS, "kr": PESA_MAS, "rating": PESA_MAS},
     },
     "smite2": {
         "solo": {"asistencias_media": TOLERA, "mitigado": PESA_MAS},
@@ -125,7 +162,8 @@ AJUSTES_ROL: dict[Juego, dict[str, dict[str, float]]] = {
 
 
 def metrica(juego: Juego, clave: str) -> Metrica | None:
-    return next((m for m in METRICAS[juego] if m.clave == clave), None)
+    """La métrica de esa clave, de las del resumen o de las de las demos (P12)."""
+    return next((m for m in [*METRICAS[juego], *METRICAS_DEMO[juego]] if m.clave == clave), None)
 
 
 def rol_de(juego: Juego, rol: str | None) -> str | None:

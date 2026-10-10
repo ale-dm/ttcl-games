@@ -126,6 +126,19 @@ export class I18n {
     return texto in ES ? this.t(texto as Clave) : clave;
   };
 
+  /** El mapa para leer: "de_inferno" → "Inferno". */
+  readonly mapa = (clave: string | null | undefined): string => {
+    if (!clave) return '—';
+    const limpio = clave.toLowerCase().startsWith('de_') ? clave.slice(3) : clave;
+    return limpio.charAt(0).toUpperCase() + limpio.slice(1);
+  };
+
+  /** Tipo de compra de una ronda (pistola, eco, forzada, completa). Si la web no lo conoce, tal cual. */
+  readonly compra = (compra: string | null | undefined): string => {
+    const clave = `demos.compra.${compra}`;
+    return clave in ES ? this.t(clave as Clave) : (compra ?? '—');
+  };
+
   /** V/D en español, W/L en inglés. */
   readonly letraForma = (c: string): string => (c === 'V' ? this.t('comun.formaV') : c === 'D' ? this.t('comun.formaD') : '?');
 }

@@ -3,8 +3,41 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { I18n } from '../../core/i18n';
-import { DetalleJuego, FilaMomento, JugadorVista, ResumenJuego, Sesiones, Sinergias } from '../../core/modelos';
+import {
+  CalorMapa,
+  DetalleJuego,
+  FilaMomento,
+  JugadorVista,
+  MetricasRondas,
+  ResumenDemos,
+  ResumenJuego,
+  Sesiones,
+  Sinergias,
+} from '../../core/modelos';
 import { JugadorPagina } from './jugador-pagina';
+
+/** Lo de las demos de alguien (P12): por defecto, sin ninguna analizada. */
+const METRICAS_VACIAS: MetricasRondas = {
+  partidas: 0,
+  rondas: 0,
+  rating: null,
+  kast: null,
+  adr: null,
+  kpr: null,
+  dpr: null,
+  aperturas: 0,
+  aperturasGanadas: 0,
+  aperturaPct: null,
+  trades: 0,
+  tradesPartida: null,
+  muertes: 0,
+  muertesTradeadas: 0,
+  tradeadasPct: null,
+  flashPartida: null,
+  utilidadRonda: null,
+  winrateRondas: null,
+};
+const SIN_DEMOS: ResumenDemos = { metricas: METRICAS_VACIAS, equipo: null, lados: [], economia: [], mapas: [] };
 
 // Sin resúmenes, la página no pide detalle, consejos ni partidas: solo el perfil.
 const BEA: JugadorVista = {
@@ -116,6 +149,7 @@ describe('JugadorPagina · periodo', () => {
     conPeriodo('/api/jugadores/j1/partidas').flush({ items: [], total: 0 });
     conPeriodo('/api/jugadores/j1/sinergias').flush({ solo: null, companeros: [] });
     conPeriodo('/api/jugadores/j1/sesiones').flush({ sesiones: 0, partidasPorSesion: null, porOrden: [], trasResultado: [], porFranja: [] });
+    conPeriodo('/api/jugadores/j1/demos').flush(SIN_DEMOS);
     await pagina.whenStable();
 
     const el = pagina.nativeElement as HTMLElement;
@@ -200,6 +234,7 @@ describe('JugadorPagina · con quién y cuándo', () => {
     const pideSesiones = http.expectOne((r) => r.url === '/api/jugadores/j1/sesiones');
     expect(pideSesiones.request.params.get('juego')).toBe('cs2');
     pideSesiones.flush(sesiones);
+    http.expectOne('/api/jugadores/j1/demos').flush(SIN_DEMOS);
     await pagina.whenStable();
     return pagina.nativeElement as HTMLElement;
   }

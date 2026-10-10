@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 import com.ttcl.games.dominio.Cuenta;
+import com.ttcl.games.dominio.Demo;
 import com.ttcl.games.dominio.Muestra;
 import com.ttcl.games.dominio.Repositorios.CuentaRepo;
+import com.ttcl.games.dominio.Repositorios.DemoRepo;
 import com.ttcl.games.dominio.Repositorios.MuestraRepo;
 import com.ttcl.games.dominio.Repositorios.ParticipacionRepo;
 import com.ttcl.games.dominio.Repositorios.PartidaRepo;
@@ -51,6 +53,9 @@ class SincronizadorTest {
     @Autowired
     ParticipacionRepo participaciones;
 
+    @Autowired
+    DemoRepo demos;
+
     /** Una partida de Jugador 1 (demo-j1-cs2) con tres jugadores de fuera; del último no se sabe el nivel. */
     static class FuenteFalsa implements FuenteJuego {
         @Override
@@ -74,12 +79,15 @@ class SincronizadorTest {
                             new ParticipacionExterna("demo-j1-cs2", 7, true, 20, 12, 3, datos),
                             new ParticipacionExterna("rival-1", 6, false, 15, 18, 2, datos),
                             new ParticipacionExterna("rival-2", 8, false, 18, 17, 4, datos),
-                            new ParticipacionExterna("rival-3", null, true, 11, 13, 6, datos))));
+                            new ParticipacionExterna("rival-3", null, true, 11, 13, 6, datos)),
+                    "https://demos.faceit.com/cs2/sync-1-1-1.dem.zst"));
         }
 
         @Override
         public Optional<NivelCuenta> nivel(String externalId) {
-            return externalId.equals("demo-j1-cs2") ? Optional.of(new NivelCuenta(8, 1777)) : Optional.empty();
+            return externalId.equals("demo-j1-cs2")
+                    ? Optional.of(new NivelCuenta(8, 1777, "76561198000000001"))
+                    : Optional.empty();
         }
     }
 
@@ -121,9 +129,19 @@ class SincronizadorTest {
         assertThat(cuentaCs2("j1").getNivel()).isEqualTo(8);
         assertThat(cuentaCs2("j1").getElo()).isEqualTo(1777);
         assertThat(cuentaCs2("j2").getNivel()).isEqualTo(6);
+        // P12: su steamid, y la demo de la partida, pendiente de analizar con la URL que dio FACEIT.
+        assertThat(cuentaCs2("j1").getSteamId()).isEqualTo("76561198000000001");
+        assertThat(cuentaCs2("j2").getSteamId()).isNull();
+        Demo demo = demos.findAll().stream()
+                .filter(d -> d.getPartida().getId() == partida)
+                .findFirst()
+                .orElseThrow();
+        assertThat(demo.getEstado()).isEqualTo(Demo.PENDIENTE);
+        assertThat(demo.getUrl()).isEqualTo("https://demos.faceit.com/cs2/sync-1-1-1.dem.zst");
 
         // Otra vez: la partida ya es conocida y no se repiten las muestras.
         sincronizador.sincronizarTodo(Map.of(Juego.CS2, new FuenteFalsa()), 20);
         assertThat(idsMuestras()).hasSize(antes.size() + 2);
+        assertThat(demos.findAll().stream().filter(d -> d.getPartida().getId() == partida)).hasSize(1);
     }
 }

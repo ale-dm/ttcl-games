@@ -60,8 +60,16 @@ class FuentesTest {
                 {"player_id": "p1", "nickname": "uno", "games": {"cs2": {"region": "EU", "skill_level": 6,
                  "faceit_elo": 1287, "game_player_id": "76561198000000000"}}}
                 """, Object.class);
-        assertThat(FaceitFuente.mapearNivel(jugador)).contains(new FuenteJuego.NivelCuenta(6, 1287));
+        assertThat(FaceitFuente.mapearNivel(jugador))
+                .contains(new FuenteJuego.NivelCuenta(6, 1287, "76561198000000000"));
         assertThat(FaceitFuente.mapearNivel(Map.of("games", Map.of("csgo", Map.of("skill_level", 4))))).isEmpty();
+        // P12: sin game_player_id, el steamid del perfil; si no parece un steamid, ninguno.
+        assertThat(FaceitFuente.mapearNivel(Map.of("steam_id_64", "76561198000000009",
+                        "games", Map.of("cs2", Map.of("skill_level", 3)))))
+                .contains(new FuenteJuego.NivelCuenta(3, null, "76561198000000009"));
+        assertThat(FaceitFuente.mapearNivel(Map.of("games", Map.of("cs2", Map.of("skill_level", 3,
+                        "game_player_id", "STEAM_1:0:1")))))
+                .contains(new FuenteJuego.NivelCuenta(3, null, null));
 
         Object detalles = json.readValue("""
                 {"match_id": "m1", "teams": {
@@ -71,6 +79,13 @@ class FuentesTest {
                 """, Object.class);
         Map<String, Integer> niveles = FaceitFuente.nivelesDelRoster(detalles);
         assertThat(niveles).containsExactlyInAnyOrderEntriesOf(Map.of("p1", 6, "p2", 5, "p3", 7));
+        // P12: sin demo_url en los detalles, ninguna; con ella (una lista), la primera.
+        assertThat(FaceitFuente.demoDe(detalles)).isNull();
+        assertThat(FaceitFuente.demoDe(Map.of("demo_url", java.util.List.of(
+                "https://demos.faceit.com/cs2/1-abc-1-1.dem.zst", "https://otra/2.dem.zst"))))
+                .isEqualTo("https://demos.faceit.com/cs2/1-abc-1-1.dem.zst");
+        assertThat(FaceitFuente.demoDe(Map.of("demo_url", java.util.List.of()))).isNull();
+        assertThat(FaceitFuente.demoDe(null)).isNull();
 
         // Cada participación de las estadísticas, con su nivel en esa partida.
         FaceitFuente.Mapeo m = FaceitFuente.conNiveles(

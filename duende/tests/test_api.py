@@ -178,3 +178,31 @@ def test_chat_con_periodos_en_camel_case():
 def test_chat_valida_la_entrada():
     assert cliente.post("/v1/chat", json={"lang": "es", "mensajes": []}).status_code == 422
     assert cliente.post("/v1/chat", json={"lang": "fr", "mensajes": [{"rol": "usuario", "texto": "x"}]}).status_code == 422
+
+
+def test_insights_con_las_demos_en_camel_case():
+    """Lo que manda la API de las demos (P12), tal cual: MetricasRondas, lados, economía y mapas en camelCase."""
+    metricas = {"partidas": 52, "rondas": 1129, "rating": 1.28, "kast": 76.8, "adr": 82.9, "kpr": 0.81, "dpr": 0.61,
+                "aperturas": 207, "aperturasGanadas": 70, "aperturaPct": 33.8, "trades": 183, "tradesPartida": 3.52,
+                "muertes": 687, "muertesTradeadas": 129, "tradeadasPct": 18.8, "flashPartida": 0.33,
+                "utilidadRonda": 3.6, "winrateRondas": 51.6}
+    demos = {
+        "metricas": metricas,
+        "equipo": {**metricas, "rating": 1.17, "tradeadasPct": 35.5},
+        "lados": [{"lado": "CT", "rondas": 567, "ganadas": 288, "winrate": 50.8, "rating": 1.25, "kast": 78.8,
+                   "adr": 80.5},
+                  {"lado": "T", "rondas": 562, "ganadas": 295, "winrate": 52.5, "rating": 1.3, "kast": 74.7,
+                   "adr": 85.3}],
+        "economia": [{"compra": "forzada", "rondas": 252, "ganadas": 113, "winrate": 44.8, "kpr": 0.79}],
+        "mapas": [{"mapa": "de_inferno", "partidas": 10, "muertes": 154, "sinTrade": 125,
+                   "zonas": [{"zona": "Banana", "muertes": 79, "sinTrade": 73}]}],
+    }
+    r = cliente.post(
+        "/v1/insights",
+        json={"lang": "es", "jugador": {"slug": "j3", "nombre": "Jugador 3"}, "juego": "cs2", "resumen": RESUMEN,
+              "rol": "entry", "demos": demos},
+    )
+    assert r.status_code == 200
+    zona = next(i for i in r.json()["insights"] if i["id"] == "zona_sin_trade")
+    assert zona["titulo"] == "En Banana te quedas solo"
+    assert zona["metrica"] == "tradeadas_pct"

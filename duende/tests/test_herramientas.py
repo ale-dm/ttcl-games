@@ -46,7 +46,7 @@ PARTIDA = {"partidaId": 7, "juego": "cs2", "jugadaEn": "2026-10-09T20:00:00Z", "
 def test_declaraciones_con_los_nombres_del_equipo():
     tool = herramientas().tool
     nombres = [f.name for f in tool.function_declarations]
-    assert nombres == ["buscar_partidas", "desglose", "comparar", "sinergias"]
+    assert nombres == ["buscar_partidas", "desglose", "comparar", "sinergias", "demos"]
     buscar = tool.function_declarations[0].parameters_json_schema
     assert buscar["properties"]["jugador"]["enum"] == ["Ana", "Bea Ruiz"]
     assert buscar["required"] == ["jugador", "juego"]
@@ -115,3 +115,14 @@ def test_la_misma_consulta_en_menos_de_un_minuto_sale_de_la_cache(api):
     assert len(falsa.peticiones) == 1
     h.ejecutar("sinergias", {"jugador": "Ana", "juego": "cs2", "periodo": "7d"})
     assert len(falsa.peticiones) == 2
+
+
+def test_demos_por_periodo_con_las_zonas_que_importan(api):
+    zonas = [{"zona": f"Z{i}", "muertes": 10 - i, "sinTrade": 9 - i} for i in range(6)]
+    falsa = api({"/api/jugadores/j2/demos": (200, {"metricas": {"partidas": 9, "rating": 1.05}, "equipo": None,
+                                                    "lados": [], "economia": [],
+                                                    "mapas": [{"mapa": "de_nuke", "muertes": 60, "zonas": zonas}]})})
+    r = herramientas().ejecutar("demos", {"jugador": "Bea Ruiz", "periodo": "30d"})
+    assert r["resultado"]["metricas"] == {"partidas": 9, "rating": 1.05}
+    assert [z["zona"] for z in r["resultado"]["mapas"][0]["zonas"]] == ["Z0", "Z1", "Z2"]
+    assert dict(falsa.peticiones[0].url.params) == {"periodo": "30d"}

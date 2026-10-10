@@ -1,0 +1,23 @@
+[project]
+name = "ttcl-analisis"
+version = "0.1.0"
+description = "Análisis de demos de CS2 de TTCL Games (P12): lo que hizo cada jugador del equipo en cada ronda"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.140,<1",
+  "uvicorn[standard]>=0.50,<1",
+  "pydantic>=2.12,<3",
+  "httpx>=0.28,<1",
+  "demoparser2>=0.42,<0.43",
+  "zstandard>=0.25,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=9,<10",
+  "httpx2>=2.13,<3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

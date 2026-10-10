@@ -1,11 +1,13 @@
 package com.ttcl.games.sync;
 
 import com.ttcl.games.dominio.Cuenta;
+import com.ttcl.games.dominio.Demo;
 import com.ttcl.games.dominio.Jugador;
 import com.ttcl.games.dominio.Muestra;
 import com.ttcl.games.dominio.Participacion;
 import com.ttcl.games.dominio.Partida;
 import com.ttcl.games.dominio.Repositorios.CuentaRepo;
+import com.ttcl.games.dominio.Repositorios.DemoRepo;
 import com.ttcl.games.dominio.Repositorios.JugadorRepo;
 import com.ttcl.games.dominio.Repositorios.MuestraRepo;
 import com.ttcl.games.dominio.Repositorios.ParticipacionRepo;
@@ -34,7 +36,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Para cada cuenta del equipo, pide las partidas recientes a su fuente y guarda las que tienen a algún miembro del
  * equipo. Una partida jugada por dos del equipo se guarda una vez, con dos participaciones. De los demás jugadores de
  * cada partida nueva se guarda lo que hicieron y su nivel, sin identificarlos (P8: muestras de lo normal en cada
- * nivel), y de cada cuenta, su nivel y ELO actuales.
+ * nivel), y de cada cuenta, su nivel y ELO actuales. De cada partida nueva de CS2 se apunta su demo, pendiente de
+ * analizar (P12).
  */
 @Service
 public class Sincronizador {
@@ -46,6 +49,7 @@ public class Sincronizador {
     private final PartidaRepo partidas;
     private final ParticipacionRepo participaciones;
     private final MuestraRepo muestras;
+    private final DemoRepo demos;
     private final SyncRepo syncs;
     private final TransactionTemplate tx;
 
@@ -55,6 +59,7 @@ public class Sincronizador {
             PartidaRepo partidas,
             ParticipacionRepo participaciones,
             MuestraRepo muestras,
+            DemoRepo demos,
             SyncRepo syncs,
             TransactionTemplate tx) {
         this.cuentas = cuentas;
@@ -62,6 +67,7 @@ public class Sincronizador {
         this.partidas = partidas;
         this.participaciones = participaciones;
         this.muestras = muestras;
+        this.demos = demos;
         this.syncs = syncs;
         this.tx = tx;
     }
@@ -131,10 +137,18 @@ public class Sincronizador {
         return resultados;
     }
 
-    /** Nivel y ELO actuales de la cuenta. Si no se pueden pedir, se quedan los de antes: las partidas ya se guardaron. */
+    /**
+     * Nivel, ELO y steamid actuales de la cuenta. Si no se pueden pedir, se quedan los de antes: las partidas ya se
+     * guardaron.
+     */
     private void actualizarNivel(FuenteJuego fuente, Cuenta cuenta) {
         try {
-            fuente.nivel(cuenta.getExternalId()).ifPresent(n -> cuenta.setNivel(n.nivel(), n.elo()));
+            fuente.nivel(cuenta.getExternalId()).ifPresent(n -> {
+                cuenta.setNivel(n.nivel(), n.elo());
+                if (n.steamId() != null) {
+                    cuenta.setSteamId(n.steamId());
+                }
+            });
         } catch (RuntimeException e) {
             log.warn("{} ({}): no se pudo leer el nivel: {}",
                     cuenta.getJugador().getNombre(), cuenta.getJuego().codigo(), e.getMessage());
@@ -175,6 +189,9 @@ public class Sincronizador {
                 }
                 if (existente.isEmpty()) {
                     guardarMuestras(juego, externa, jugadorPorExternalId);
+                    if (juego == Juego.CS2) {
+                        demos.save(new Demo(partida, externa.demoUrl()));
+                    }
                 }
                 return existente.isEmpty();
             });

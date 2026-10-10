@@ -1,5 +1,5 @@
 from app.insights import en_frase, generar_insights
-from app.metricas import AJUSTES_ROL, METRICAS, NO_SE_JUZGA, PESA_MAS, TOLERA, formatear
+from app.metricas import AJUSTES_ROL, METRICAS, METRICAS_DEMO, NO_SE_JUZGA, PESA_MAS, TOLERA, formatear
 from app.modelos import Desglose, JugadorRef, MediasEquipo, PeticionInsights, Resumen, Sinergias
 from app.textos import NOMBRES_MOMENTO, NOMBRES_ROL
 
@@ -201,7 +201,7 @@ def test_guardian_de_smite_no_se_juzga_por_kills_dano_ni_oro():
 
 def test_cada_rol_tiene_nombre_y_solo_ajusta_metricas_que_existen():
     for juego, roles in AJUSTES_ROL.items():
-        claves = {m.clave for m in METRICAS[juego]}
+        claves = {m.clave for m in METRICAS[juego]} | {m.clave for m in METRICAS_DEMO[juego]}
         for rol, ajustes in roles.items():
             assert set(NOMBRES_ROL[rol]) == {"es", "en"}
             assert set(ajustes) <= claves, f"{juego}/{rol}"

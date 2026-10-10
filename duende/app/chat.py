@@ -78,6 +78,11 @@ def _datos_para_prompt(p: PeticionChat) -> dict:
         if g.nivel:
             # Para "¿quién tiene más nivel?" basta con el nivel y el ELO; el detalle va solo con los del foco.
             basico["nivel"] = g.nivel.model_dump(by_alias=True, exclude_none=True, include={"nivel", "elo"})
+        if g.demos:
+            # Para "¿quién tiene mejor rating?" basta con el rating y el KAST de sus demos.
+            basico["demos"] = g.demos.metricas.model_dump(
+                by_alias=True, exclude_none=True, include={"partidas", "rating", "kast"}
+            )
         if g.periodos:
             # Para "¿quién va mejor esta semana?" también hacen falta los últimos días del resto.
             basico["periodos"] = [pr.model_dump(by_alias=True, exclude_none=True, exclude={"equipo"}) for pr in g.periodos]

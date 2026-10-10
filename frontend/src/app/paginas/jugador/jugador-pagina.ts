@@ -15,16 +15,28 @@ import { Clave } from '../../core/textos';
 import { TituloTraducido } from '../../core/titulo';
 import { DuendeEstado } from '../../duende/duende-estado';
 import { PanelConsejos } from '../../duende/panel-consejos';
+import { PanelDemos } from './panel-demos';
 import { TablaPartidas } from './tabla-partidas';
 
-type Pestana = 'resumen' | 'partidas' | 'desglose';
+type Pestana = 'resumen' | 'partidas' | 'desglose' | 'demos';
 const POR_PAGINA = 15;
 /** Con menos partidas, el desglose no marca mejor ni peor. */
 const MIN_DESGLOSE = 3;
 
 @Component({
   selector: 'app-jugador-pagina',
-  imports: [NgTemplateOutlet, RouterLink, Avatar, Forma, Grafica, MarcaDuende, PanelConsejos, SelectorPeriodo, TablaPartidas],
+  imports: [
+    NgTemplateOutlet,
+    RouterLink,
+    Avatar,
+    Forma,
+    Grafica,
+    MarcaDuende,
+    PanelConsejos,
+    PanelDemos,
+    SelectorPeriodo,
+    TablaPartidas,
+  ],
   templateUrl: './jugador-pagina.html',
 })
 export class JugadorPagina {
@@ -57,6 +69,8 @@ export class JugadorPagina {
   });
   protected readonly pestana = computed<Pestana>(() => {
     const t = this.tab();
+    // Las demos solo son de CS2.
+    if (t === 'demos') return this.juegoActivo() === 'cs2' ? 'demos' : 'resumen';
     return t === 'partidas' || t === 'desglose' ? t : 'resumen';
   });
 
@@ -96,6 +110,26 @@ export class JugadorPagina {
     return s ? [...s.companeros, ...(s.solo ? [s.solo] : [])] : [];
   });
   protected readonly sesiones = cargaReactiva(this.clave, (p) => this.api.sesiones(p.slug, p.juego, p.periodo));
+  /** Lo que dicen sus demos (P12), solo en CS2: en el resumen, lo breve; en su pestaña, todo. */
+  protected readonly demos = cargaReactiva(
+    () => {
+      const c = this.clave();
+      return c && c.juego === 'cs2' ? c : null;
+    },
+    (p) => this.api.demos(p.slug, p.periodo),
+  );
+  /** Donde más muere sin trade, de todos los mapas: la zona con más parte de sus muertes en ese mapa. */
+  protected readonly peorZona = computed(() => {
+    const mapas = this.demos.estado().datos?.mapas ?? [];
+    let mejor: { zona: string; mapa: string; parte: number } | null = null;
+    for (const m of mapas) {
+      for (const z of m.zonas) {
+        const parte = m.muertes ? z.sinTrade / m.muertes : 0;
+        if (z.sinTrade && (!mejor || parte > mejor.parte)) mejor = { zona: z.zona, mapa: m.mapa, parte };
+      }
+    }
+    return mejor;
+  });
   /** Bloques de "Cuándo juegas mejor": orden en la sesión, según la anterior y hora del día (los que tengan filas). */
   protected readonly bloquesSesion = computed(() => {
     const s = this.sesiones.estado().datos;

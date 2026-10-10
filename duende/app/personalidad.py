@@ -52,7 +52,14 @@ _CABECERA_DATOS: dict[Idioma, str] = {
         "«metricas», «referencia» es lo normal en ese nivel (la mediana de las partidas de jugadores de ese nivel; en "
         "entradas y clutches, el porcentaje de todas juntas) y «percentil», el % de esas partidas con un valor más "
         "bajo que el suyo (en muertes, más bajo es mejor). Las recomendaciones ya comparan con eso cuando está; si no "
-        "está, las referencias son fijas y orientativas."
+        "está, las referencias son fijas y orientativas. «demos» (solo CS2, si tiene partidas con la demo analizada) "
+        "es lo que dicen sus rondas: en «metricas», «rating» (propio, al estilo del de HLTV: 1,00 es lo normal), "
+        "«kast» (% de rondas con kill, asistencia, sobreviviendo o siendo tradeado), «aperturaPct» (% de primeros "
+        "duelos de la ronda que gana), «tradesPartida» (veces por partida que venga a un compañero), «tradeadasPct» "
+        "(% de sus muertes que un compañero vengó en menos de 5 segundos) y «flashPartida» (asistencias de flash por "
+        "partida); «equipo» es la media del resto; «lados», CT y T; «economia», el % de rondas ganadas según la "
+        "compra; «mapas», sus muertes por mapa y por zona («sinTrade»: sin que nadie le vengase). Con menos de 5 "
+        "partidas analizadas no saques conclusiones."
     ),
     "en": (
         "Available data (JSON). 'foco' are the players this conversation is about; 'equipo' is the whole group. "
@@ -75,7 +82,13 @@ _CABECERA_DATOS: dict[Idioma, str] = {
         "what's normal at that level (the median of matches by players at that level; for entries and clutches, the "
         "percentage over all of them) and 'percentil' is the % of those matches with a lower value than theirs (for "
         "deaths, lower is better). The recommendations already compare against it when it's there; when it isn't, the "
-        "benchmarks are fixed and only a rough guide."
+        "benchmarks are fixed and only a rough guide. 'demos' (CS2 only, if they have matches with an analysed demo) "
+        "is what their rounds say: in 'metricas', 'rating' (our own, in the style of HLTV's: 1.00 is normal), 'kast' "
+        "(% of rounds with a kill, assist, survival or being traded), 'aperturaPct' (% of opening duels won), "
+        "'tradesPartida' (times per match they avenge a teammate), 'tradeadasPct' (% of their deaths a teammate "
+        "avenged within 5 seconds) and 'flashPartida' (flash assists per match); 'equipo' is the rest of the team's "
+        "average; 'lados', CT and T; 'economia', the % of rounds won by buy type; 'mapas', their deaths per map and "
+        "zone ('sinTrade': with no one avenging them). With fewer than 5 analysed matches, draw no conclusions."
     ),
 }
 
@@ -83,16 +96,16 @@ _CABECERA_DATOS: dict[Idioma, str] = {
 _CONSULTAS: dict[Idioma, str] = {
     "es": (
         "Si con esos datos no basta (un mapa o dios concreto, unas fechas, solo las victorias o las derrotas, "
-        "partidas concretas como «mis dos últimas derrotas», o el desglose, el cara a cara o con quién juega mejor en "
-        "los últimos 7 o 30 días), usa las herramientas: consultan la API del equipo. No calcules nada tú: usa los "
+        "partidas concretas como «mis dos últimas derrotas», el desglose, el cara a cara, con quién juega mejor o lo "
+        "de sus demos en los últimos 7 o 30 días), usa las herramientas: consultan la API del equipo. No calcules nada tú: usa los "
         "números que devuelven tal cual y, si una consulta da error o no trae partidas, dilo. «hoy» es la fecha de hoy "
         "en la zona del equipo: con ella sabes qué días son «ayer», «esta semana» o «septiembre». Si ya puedes "
         "responder con lo que tienes, no consultes."
     ),
     "en": (
         "If that data isn't enough (a specific map or god, certain dates, only wins or only losses, specific matches "
-        "like 'my last two losses', or the breakdown, the head-to-head or who they play best with over the last 7 or "
-        "30 days), use the tools: they query the team's API. Don't compute anything yourself: use the numbers they "
+        "like 'my last two losses', the breakdown, the head-to-head, who they play best with or their demos over the "
+        "last 7 or 30 days), use the tools: they query the team's API. Don't compute anything yourself: use the numbers they "
         "return as they are and, if a query fails or brings no matches, say so. 'hoy' is today's date in the team's "
         "time zone: use it to work out which days 'yesterday', 'this week' or 'September' are. If you can already "
         "answer with what you have, don't query."

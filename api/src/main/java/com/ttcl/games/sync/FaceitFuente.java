@@ -63,14 +63,22 @@ public class FaceitFuente implements FuenteJuego {
         return mapearNivel(http.get().uri("/players/{id}", externalId).retrieve().body(Object.class));
     }
 
-    /** Nivel y ELO de CS2 del perfil de un jugador ({@code games.cs2}). Pública para los tests. */
+    /**
+     * Nivel y ELO de CS2 del perfil de un jugador ({@code games.cs2}), y su steamid ({@code games.cs2.game_player_id}
+     * o, si no, {@code steam_id_64}; P12). Pública para los tests.
+     */
     public static Optional<NivelCuenta> mapearNivel(Object jugador) {
         Map<String, Object> cs2 = mapa(mapa(jugador, "games"), "cs2");
         Integer nivel = entero(cs2.get("skill_level"));
         if (nivel == null || nivel < 1) {
             return Optional.empty();
         }
-        return Optional.of(new NivelCuenta(nivel, entero(cs2.get("faceit_elo"))));
+        String steamId = texto(cs2.get("game_player_id"));
+        if (steamId == null || !steamId.matches("\\d{17}")) {
+            steamId = texto(mapa(jugador).get("steam_id_64"));
+        }
+        return Optional.of(new NivelCuenta(nivel, entero(cs2.get("faceit_elo")),
+                steamId != null && steamId.matches("\\d{17}") ? steamId : null));
     }
 
     @Override
@@ -87,7 +95,8 @@ public class FaceitFuente implements FuenteJuego {
                 continue;
             }
             Object stats = http.get().uri("/matches/{id}/stats", matchId).retrieve().body(Object.class);
-            Mapeo m = conNiveles(mapearEstadisticas(stats), nivelesDe(matchId));
+            Object detalles = detallesDe(matchId);
+            Mapeo m = conNiveles(mapearEstadisticas(stats), nivelesDelRoster(detalles));
             Double empezada = numero(mapa(item).get("started_at"));
             Double terminada = numero(mapa(item).get("finished_at"));
             partidas.add(new PartidaExterna(
@@ -96,21 +105,33 @@ public class FaceitFuente implements FuenteJuego {
                     empezada == null ? Instant.now() : Instant.ofEpochSecond(empezada.longValue()),
                     empezada != null && terminada != null ? (int) (terminada - empezada) : null,
                     m.mapa(),
-                    m.participaciones()));
+                    m.participaciones(),
+                    demoDe(detalles)));
         }
         return partidas;
     }
 
     /**
-     * Nivel de cada jugador en la partida, de sus detalles. Si no se pueden pedir, vacío: la partida se guarda igual,
-     * solo que sin muestras de su nivel.
+     * Detalles de la partida: el nivel de cada jugador (P8) y la URL de la demo (P12). Si no se pueden pedir, nada: la
+     * partida se guarda igual, solo que sin muestras de su nivel y sin URL de la demo.
      */
-    private Map<String, Integer> nivelesDe(String matchId) {
+    private Object detallesDe(String matchId) {
         try {
-            return nivelesDelRoster(http.get().uri("/matches/{id}", matchId).retrieve().body(Object.class));
+            return http.get().uri("/matches/{id}", matchId).retrieve().body(Object.class);
         } catch (RestClientException e) {
-            return Map.of();
+            return null;
         }
+    }
+
+    /**
+     * La URL de la demo en los detalles de una partida ({@code demo_url}, una lista; la primera), o null. Es la del
+     * almacén de FACEIT: para descargarla hace falta pedir una firmada a su API de descargas. Pública para los tests.
+     */
+    public static String demoDe(Object detalles) {
+        Object valor = mapa(detalles).get("demo_url");
+        String url = valor instanceof List<?> l ? l.stream().map(Json::texto).filter(t -> t != null).findFirst().orElse(null)
+                : texto(valor);
+        return url != null && url.startsWith("http") ? url : null;
     }
 
     /** Nivel de cada jugador (por player_id) en los detalles de una partida. Pública para los tests. */

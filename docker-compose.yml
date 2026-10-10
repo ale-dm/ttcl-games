@@ -1,5 +1,6 @@
 # Todo el proyecto con un comando: docker compose up --build  →  http://localhost:4200
-# Las claves van en .env (copia de .env.example). Solo la web publica puerto; la API y el Duende quedan dentro.
+# Las claves van en .env (copia de .env.example). Solo la web publica puerto; la API, el Duende y el análisis de demos
+# quedan dentro. Las demos que se dejen a mano van en ./demos (P12).
 services:
   db:
     image: postgres:17-alpine
@@ -27,12 +28,24 @@ services:
       API_URL: http://api:8080
       DUENDE_MAX_CONSULTAS: ${DUENDE_MAX_CONSULTAS:-4}
 
+  # Análisis de demos de CS2 (P12): lee cada demo y devuelve lo que hizo cada uno en cada ronda. No guarda nada.
+  analisis:
+    build: ./analisis
+    environment:
+      TTCL_DEMOS_DIR: /demos
+      ANALISIS_MAX_MB: ${ANALISIS_MAX_MB:-800}
+      ANALISIS_TIMEOUT_S: ${ANALISIS_TIMEOUT_S:-300}
+    volumes:
+      - ./demos:/demos:ro
+
   api:
     build: ./api
     depends_on:
       db:
         condition: service_healthy
       duende:
+        condition: service_started
+      analisis:
         condition: service_started
     environment:
       SPRING_PROFILES_ACTIVE: postgres
@@ -51,8 +64,14 @@ services:
       DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
       DISCORD_LANG: ${DISCORD_LANG:-es}
       DISCORD_RESUMEN_SEMANAL: ${DISCORD_RESUMEN_SEMANAL:-0 0 10 * * MON}
+      # Demos de CS2 (P12): el trabajador de análisis, el token de descargas de FACEIT y la carpeta de demos.
+      ANALISIS_URL: http://analisis:8001
+      ANALISIS_INTERVALO_MIN: ${ANALISIS_INTERVALO_MIN:-15}
+      FACEIT_DOWNLOADS_TOKEN: ${FACEIT_DOWNLOADS_TOKEN:-}
+      TTCL_DEMOS_DIR: /demos
     volumes:
       - ./config:/config:ro
+      - ./demos:/demos:ro
 
   web:
     build: ./frontend

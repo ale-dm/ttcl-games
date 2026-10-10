@@ -448,6 +448,47 @@ select {
 }
 .fab:hover { transform: translateY(-2px); }
 
+/* ─── Demos (P12) ─────────────────────────────────────────────────────────── */
+.demos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+.demos-cifras { grid-column: 1 / -1; overflow: hidden; }
+.demos-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.kpis.kpis-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line); margin-top: 12px; }
+.demos-donde { display: grid; gap: 16px; }
+.demos-zonas .eyebrow { margin-bottom: 2px; }
+.demos-breve-g { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.demos-breve-l { margin: 12px 0 0; }
+.demos-breve-l + .demos-breve-l { margin-top: 4px; }
+/* Mapa de calor: el fondo son las muertes de todos; encima, las suyas y el calor. */
+.mc { display: block; width: 100%; height: auto; max-height: 560px; background: var(--surface2); border-radius: 10px; }
+.mc-fondo { fill: var(--faint); opacity: 0.35; }
+.mc-calor { fill: var(--loss); }
+.mc-muerte { fill: var(--loss); stroke: var(--surface); stroke-width: 0.8; }
+.mc-muerte.tradeada { fill: var(--surface); stroke: var(--muted); stroke-width: 1.2; }
+.mc-zona {
+  fill: var(--text); font: 600 10px 'Geist', system-ui, sans-serif; pointer-events: none;
+  paint-order: stroke; stroke: var(--surface2); stroke-width: 3px; stroke-linejoin: round;
+}
+.mc-leyenda { justify-content: flex-start; margin-top: 8px; }
+.dot.mc-dot-trade { background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--muted); }
+/* Rondas de una partida, desplegadas en el historial. */
+.rp-btn.on { background: var(--acc-soft); color: var(--acc-ink); }
+.tbl tr.rondas-fila td { padding: 2px 12px 14px; white-space: normal; }
+.tbl tbody tr.rondas-fila:hover { background: none; }
+.rp-resumen { margin: 0 0 8px; color: var(--muted); }
+.rp-tira { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 3px; }
+.rp-r {
+  width: 30px; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 0 3px;
+  border-radius: 6px; background: var(--surface2); border-top: 3px solid var(--faint); font-size: 11px; line-height: 1.1;
+}
+.rp-r.w { border-top-color: var(--win); }
+.rp-r.l { border-top-color: var(--loss); }
+.rp-r.cambio { margin-left: 10px; }
+.rp-lado { font: 500 9px 'Geist Mono', monospace; color: var(--faint); }
+.rp-k { font-size: 14px; font-weight: 650; }
+.rp-m { height: 12px; color: var(--loss); font-size: 10px; }
+.rp-m .tradeado { color: var(--muted); }
+.rp-leyenda { margin: 8px 0 0; }
+
 /* ─── Pie ─────────────────────────────────────────────────────────────────── */
 .pie { border-top: 1px solid var(--line); padding: 22px 0 90px; font-size: 13px; color: var(--faint); }
 .pie .wrap { display: flex; gap: 12px 24px; flex-wrap: wrap; justify-content: space-between; }
@@ -464,6 +505,8 @@ select {
   .txt-duende { display: none; }
 }
 @media (max-width: 900px) {
+  .demos { grid-template-columns: minmax(0, 1fr); }
+  .kpis.kpis-4, .demos-breve-g { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .nav-links { display: none; }
   .nav-movil { display: flex; }
   .buscar { flex: 1 1 auto; }

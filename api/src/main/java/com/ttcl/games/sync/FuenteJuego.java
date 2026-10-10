@@ -31,8 +31,15 @@ public interface FuenteJuego {
 
     record CuentaResuelta(String externalId, String nombre) {}
 
-    /** @param elo null si la fuente da el nivel pero no el ELO */
-    record NivelCuenta(int nivel, Integer elo) {}
+    /**
+     * @param elo null si la fuente da el nivel pero no el ELO
+     * @param steamId steamid de la cuenta (P12: con él se le encuentra en las demos), o null si no lo da
+     */
+    record NivelCuenta(int nivel, Integer elo, String steamId) {
+        public NivelCuenta(int nivel, Integer elo) {
+            this(nivel, elo, null);
+        }
+    }
 
     /**
      * @param externalPlayerId ID del jugador en la fuente; los del equipo se guardan como participaciones
@@ -49,11 +56,20 @@ public interface FuenteJuego {
             Integer asistencias,
             Map<String, Object> datos) {}
 
+    /** @param demoUrl dónde está su demo (P12: FACEIT la da en los detalles de la partida), o null */
     record PartidaExterna(
             String externalId,
             Juego juego,
             Instant jugadaEn,
             Integer duracionSeg,
             String modo,
-            List<ParticipacionExterna> participaciones) {}
+            List<ParticipacionExterna> participaciones,
+            String demoUrl) {
+
+        public PartidaExterna(
+                String externalId, Juego juego, Instant jugadaEn, Integer duracionSeg, String modo,
+                List<ParticipacionExterna> participaciones) {
+            this(externalId, juego, jugadaEn, duracionSeg, modo, participaciones, null);
+        }
+    }
 }

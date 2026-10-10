@@ -178,6 +178,8 @@ export interface PartidaVista {
   asistencias: number | null;
   datos: Record<string, number | string | null>;
   companeros: string[];
+  /** Si su demo está analizada (P12): entonces se pueden pedir sus rondas. */
+  analizada: boolean;
   /** Lo que dice el Duende de la partida (rachas, récords del mes...), o null si no tiene nada especial. */
   comentario: string | null;
 }
@@ -226,6 +228,139 @@ export interface Estado {
   demo: boolean;
   fuentes: Record<Juego, boolean>;
   duende: { disponible: boolean; gemini: boolean; modelo: string | null };
+  /** Análisis de demos (P12): si hay trabajador, si hay token de descargas de FACEIT y cuántas demos en cada estado. */
+  analisis: { activo: boolean; descargas: boolean; analizadas: number; pendientes: number; fallidas: number };
+}
+
+// ─── Demos de CS2 (P12) ────────────────────────────────────────────────────
+
+export type Lado = 'CT' | 'T';
+export type Compra = 'pistola' | 'eco' | 'forzada' | 'completa';
+
+/** Lo que hizo en una ronda de una partida analizada. */
+export interface FilaRonda {
+  partidaId: number;
+  jugadaEn: string;
+  mapa: string | null;
+  ronda: number;
+  lado: Lado | null;
+  /** Si su equipo ganó la ronda. */
+  gano: boolean | null;
+  kills: number;
+  asistencias: number;
+  asistenciasFlash: number;
+  dano: number;
+  danoUtilidad: number;
+  murio: boolean;
+  muerteX: number | null;
+  muerteY: number | null;
+  /** Dónde murió, para leer ("Top of Mid", "Bombsite A"). */
+  muerteZona: string | null;
+  /** Murió y un compañero vengó su muerte en menos de 5 s. */
+  tradeado: boolean;
+  /** Veces que vengó a un compañero en menos de 5 s. */
+  trades: number;
+  /** El primer duelo de la ronda, si fue suyo. */
+  apertura: 'ganada' | 'perdida' | null;
+  equipamiento: number | null;
+  compra: Compra | null;
+  kast: boolean;
+}
+
+/** Lo que dicen las rondas de unas partidas analizadas. Porcentajes de 0 a 100. */
+export interface MetricasRondas {
+  partidas: number;
+  rondas: number;
+  /** Rating propio al estilo del de HLTV: 1,00 es lo normal. */
+  rating: number | null;
+  kast: number | null;
+  adr: number | null;
+  kpr: number | null;
+  dpr: number | null;
+  aperturas: number;
+  aperturasGanadas: number;
+  aperturaPct: number | null;
+  trades: number;
+  tradesPartida: number | null;
+  muertes: number;
+  muertesTradeadas: number;
+  tradeadasPct: number | null;
+  flashPartida: number | null;
+  utilidadRonda: number | null;
+  winrateRondas: number | null;
+}
+
+export interface FilaLado {
+  lado: Lado;
+  rondas: number;
+  ganadas: number;
+  winrate: number | null;
+  rating: number | null;
+  kast: number | null;
+  adr: number | null;
+}
+
+export interface FilaCompra {
+  compra: Compra;
+  rondas: number;
+  ganadas: number;
+  winrate: number | null;
+  kpr: number | null;
+}
+
+export interface ZonaMuerte {
+  zona: string;
+  muertes: number;
+  sinTrade: number;
+}
+
+/** Sus muertes en un mapa ("de_inferno"), en total, sin trade y por zona (las de más muertes sin trade primero). */
+export interface MapaMuertes {
+  mapa: string;
+  partidas: number;
+  muertes: number;
+  sinTrade: number;
+  zonas: ZonaMuerte[];
+}
+
+/** Todo lo de sus demos, con la media del resto del equipo (null si nadie más tiene demos). */
+export interface ResumenDemos {
+  metricas: MetricasRondas;
+  equipo: MetricasRondas | null;
+  lados: FilaLado[];
+  economia: FilaCompra[];
+  mapas: MapaMuertes[];
+}
+
+export interface Punto {
+  x: number;
+  y: number;
+}
+
+export interface PuntoMuerte extends Punto {
+  zona: string | null;
+  tradeado: boolean;
+}
+
+export interface EtiquetaZona extends Punto {
+  zona: string;
+}
+
+/** Mapa de calor de sus muertes en un mapa. `fondo`: dónde muere la gente en él (sin decir quién). */
+export interface CalorMapa {
+  mapa: string | null;
+  mapas: string[];
+  muertes: PuntoMuerte[];
+  fondo: Punto[];
+  zonas: EtiquetaZona[];
+}
+
+/** Las rondas de una partida analizada, con su resumen. */
+export interface RondasPartida {
+  partidaId: number;
+  mapa: string | null;
+  metricas: MetricasRondas;
+  rondas: FilaRonda[];
 }
 
 // ─── Duende ────────────────────────────────────────────────────────────────

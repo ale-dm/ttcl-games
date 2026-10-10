@@ -35,6 +35,7 @@ import com.ttcl.games.stats.Modelos.FilaMomento;
 import com.ttcl.games.stats.Modelos.FilaSinergia;
 import com.ttcl.games.stats.Modelos.Hecho;
 import com.ttcl.games.stats.Modelos.MetricaNivel;
+import com.ttcl.games.stats.Modelos.ResumenDemos;
 import com.ttcl.games.stats.Modelos.ResumenPeriodo;
 import com.ttcl.games.stats.Modelos.SemanaJuego;
 import com.ttcl.games.stats.Periodo;
@@ -995,6 +996,119 @@ class ApiTest {
                 .andExpect(jsonPath("$.demo").value(true))
                 .andExpect(jsonPath("$.ultimaSync").isString())
                 .andExpect(jsonPath("$.fuentes.cs2").value(false))
-                .andExpect(jsonPath("$.duende.disponible").value(false));
+                .andExpect(jsonPath("$.duende.disponible").value(false))
+                // P12: todas las partidas de CS2 de ejemplo tienen la demo analizada; sin token de descargas.
+                .andExpect(jsonPath("$.analisis.analizadas", greaterThan(50)))
+                .andExpect(jsonPath("$.analisis.pendientes").value(0))
+                .andExpect(jsonPath("$.analisis.descargas").value(false));
+    }
+
+    // ─── Demos (P12) ────────────────────────────────────────────────────────
+
+    @Test
+    void loQueDicenLasDemosDeCadaUnoConLosDatosDeEjemplo() throws Exception {
+        // Jugador 3 (entry) muere una y otra vez en el mismo sitio de cada mapa sin que le tradeen.
+        JsonNode tres = json("/api/jugadores/j3/demos");
+        JsonNode m = tres.get("metricas");
+        assertThat(m.get("partidas").asInt()).isEqualTo(json("/api/jugadores/j3/juegos/cs2").get("resumen")
+                .get("partidas").asInt());
+        assertThat(m.get("rating").asDouble()).isPositive();
+        assertThat(m.get("kast").asDouble()).isBetween(50.0, 100.0);
+        assertThat(m.get("tradeadasPct").asDouble()).isLessThan(tres.get("equipo").get("tradeadasPct").asDouble());
+        JsonNode mapa = tres.get("mapas").get(0);
+        JsonNode zona = mapa.get("zonas").get(0);
+        assertThat((double) zona.get("sinTrade").asInt() / mapa.get("muertes").asInt()).isGreaterThan(0.3);
+        assertThat(tres.get("lados")).hasSize(2);
+        assertThat(tres.get("economia")).hasSize(4);
+        assertThat(tres.get("economia").get(1).get("compra").asString()).isEqualTo("eco");
+        assertThat(tres.get("economia").get(1).get("winrate").asDouble())
+                .isLessThan(tres.get("economia").get(3).get("winrate").asDouble());
+
+        // Jugador 1 se apaga de T; Jugador 2 (soporte) da muchas más asistencias de flash que el resto.
+        JsonNode uno = json("/api/jugadores/j1/demos");
+        double ct = uno.get("lados").get(0).get("rating").asDouble();
+        double t = uno.get("lados").get(1).get("rating").asDouble();
+        assertThat(uno.get("lados").get(1).get("lado").asString()).isEqualTo("T");
+        assertThat(ct - t).isGreaterThan(0.4);
+        JsonNode dos = json("/api/jugadores/j2/demos");
+        assertThat(dos.get("metricas").get("flashPartida").asDouble())
+                .isGreaterThan(3 * dos.get("equipo").get("flashPartida").asDouble());
+
+        // Con un periodo, solo esos días; quien no juega a CS2, 404.
+        assertThat(json("/api/jugadores/j3/demos?periodo=7d").get("metricas").get("partidas").asInt())
+                .isBetween(1, m.get("partidas").asInt() - 1);
+        mvc.perform(get("/api/jugadores/j4/demos")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void lasRondasCuadranConCadaPartida() throws Exception {
+        JsonNode partidas = json("/api/jugadores/j3/partidas?juego=cs2&limite=5").get("items");
+        for (JsonNode p : partidas) {
+            assertThat(p.get("analizada").asBoolean()).isTrue();
+            JsonNode detalle = json("/api/jugadores/j3/partidas/" + p.get("partidaId").asLong() + "/rondas");
+            JsonNode rondas = detalle.get("rondas");
+            int kills = 0;
+            int muertes = 0;
+            int asistencias = 0;
+            for (JsonNode r : rondas) {
+                kills += r.get("kills").asInt();
+                muertes += r.get("murio").asBoolean() ? 1 : 0;
+                asistencias += r.get("asistencias").asInt();
+            }
+            assertThat(rondas).hasSize(p.get("datos").get("rondas").asInt());
+            assertThat(kills).isEqualTo(p.get("kills").asInt());
+            assertThat(muertes).isEqualTo(Math.min(p.get("muertes").asInt(), rondas.size()));
+            assertThat(asistencias).isEqualTo(p.get("asistencias").asInt());
+            assertThat(detalle.get("metricas").get("adr").asDouble())
+                    .isCloseTo(p.get("datos").get("adr").asDouble(), org.assertj.core.data.Offset.offset(1.0));
+            assertThat(detalle.get("mapa").asString()).isEqualTo(p.get("modo").asString());
+        }
+        // Las de SMITE 2 no tienen demo; una partida que no es suya, tampoco.
+        assertThat(json("/api/jugadores/j4/partidas?juego=smite2&limite=1").get("items").get(0).get("analizada")
+                .asBoolean()).isFalse();
+        long deSmite = json("/api/jugadores/j4/partidas?juego=smite2&limite=1").get("items").get(0)
+                .get("partidaId").asLong();
+        mvc.perform(get("/api/jugadores/j4/partidas/" + deSmite + "/rondas")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/jugadores/j3/partidas/999999/rondas")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void mapaDeCalorDeDondeMuere() throws Exception {
+        JsonNode calor = json("/api/jugadores/j3/demos/calor");
+        assertThat(calor.get("mapa").asString()).isEqualTo(calor.get("mapas").get(0).asString());
+        assertThat(calor.get("muertes").size()).isGreaterThan(20);
+        assertThat(calor.get("fondo").size()).isBetween(calor.get("muertes").size(), 2500);
+        assertThat(calor.get("zonas").size()).isGreaterThan(4);
+        assertThat(calor.get("muertes").get(0).has("tradeado")).isTrue();
+
+        JsonNode nuke = json("/api/jugadores/j3/demos/calor?mapa=DE_NUKE");
+        assertThat(nuke.get("mapa").asString()).isEqualTo("de_nuke");
+        assertThat(nuke.get("muertes").get(0).get("zona").asString()).isNotBlank();
+        assertThat(json("/api/jugadores/j3/demos/calor?mapa=de_vertigo").get("muertes")).isEmpty();
+    }
+
+    @Test
+    void elDuendeRecibeLoDeLasDemos() throws Exception {
+        mvc.perform(get("/api/jugadores/j3/consejos?juego=cs2")).andExpect(status().isOk());
+        ResumenDemos demos = duende.ultimaInsights.demos();
+        assertThat(demos.metricas().partidas()).isGreaterThan(20);
+        assertThat(demos.equipo()).isNotNull();
+        assertThat(demos.mapas()).isNotEmpty();
+        // Con un periodo, las de esos días.
+        mvc.perform(get("/api/jugadores/j3/consejos?juego=cs2&periodo=7d")).andExpect(status().isOk());
+        assertThat(duende.ultimaInsights.demos().metricas().partidas()).isLessThan(demos.metricas().partidas());
+        // SMITE 2 no tiene demos.
+        mvc.perform(get("/api/jugadores/j4/consejos?juego=smite2")).andExpect(status().isOk());
+        assertThat(duende.ultimaInsights.demos()).isNull();
+
+        duende.respuesta = new RespuestaChat("Hola", "reglas", null, "demos", List.of());
+        mvc.perform(post("/api/duende/chat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mensajes\": [{\"rol\": \"usuario\", \"texto\": \"¿Dónde muero más?\"}]}"))
+                .andExpect(status().isOk());
+        assertThat(juegoDe(duende.ultimaChat, "j1", Juego.CS2).demos().lados()).hasSize(2);
+        assertThat(juegoDe(duende.ultimaChat, "j1", Juego.SMITE2).demos()).isNull();
+        mvc.perform(get("/api/equipo?juego=cs2")).andExpect(status().isOk());
+        assertThat(duende.ultimoLote).allSatisfy(p -> assertThat(p.demos()).isNotNull());
     }
 }

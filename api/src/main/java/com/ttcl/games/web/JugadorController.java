@@ -8,6 +8,9 @@ import com.ttcl.games.servicio.Vistas.ConsultaPartidas;
 import com.ttcl.games.servicio.Vistas.DetalleJuego;
 import com.ttcl.games.servicio.Vistas.JugadorVista;
 import com.ttcl.games.servicio.Vistas.PaginaPartidas;
+import com.ttcl.games.servicio.Vistas.RondasPartida;
+import com.ttcl.games.stats.Modelos.CalorMapa;
+import com.ttcl.games.stats.Modelos.ResumenDemos;
 import com.ttcl.games.stats.Modelos.Sesiones;
 import com.ttcl.games.stats.Modelos.Sinergias;
 import com.ttcl.games.stats.FiltroPartidas;
@@ -91,6 +94,30 @@ public class JugadorController {
     public Sesiones sesiones(
             @PathVariable String slug, @RequestParam Juego juego, @RequestParam(defaultValue = "todo") Periodo periodo) {
         return equipo.sesiones(slug, juego, periodo);
+    }
+
+    /**
+     * Lo que dicen las rondas de sus demos de CS2 analizadas (P12): rating, KAST, trades, duelos de apertura,
+     * asistencias de flash, utilidad, CT y T, economía y dónde muere en cada mapa, con la media del resto del equipo.
+     */
+    @GetMapping("/demos")
+    public ResumenDemos demos(@PathVariable String slug, @RequestParam(defaultValue = "todo") Periodo periodo) {
+        return equipo.demos(slug, periodo);
+    }
+
+    /** Mapa de calor de dónde muere en un mapa (sin {@code mapa}, en el que más rondas tiene analizadas). */
+    @GetMapping("/demos/calor")
+    public CalorMapa calor(
+            @PathVariable String slug,
+            @RequestParam(required = false) String mapa,
+            @RequestParam(defaultValue = "todo") Periodo periodo) {
+        return equipo.calor(slug, mapa, periodo);
+    }
+
+    /** Lo que hizo en cada ronda de una partida con la demo analizada (P12). */
+    @GetMapping("/partidas/{partidaId}/rondas")
+    public RondasPartida rondas(@PathVariable String slug, @PathVariable long partidaId) {
+        return equipo.rondasPartida(slug, partidaId);
     }
 
     /** En qué mejorar y qué hace bien, según el Duende. */
