@@ -2,14 +2,25 @@
 
 Es determinista y no necesita Gemini: compara cada métrica con la media del resto del equipo y con una referencia,
 y añade reglas con más contexto (kills que no dan victorias, rachas, tendencia reciente, mapas o dioses flojos,
-compañeros, tilt en las sesiones largas y la mejor hora del día).
+compañeros, tilt en las sesiones largas, la mejor hora del día y si los consejos de antes han funcionado).
 Si se conoce el rol del jugador, cada métrica pesa lo que pide ese rol (metricas.AJUSTES_ROL).
 """
 
 from dataclasses import dataclass
 
 from .metricas import METRICAS, NOMBRE_JUEGO, Metrica, factor_rol, formatear, rol_de
-from .modelos import Barra, FilaMomento, FilaSinergia, Idioma, Insight, Nivel, PeticionInsights, Resumen
+from .metricas import metrica as metrica_de
+from .modelos import (
+    Barra,
+    FilaMomento,
+    FilaSinergia,
+    Idioma,
+    Insight,
+    Nivel,
+    PeticionInsights,
+    Resumen,
+    SeguimientoConsejo,
+)
 from .textos import DEBILIDADES, ESPECIALES, FORTALEZAS, FRASES, NOMBRES_MOMENTO, NOMBRES_ROL, consejo_para
 
 MUESTRA_MINIMA = 5
@@ -27,6 +38,10 @@ DIFERENCIA_TILT = 15
 TILT_GRAVE = 25
 # La mejor hora del día se elige entre cuatro: se pide más diferencia para no premiar la casualidad.
 DIFERENCIA_HORARIO = 20
+# Memoria de consejos (P6): días que hay que dejar pasar antes de juzgar un consejo, y cuánto tiene que mejorar la
+# métrica (como en el resto de reglas: 5 puntos en porcentajes, un 10 % en lo demás) para decir que ha funcionado.
+DIAS_SEGUIMIENTO = 7
+MEJORA_CONSEJO = 0.1
 
 ORDEN_NIVEL: dict[Nivel, int] = {"info": 0, "alto": 1, "medio": 2, "bien": 3}
 
@@ -427,6 +442,87 @@ def sesiones_destacadas(p: PeticionInsights) -> list[Insight]:
     return [c.insight for c in _sesiones(p)]
 
 
+# ─── Memoria de consejos (P6) ────────────────────────────────────────────────
+
+
+def en_frase(nombre: str) -> str:
+    """El nombre de una métrica dentro de una frase: "winrate", "muertes / partida"; las siglas, igual ("ADR", "K/D")."""
+    if not nombre[:1].isalpha() or nombre[:2].isupper():
+        return nombre
+    return nombre[0].lower() + nombre[1:]
+
+
+def aviso_de(s: SeguimientoConsejo, m: Metrica, lang: Idioma) -> str:
+    """El título del aviso que se le dio ("Poco daño por ronda"), o el nombre de la métrica si no se puede rehacer."""
+    if s.insight.startswith("debil_") and (textos := DEBILIDADES.get(s.metrica, {}).get(lang)):
+        return str(textos["titulo"])
+    titulo = str(ESPECIALES.get(s.insight, {}).get(lang, {}).get("titulo", ""))
+    return titulo if titulo and "{" not in titulo else m.nombre(lang)
+
+
+def efecto(s: SeguimientoConsejo, juego: str) -> float | None:
+    """Cuánto ha mejorado (+) o empeorado (-) la métrica desde el consejo, como en el resto de reglas. None si aún es
+    pronto: menos de DIAS_SEGUIMIENTO días o menos de MUESTRA_MINIMA partidas desde entonces."""
+    m = metrica_de(juego, s.metrica)
+    if not m or s.valor_desde is None or s.dias < DIAS_SEGUIMIENTO or s.partidas_desde < MUESTRA_MINIMA:
+        return None
+    return _desviacion(m, s.valor_desde, s.valor)
+
+
+def _consejo_seguido(regla: str, nivel: Nivel, s: SeguimientoConsejo, d: float, p: PeticionInsights) -> Candidato:
+    lang = p.lang
+    m = metrica_de(p.juego, s.metrica)
+    assert m is not None and s.valor_desde is not None
+    antes, ahora = formatear(s.valor, m.formato, lang), formatear(s.valor_desde, m.formato, lang)
+    insight = _especial(
+        regla,
+        lang,
+        p.juego,
+        nivel,
+        metrica=m.nombre(lang),
+        metrica_frase=en_frase(m.nombre(lang)),
+        aviso=aviso_de(s, m, lang),
+        dias=s.dias,
+        partidas=s.partidas_desde,
+        antes=antes,
+        ahora=ahora,
+    )
+    if regla == "consejo_no_funciona" and s.insight.startswith("debil_"):
+        # El consejo de entonces, otra vez: aún no ha servido.
+        if original := consejo_para(DEBILIDADES.get(s.metrica, {}).get(lang, {}), p.juego):
+            insight.consejo = FRASES[lang]["insiste"].format(consejo=original)
+    f = FRASES[lang]
+    insight.metrica = s.metrica
+    insight.formato = m.formato
+    insight.barras = [
+        Barra(etiqueta=f["desde_entonces"], valor=round(s.valor_desde, 2), tuyo=True),
+        Barra(etiqueta=f["entonces"], valor=round(s.valor, 2)),
+    ]
+    # La memoria del Duende va por delante: es lo más personal que puede decir.
+    return Candidato(insight, 1 + abs(d))
+
+
+def _seguimiento(p: PeticionInsights) -> list[Candidato]:
+    """Si los consejos de antes han funcionado: el que más ha mejorado y el que no ha mejorado nada (o ha empeorado)."""
+    con_efecto = [(s, d) for s in p.seguimiento if (d := efecto(s, p.juego)) is not None]
+    if not con_efecto:
+        return []
+    candidatos: list[Candidato] = []
+    mejor, d_mejor = max(con_efecto, key=lambda x: x[1])
+    if d_mejor >= MEJORA_CONSEJO:
+        candidatos.append(_consejo_seguido("consejo_funciona", "bien", mejor, d_mejor, p))
+    peor, d_peor = min(con_efecto, key=lambda x: x[1])
+    if d_peor <= 0:
+        nivel: Nivel = "alto" if d_peor <= -MEJORA_CONSEJO else "medio"
+        candidatos.append(_consejo_seguido("consejo_no_funciona", nivel, peor, d_peor, p))
+    return candidatos
+
+
+def seguimiento_destacado(p: PeticionInsights) -> list[Insight]:
+    """Si han funcionado los consejos, sin el tope del panel, para cuando se pregunta por ello."""
+    return [c.insight for c in _seguimiento(p)]
+
+
 def generar_insights(p: PeticionInsights) -> list[Insight]:
     """Recomendaciones ordenadas: aviso de muestra, debilidades graves, medias y, al final, lo que hace bien."""
     if p.resumen.partidas == 0:
@@ -445,9 +541,10 @@ def generar_insights(p: PeticionInsights) -> list[Insight]:
         + _desglose(p)
         + _sinergias(p)
         + _sesiones(p)
+        + _seguimiento(p)
     )
-    # Si una regla especial ya habla del winrate, la genérica del winrate sobra.
-    ocupadas = {c.insight.metrica for c in especiales if c.insight.id == "kd_sin_victorias"}
+    # Si una regla especial ya habla de una métrica (el winrate, o un consejo que no ha funcionado), la genérica sobra.
+    ocupadas = {c.insight.metrica for c in especiales if c.insight.id in ("kd_sin_victorias", "consejo_no_funciona")}
     candidatos = especiales + _por_metrica(p, {m for m in ocupadas if m})
 
     debiles = sorted(

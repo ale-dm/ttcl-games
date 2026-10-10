@@ -92,6 +92,19 @@ def test_insights_con_sesiones_en_camel_case():
     assert por_id["mejor_horario"]["titulo"] == "Rindes más por la tarde"
 
 
+def test_insights_con_seguimiento_en_camel_case():
+    seguimiento = [{"insight": "debil_adr", "metrica": "adr", "valor": 70.0, "dadoEn": "2026-09-24T18:00:00Z",
+                    "dias": 15, "partidasDesde": 12, "valorDesde": 90.0}]
+    r = cliente.post(
+        "/v1/insights",
+        json={"lang": "es", "jugador": {"slug": "j3", "nombre": "Jugador 3"}, "juego": "cs2", "resumen": RESUMEN,
+              "seguimiento": seguimiento},
+    )
+    assert r.status_code == 200
+    bien = next(i for i in r.json()["insights"] if i["id"] == "consejo_funciona")
+    assert bien["texto"].startswith("Hace 15 días te avisé: «Poco daño por ronda».")
+
+
 def test_insights_lote():
     item = {"lang": "en", "jugador": {"slug": "j1", "nombre": "Jugador 1"}, "juego": "cs2", "resumen": RESUMEN}
     r = cliente.post("/v1/insights/lote", json={"items": [item, {**item, "jugador": {"slug": "j2", "nombre": "J2"}}]})

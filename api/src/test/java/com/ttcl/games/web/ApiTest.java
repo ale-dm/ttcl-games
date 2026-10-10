@@ -10,6 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ttcl.games.config.TtclProperties;
+import com.ttcl.games.dominio.ConsejoDado;
+import com.ttcl.games.dominio.Repositorios.ConsejoDadoRepo;
 import com.ttcl.games.duende.DuendeCliente;
 import com.ttcl.games.duende.DuendeModelos.Insight;
 import com.ttcl.games.duende.DuendeModelos.ItemLote;
@@ -58,6 +60,9 @@ class ApiTest {
     @Autowired
     DuendeFalso duende;
 
+    @Autowired
+    ConsejoDadoRepo consejosDados;
+
     MockMvc mvc;
 
     /**
@@ -66,6 +71,7 @@ class ApiTest {
      */
     static class DuendeFalso extends DuendeCliente {
         List<ItemLote> lote = List.of();
+        List<Insight> insights = List.of();
         RespuestaChat respuesta;
         RuntimeException fallo;
         PeticionChat ultimaChat;
@@ -91,7 +97,7 @@ class ApiTest {
             if (fallo != null) {
                 throw fallo;
             }
-            return List.of();
+            return insights;
         }
 
         @Override
@@ -122,6 +128,7 @@ class ApiTest {
     void preparar() {
         mvc = MockMvcBuilders.webAppContextSetup(contexto).build();
         duende.lote = List.of();
+        duende.insights = List.of();
         duende.respuesta = null;
         duende.fallo = null;
         duende.ultimaChat = null;
@@ -430,6 +437,80 @@ class ApiTest {
                 .filter(g -> g.juego() == juego)
                 .findFirst()
                 .orElseThrow();
+    }
+
+    // ─── Memoria de consejos (P6) ───────────────────────────────────────────
+
+    private List<ConsejoDado> consejosDe(String slug) {
+        return consejosDados.findAllDesde(Instant.EPOCH).stream()
+                .filter(c -> c.getJugador().getSlug().equals(slug))
+                .toList();
+    }
+
+    @Test
+    void losConsejosNuevosSeApuntanUnaVezYSoloConTodasLasPartidas() throws Exception {
+        // Jugador 2 no tiene consejos en los datos de ejemplo.
+        duende.insights = List.of(
+                new Insight("debil_adr", "alto", "adr", "Poco daño", "t", "c", List.of(), "int"),
+                new Insight("tilt_sesion", "medio", null, "Tilt", "t", "c", List.of(), "pct"),
+                new Insight("fuerte_kd", "bien", "kd", "Buen K/D", "t", "c", List.of(), "dec"), // lo hace bien
+                new Insight("consejo_no_funciona", "medio", "kd", "Sigue igual", "t", "c", List.of(), "dec"));
+        try {
+            mvc.perform(get("/api/jugadores/j2/consejos?juego=cs2")).andExpect(status().isOk());
+            List<ConsejoDado> dados = consejosDe("j2");
+            assertThat(dados).extracting(ConsejoDado::getInsight).containsExactlyInAnyOrder("debil_adr", "tilt_sesion");
+            double adr = json("/api/jugadores/j2/juegos/cs2").get("resumen").get("datosMedios").get("adr").asDouble();
+            ConsejoDado delAdr = dados.stream().filter(c -> c.getInsight().equals("debil_adr")).findFirst().orElseThrow();
+            assertThat(delAdr.getValor()).isEqualTo(adr); // el valor de ese día, con todas las partidas
+            assertThat(delAdr.getNivel()).isEqualTo("alto");
+            assertThat(delAdr.getJuego()).isEqualTo(Juego.CS2);
+
+            // Otra vez (o en inglés): no se repite. Con un periodo, no se apunta nada.
+            mvc.perform(get("/api/jugadores/j2/consejos?juego=cs2&lang=en")).andExpect(status().isOk());
+            duende.insights = List.of(new Insight("debil_hs_pct", "alto", "hs_pct", "HS", "t", "c", List.of(), "pct"));
+            mvc.perform(get("/api/jugadores/j2/consejos?juego=cs2&periodo=7d")).andExpect(status().isOk());
+            assertThat(consejosDe("j2")).hasSize(2);
+
+            // A partir de ahora, el Duende recibe su seguimiento (aún sin partidas desde entonces).
+            mvc.perform(get("/api/jugadores/j2/consejos?juego=cs2")).andExpect(status().isOk());
+            assertThat(duende.ultimaInsights.seguimiento()).singleElement().satisfies(s -> {
+                assertThat(s.insight()).isEqualTo("debil_adr");
+                assertThat(s.dias()).isZero();
+                assertThat(s.partidasDesde()).isZero();
+                assertThat(s.valorDesde()).isNull();
+            });
+        } finally {
+            consejosDados.deleteAll(consejosDe("j2"));
+        }
+    }
+
+    @Test
+    void elDuendeRecibeElSeguimientoDeLosConsejosDeEjemplo() throws Exception {
+        // A Jugador 3 se le avisó del ADR hace 12 días y ha mejorado; a Jugador 4, de las muertes, y muere más.
+        mvc.perform(get("/api/jugadores/j3/consejos?juego=cs2")).andExpect(status().isOk());
+        assertThat(duende.ultimaInsights.seguimiento()).singleElement().satisfies(s -> {
+            assertThat(s.insight()).isEqualTo("debil_adr");
+            assertThat(s.metrica()).isEqualTo("adr");
+            assertThat(s.dias()).isEqualTo(12);
+            assertThat(s.partidasDesde()).isGreaterThanOrEqualTo(5);
+            assertThat(s.valorDesde()).isGreaterThan(s.valor() * 1.1);
+        });
+        mvc.perform(get("/api/jugadores/j4/consejos?juego=smite2")).andExpect(status().isOk());
+        assertThat(duende.ultimaInsights.seguimiento()).singleElement().satisfies(s -> {
+            assertThat(s.metrica()).isEqualTo("muertes_media");
+            assertThat(s.valorDesde()).isGreaterThan(s.valor());
+        });
+
+        // Con un periodo, sin seguimiento (es con todas las partidas); en el chat, sí.
+        mvc.perform(get("/api/jugadores/j3/consejos?juego=cs2&periodo=30d")).andExpect(status().isOk());
+        assertThat(duende.ultimaInsights.seguimiento()).isEmpty();
+        duende.respuesta = new RespuestaChat("Hola", "reglas", null, List.of());
+        mvc.perform(post("/api/duende/chat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mensajes\": [{\"rol\": \"usuario\", \"texto\": \"¿Ha funcionado?\"}]}"))
+                .andExpect(status().isOk());
+        assertThat(juegoDe(duende.ultimaChat, "j3", Juego.CS2).seguimiento()).hasSize(1);
+        assertThat(juegoDe(duende.ultimaChat, "j1", Juego.CS2).seguimiento()).isEmpty();
     }
 
     @Test

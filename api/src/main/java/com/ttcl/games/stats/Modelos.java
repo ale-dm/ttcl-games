@@ -136,6 +136,22 @@ public final class Modelos {
      */
     public record ResumenPeriodo(Periodo periodo, ResumenJuego resumen, MediasEquipo equipo) {}
 
+    /** Un consejo que se le dio, tal como se guardó: lo que hace falta para su seguimiento. */
+    public record ConsejoAnterior(String insight, String metrica, Double valor, Instant dadoEn) {}
+
+    /**
+     * Cómo ha ido un consejo que hablaba de una métrica: su valor el día que se dio y en las partidas jugadas desde
+     * entonces. El Duende decide con esto si ha funcionado.
+     *
+     * @param valor valor de la métrica ese día, con todas sus partidas de entonces
+     * @param dias días desde que se dio
+     * @param partidasDesde partidas jugadas desde entonces
+     * @param valorDesde valor de la métrica en esas partidas, o null si no hay ninguna
+     */
+    public record SeguimientoConsejo(
+            String insight, String metrica, Double valor, Instant dadoEn, int dias, int partidasDesde,
+            Double valorDesde) {}
+
     /** Un punto de la gráfica de partidas. */
     public record PuntoSerie(
             long partidaId, Instant fecha, Boolean gano, Integer kills, Integer muertes, Integer asistencias,

@@ -3,7 +3,17 @@ from app.config import get_config
 from app.modelos import Desglose, Mensaje, PeticionChat
 from app.reglas_chat import detectar_intencion, detectar_juego, detectar_periodo, insights_de
 
-from .conftest import Sinergias, companero, en_periodo, equipo_cs2, jugador, momento, resumen_cs2, sesiones
+from .conftest import (
+    Sinergias,
+    companero,
+    en_periodo,
+    equipo_cs2,
+    jugador,
+    momento,
+    resumen_cs2,
+    seguido,
+    sesiones,
+)
 
 
 def equipo():
@@ -387,6 +397,80 @@ def test_los_ultimos_dias_llegan_a_gemini(monkeypatch):
     assert '"periodos":[{"periodo":"7d","resumen":{"juego":"cs2","partidas":8' in sistema  # Ana, con todo
     assert '"periodos":[{"periodo":"30d","resumen":{"juego":"cs2","partidas":12' in sistema  # Bea, solo el resumen
     assert "«periodos» trae además el resumen de los últimos 7 días" in sistema
+
+
+# ─── Memoria de consejos ─────────────────────────────────────────────────────
+
+
+def test_intencion_de_seguimiento():
+    assert detectar_intencion("¿Ha funcionado lo que me dijiste?", 1) == "seguimiento"
+    assert detectar_intencion("¿Me sirvió tu consejo?", 1) == "seguimiento"
+    assert detectar_intencion("did your advice work?", 1) == "seguimiento"
+    assert detectar_intencion("¿He mejorado en lo que me has dicho?", 1) == "seguimiento"  # no es "mejorar"
+    assert detectar_intencion("What should I work on?", 1) == "mejorar"
+
+
+def equipo_con_seguimiento():
+    s = [
+        seguido("debil_adr", "adr", 70.0, 15, 12, 90.0),
+        seguido("debil_muertes_media", "muertes_media", 18.0, 20, 10, 20.0),
+        seguido("debil_hs_pct", "hs_pct", 40.0, 3, 2, 42.0),
+        seguido("debil_kd", "kd", 0.9, 2, 0, None),
+    ]
+    return [jugador("j1", "Ana", resumen_cs2(), equipo_cs2(), seguimiento=s)]
+
+
+def test_ha_funcionado_lo_que_me_dijiste():
+    r = preguntar_con("¿Ha funcionado lo que me dijiste?", equipo_con_seguimiento(), foco=["j1"])
+    assert r.split("\n")[:6] == [
+        "Lo que te he ido diciendo en Counter-Strike 2, Ana:",
+        "",
+        "- **Poco daño por ronda** (hace 15 días): ADR 70 → 90 en 12 partidas desde entonces. Funciona.",
+        "- **Mueres demasiado** (hace 20 días): Muertes / partida 18,00 → 20,00 en 10 partidas desde entonces. "
+        "Sigue sin mejorar.",
+        "- **Pocos headshots** (hace 3 días): % headshot 40,0 % → 42,0 % en 2 partidas desde entonces. "
+        "Aún es pronto para saberlo.",
+        "- **Mueres más de lo que matas** (hace 2 días): K/D 0,90; aún no has jugado desde entonces.",
+    ]
+    assert "**Mejora en ADR.** Lo que estés haciendo, funciona" in r
+    assert "**Muertes / partida sigue sin mejorar.** Toca insistir: No asomes solo" in r
+
+
+def test_seguimiento_sin_consejos_sin_foco_y_sugerencias():
+    sin = [jugador("j1", "Ana", resumen_cs2(), equipo_cs2())]
+    assert preguntar_con("did your advice work?", sin, foco=["j1"], lang="en").startswith(
+        "I don't have any Counter-Strike 2 tips of yours to review yet."
+    )
+    assert preguntar_con("¿Ha funcionado lo que me dijiste?", equipo_con_seguimiento()).startswith("Dime de quién")
+    con = chat.responder(
+        PeticionChat(lang="es", mensajes=[Mensaje(rol="usuario", texto="hola")], foco=["j1"],
+                     equipo=equipo_con_seguimiento())
+    ).sugerencias
+    assert con[:2] == ["¿En qué tengo que mejorar?", "¿Ha funcionado lo que me dijiste?"]
+    sin_sug = chat.responder(PeticionChat(lang="es", mensajes=[Mensaje(rol="usuario", texto="hola")], foco=["j1"],
+                                          equipo=sin)).sugerencias
+    assert "¿Ha funcionado lo que me dijiste?" not in sin_sug
+
+
+def test_el_seguimiento_llega_a_gemini(monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "clave-de-prueba")
+    get_config.cache_clear()
+    sistemas = []
+
+    def falso(sistema, contenidos, temperatura=0.8):
+        sistemas.append(sistema)
+        return "Respuesta de Gemini", "gemini-falso"
+
+    monkeypatch.setattr(gemini, "generar", falso)
+    chat.responder(
+        PeticionChat(lang="es", mensajes=[Mensaje(rol="usuario", texto="¿Ha funcionado? (Gemini)")], foco=["j1"],
+                     equipo=equipo_con_seguimiento())
+    )
+    sistema = sistemas[0]
+    assert '"insight":"debil_adr","metrica":"adr","valor":70.0' in sistema
+    assert '"partidasDesde":12,"valorDesde":90.0' in sistema
+    assert "«seguimiento» son los consejos que ya le diste" in sistema
+    assert "Mejora en ADR" in sistema  # y la recomendación ya calculada
 
 
 def test_mejorar_tiene_en_cuenta_el_rol():

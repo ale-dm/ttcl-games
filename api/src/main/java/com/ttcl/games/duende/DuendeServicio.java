@@ -7,6 +7,7 @@ import com.ttcl.games.duende.DuendeModelos.PeticionChat;
 import com.ttcl.games.duende.DuendeModelos.RespuestaChat;
 import com.ttcl.games.juego.Juego;
 import com.ttcl.games.servicio.EquipoServicio;
+import com.ttcl.games.servicio.MemoriaConsejos;
 import com.ttcl.games.servicio.Vistas.ConsejoBreve;
 import com.ttcl.games.servicio.Vistas.ConsejosVista;
 import com.ttcl.games.servicio.Vistas.JugadorVista;
@@ -33,10 +34,12 @@ public class DuendeServicio {
 
     private final EquipoServicio equipo;
     private final DuendeCliente cliente;
+    private final MemoriaConsejos memoria;
 
-    public DuendeServicio(EquipoServicio equipo, DuendeCliente cliente) {
+    public DuendeServicio(EquipoServicio equipo, DuendeCliente cliente, MemoriaConsejos memoria) {
         this.equipo = equipo;
         this.cliente = cliente;
+        this.memoria = memoria;
     }
 
     /** "es" o "en". Cualquier otra cosa se trata como español. */
@@ -79,16 +82,27 @@ public class DuendeServicio {
 
     /**
      * Recomendaciones de un jugador en un juego con las partidas del periodo. Si el Duende no responde,
-     * {@code disponible} es false.
+     * {@code disponible} es false. Con todas las partidas, los consejos nuevos se apuntan en la memoria del Duende
+     * (con un periodo no: el valor de la métrica sería el de esos días y el seguimiento no cuadraría).
      */
     public ConsejosVista consejos(String slug, Juego juego, String lang, Periodo periodo) {
         var peticion = equipo.peticionInsights(slug, juego, idioma(lang), periodo);
+        List<Insight> insights;
         try {
-            return new ConsejosVista(true, cliente.insights(peticion));
+            insights = cliente.insights(peticion);
         } catch (DuendeNoDisponibleException e) {
             log.warn("Consejos de {} sin Duende: {}", slug, e.getMessage());
             return new ConsejosVista(false, List.of());
         }
+        if (periodo == Periodo.TODO) {
+            try {
+                memoria.apuntar(slug, juego, peticion.resumen(), insights);
+            } catch (RuntimeException e) {
+                // Si no se puede apuntar, los consejos se enseñan igual.
+                log.warn("No se pudieron apuntar los consejos de {}: {}", slug, e.getMessage());
+            }
+        }
+        return new ConsejosVista(true, insights);
     }
 
     /**

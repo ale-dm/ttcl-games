@@ -45,7 +45,10 @@ _CABECERA_DATOS: dict[Idioma, str] = {
         "Con menos de 15 sesiones no saques conclusiones de tilt ni de horarios. Todo eso es con todas sus partidas; "
         "«periodos» trae además el resumen de los últimos 7 días («7d») y 30 días («30d») con la media del equipo en "
         "esos días: úsalo si preguntan por esta semana o este mes. «periodo_seleccionado» es el que se ve en la "
-        "página (null o «todo»: todas las partidas)."
+        "página (null o «todo»: todas las partidas). «seguimiento» son los consejos que ya le diste: la métrica, su "
+        "valor ese día («valor»), los días que han pasado y el valor en las partidas jugadas desde entonces "
+        "(«valorDesde», «partidasDesde»). Si preguntan si ha funcionado, usa eso; con menos de 7 días o de 5 partidas "
+        "desde entonces, di que aún es pronto."
     ),
     "en": (
         "Available data (JSON). 'foco' are the players this conversation is about; 'equipo' is the whole group. "
@@ -61,7 +64,10 @@ _CABECERA_DATOS: dict[Idioma, str] = {
         "With fewer than 15 sessions, draw no conclusions about tilt or times of day. All of that uses every match; "
         "'periodos' also brings the summary of the last 7 days ('7d') and 30 days ('30d') with the team average for "
         "those days: use it when they ask about this week or this month. 'periodo_seleccionado' is the one shown on "
-        "the page (null or 'todo': all matches)."
+        "the page (null or 'todo': all matches). 'seguimiento' are the tips you already gave them: the metric, its "
+        "value that day ('valor'), the days since and the value over the matches played since ('valorDesde', "
+        "'partidasDesde'). If they ask whether it worked, use that; with fewer than 7 days or 5 matches since, say it's "
+        "too early to tell."
     ),
 }
 

@@ -1,6 +1,7 @@
 package com.ttcl.games.stats;
 
 import com.ttcl.games.juego.Juego;
+import com.ttcl.games.stats.Modelos.ConsejoAnterior;
 import com.ttcl.games.stats.Modelos.FilaComparacion;
 import com.ttcl.games.stats.Modelos.FilaDesglose;
 import com.ttcl.games.stats.Modelos.FilaMomento;
@@ -12,6 +13,7 @@ import com.ttcl.games.stats.Modelos.Miembro;
 import com.ttcl.games.stats.Modelos.Presencia;
 import com.ttcl.games.stats.Modelos.PuntoSerie;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
+import com.ttcl.games.stats.Modelos.SeguimientoConsejo;
 import com.ttcl.games.stats.Modelos.Sesiones;
 import com.ttcl.games.stats.Modelos.Sinergias;
 import java.time.Duration;
@@ -37,6 +39,8 @@ public final class Estadisticas {
     public static final int MIN_PARTIDAS_SINERGIA = 3;
     /** Pausa a partir de la cual la siguiente partida ya es otra sesión. */
     public static final Duration PAUSA_SESION = Duration.ofMinutes(45);
+    /** Hasta cuándo se mira atrás para ver si un consejo ha funcionado. */
+    public static final Duration VENTANA_SEGUIMIENTO = Duration.ofDays(60);
 
     /** Recuentos que no se promedian: con ellos se calculan porcentajes sobre el total (entry_pct, dano_min...). */
     private static final Set<String> RECUENTOS = Set.of(
@@ -395,6 +399,32 @@ public final class Estadisticas {
                     ResumenJuego r = resumir(juego, e.getValue());
                     return new FilaMomento(e.getKey(), r.partidas(), r.victorias(), r.winrate(), r.kd(), resto.size(),
                             resto.isEmpty() ? null : resumir(juego, resto).winrate());
+                })
+                .toList();
+    }
+
+    // ─── Seguimiento de consejos ────────────────────────────────────────────
+
+    /**
+     * Cómo han ido los consejos de los últimos {@link #VENTANA_SEGUIMIENTO} que hablaban de una métrica: por cada
+     * recomendación, la primera vez que se dio en ese tiempo (con su valor de entonces) y el valor en las partidas
+     * jugadas desde ese momento. El más antiguo primero.
+     */
+    public static List<SeguimientoConsejo> seguimiento(
+            Juego juego, List<FilaParticipacion> filas, List<ConsejoAnterior> consejos, Instant ahora) {
+        Instant inicio = ahora.minus(VENTANA_SEGUIMIENTO);
+        Map<String, ConsejoAnterior> primero = new LinkedHashMap<>();
+        consejos.stream()
+                .filter(c -> c.metrica() != null && c.valor() != null && !c.dadoEn().isBefore(inicio))
+                .sorted(Comparator.comparing(ConsejoAnterior::dadoEn))
+                .forEach(c -> primero.putIfAbsent(c.insight(), c));
+        return primero.values().stream()
+                .map(c -> {
+                    List<FilaParticipacion> desde = filas.stream().filter(f -> f.jugadaEn().isAfter(c.dadoEn())).toList();
+                    Double valorDesde = desde.isEmpty() ? null : valor(resumir(juego, desde), c.metrica());
+                    int dias = (int) Duration.between(c.dadoEn(), ahora).toDays();
+                    return new SeguimientoConsejo(
+                            c.insight(), c.metrica(), c.valor(), c.dadoEn(), dias, desde.size(), valorDesde);
                 })
                 .toList();
     }

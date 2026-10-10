@@ -1,9 +1,11 @@
 package com.ttcl.games.servicio;
 
 import com.ttcl.games.config.TtclProperties;
+import com.ttcl.games.dominio.ConsejoDado;
 import com.ttcl.games.dominio.Cuenta;
 import com.ttcl.games.dominio.Jugador;
 import com.ttcl.games.dominio.Participacion;
+import com.ttcl.games.dominio.Repositorios.ConsejoDadoRepo;
 import com.ttcl.games.dominio.Repositorios.CuentaRepo;
 import com.ttcl.games.dominio.Repositorios.JugadorRepo;
 import com.ttcl.games.dominio.Repositorios.ParticipacionRepo;
@@ -23,6 +25,7 @@ import com.ttcl.games.servicio.Vistas.PaginaPartidas;
 import com.ttcl.games.servicio.Vistas.PartidaVista;
 import com.ttcl.games.servicio.Vistas.Ranking;
 import com.ttcl.games.stats.Estadisticas;
+import com.ttcl.games.stats.Modelos.ConsejoAnterior;
 import com.ttcl.games.stats.Modelos.FilaParticipacion;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
 import com.ttcl.games.stats.Modelos.Presencia;
@@ -62,30 +65,40 @@ public class EquipoServicio {
     private final JugadorRepo jugadores;
     private final CuentaRepo cuentas;
     private final ParticipacionRepo participaciones;
+    private final ConsejoDadoRepo consejosDados;
     /** Zona del equipo: con ella se sabe a qué hora del día se jugó cada partida. */
     private final ZoneId zona;
 
     public EquipoServicio(
-            JugadorRepo jugadores, CuentaRepo cuentas, ParticipacionRepo participaciones, TtclProperties props) {
+            JugadorRepo jugadores, CuentaRepo cuentas, ParticipacionRepo participaciones,
+            ConsejoDadoRepo consejosDados, TtclProperties props) {
         this.jugadores = jugadores;
         this.cuentas = cuentas;
         this.participaciones = participaciones;
+        this.consejosDados = consejosDados;
         this.zona = props.zona();
     }
 
     /**
-     * Foto del equipo: jugadores, cuentas, participaciones por jugador y juego, y quién jugó cada partida. Se puede
-     * recortar a un periodo ({@link #desde}); {@code juegos} sigue diciendo a qué ha jugado cada uno alguna vez.
+     * Foto del equipo: jugadores, cuentas, participaciones por jugador y juego, quién jugó cada partida y los consejos
+     * que se les han dado. Se puede recortar a un periodo ({@link #desde}); {@code juegos} sigue diciendo a qué ha
+     * jugado cada uno alguna vez.
      */
     record Instantanea(
             List<Jugador> jugadores,
             Map<Long, List<Cuenta>> cuentas,
             Map<Long, Map<Juego, List<FilaParticipacion>>> filas,
             Map<Juego, Map<Long, List<Presencia>>> presencias,
-            Map<Long, Set<Juego>> juegos) {
+            Map<Long, Set<Juego>> juegos,
+            Map<Long, Map<Juego, List<ConsejoAnterior>>> consejos) {
 
         List<FilaParticipacion> filas(Jugador j, Juego juego) {
             return filas.getOrDefault(j.getId(), Map.of()).getOrDefault(juego, List.of());
+        }
+
+        /** Consejos que se le dieron en ese juego (en una foto recortada, ninguno: el seguimiento es con todas). */
+        List<ConsejoAnterior> consejos(Jugador j, Juego juego) {
+            return consejos.getOrDefault(j.getId(), Map.of()).getOrDefault(juego, List.of());
         }
 
         /** Si tiene partidas de ese juego, aunque no sean del periodo de la foto. */
@@ -113,7 +126,7 @@ public class EquipoServicio {
                     presentes.computeIfAbsent(juego, k -> new HashMap<>()).put(id, lista);
                 }
             }));
-            return new Instantanea(jugadores, cuentas, recortadas, presentes, juegos);
+            return new Instantanea(jugadores, cuentas, recortadas, presentes, juegos, Map.of());
         }
 
         /** Lanza un 404 si no tiene ni una partida de ese juego (en un periodo sin partidas, los datos van vacíos). */
@@ -169,7 +182,13 @@ public class EquipoServicio {
         }
         Map<Long, Set<Juego>> juegos = new HashMap<>();
         filas.forEach((jugador, porJuego) -> juegos.put(jugador, Set.copyOf(porJuego.keySet())));
-        return new Instantanea(lista, porJugador, filas, presencias, juegos);
+        Map<Long, Map<Juego, List<ConsejoAnterior>>> consejos = new HashMap<>();
+        for (ConsejoDado c : consejosDados.findAllDesde(Instant.now().minus(Estadisticas.VENTANA_SEGUIMIENTO))) {
+            consejos.computeIfAbsent(c.getJugador().getId(), k -> new EnumMap<>(Juego.class))
+                    .computeIfAbsent(c.getJuego(), k -> new ArrayList<>())
+                    .add(new ConsejoAnterior(c.getInsight(), c.getMetrica(), c.getValor(), c.getDadoEn()));
+        }
+        return new Instantanea(lista, porJugador, filas, presencias, juegos, consejos);
     }
 
     /** La foto con solo las partidas del periodo (contado hacia atrás desde ahora). */
@@ -261,7 +280,8 @@ public class EquipoServicio {
                 Estadisticas.desglose(juego, filas),
                 Estadisticas.sinergias(juego, j.getSlug(), filas, foto.presencias(juego)),
                 Estadisticas.sesiones(juego, filas, zona),
-                periodos);
+                periodos,
+                Estadisticas.seguimiento(juego, filas, foto.consejos(j, juego), Instant.now()));
     }
 
     /** Con quién del equipo juega mejor un jugador en un juego (y cómo le va solo), en el periodo. */
@@ -367,7 +387,7 @@ public class EquipoServicio {
     private PeticionInsights peticion(Instantanea foto, Jugador j, Juego juego, String lang) {
         JuegoContexto c = contexto(foto, j, juego, List.of());
         return new PeticionInsights(lang, new JugadorRef(j.getSlug(), j.getNombre()), juego, c.rol(), c.resumen(),
-                c.reciente(), c.equipo(), c.desglose(), c.sinergias(), c.sesiones());
+                c.reciente(), c.equipo(), c.desglose(), c.sinergias(), c.sesiones(), c.seguimiento());
     }
 
     /** Peticiones de recomendaciones de todo el equipo (una por jugador y juego), para las tarjetas. */

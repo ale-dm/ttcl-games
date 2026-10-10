@@ -1,9 +1,9 @@
-from app.insights import generar_insights
+from app.insights import en_frase, generar_insights
 from app.metricas import AJUSTES_ROL, METRICAS, NO_SE_JUZGA, PESA_MAS, TOLERA, formatear
 from app.modelos import Desglose, JugadorRef, MediasEquipo, PeticionInsights, Resumen, Sinergias
 from app.textos import NOMBRES_MOMENTO, NOMBRES_ROL
 
-from .conftest import companero, equipo_cs2, momento, resumen_cs2, sesiones
+from .conftest import companero, equipo_cs2, momento, resumen_cs2, seguido, sesiones
 
 
 def peticion(**cambios) -> PeticionInsights:
@@ -364,6 +364,81 @@ def test_sesiones_en_ingles():
     hora = next(i for i in insights if i.id == "mejor_horario")
     assert hora.titulo == "You play best late at night"
     assert hora.texto == "Late at night you win 65.0% (20 matches); the rest of the day, 40.0%."
+
+
+# ─── Memoria de consejos ─────────────────────────────────────────────────────
+
+
+def test_el_consejo_ha_funcionado():
+    s = [seguido("debil_adr", "adr", 70.0, 15, 12, 90.0)]
+    bien = next(i for i in generar_insights(peticion(seguimiento=s)) if i.id == "consejo_funciona")
+    assert bien.nivel == "bien"
+    assert bien.titulo == "Mejora en ADR"
+    assert bien.texto == (
+        "Hace 15 días te avisé: «Poco daño por ronda». Entonces tenías 70; en las 12 partidas desde entonces, 90."
+    )
+    assert bien.consejo == "Lo que estés haciendo, funciona: no lo sueltes."
+    assert bien.formato == "int"
+    assert [(b.etiqueta, b.valor, b.tuyo) for b in bien.barras] == [("Desde entonces", 90.0, True), ("Entonces", 70.0, False)]
+
+
+def test_el_consejo_no_ha_funcionado_y_sustituye_al_aviso_de_siempre():
+    # Muere más que el equipo (aviso de siempre) y más que cuando se le dijo: sale el seguimiento, no los dos.
+    p = peticion(
+        resumen=resumen_cs2(muertes_media=22.0),
+        seguimiento=[seguido("debil_muertes_media", "muertes_media", 18.0, 20, 10, 22.0)],
+    )
+    insights = generar_insights(p)
+    malo = next(i for i in insights if i.id == "consejo_no_funciona")
+    assert malo.nivel == "alto"  # ha empeorado más de un 10 %
+    assert malo.titulo == "Muertes / partida sigue sin mejorar"
+    assert malo.texto.startswith("Hace 20 días te avisé: «Mueres demasiado». Entonces tenías 18,00;")
+    assert malo.consejo == "Toca insistir: No asomes solo sin información: espera a un compañero para el trade y cambia de posición tras cada kill."
+    assert "debil_muertes_media" not in ids(insights)
+    # Igual que antes (ni mejor ni peor): también "sigue sin mejorar", pero a vigilar.
+    igual = peticion(seguimiento=[seguido("debil_kd", "kd", 0.9, 10, 8, 0.9)])
+    assert next(i for i in generar_insights(igual) if i.id == "consejo_no_funciona").nivel == "medio"
+
+
+def test_aun_es_pronto_para_juzgar_un_consejo():
+    casos = [
+        seguido("debil_adr", "adr", 70.0, 5, 12, 50.0),  # menos de 7 días
+        seguido("debil_adr", "adr", 70.0, 15, 3, 50.0),  # menos de 5 partidas desde entonces
+        seguido("debil_adr", "adr", 70.0, 15, 0, None),  # no ha jugado desde entonces
+        seguido("debil_adr", "adr", 70.0, 15, 12, 74.0),  # algo mejor (un 6 %), pero poco: ni bien ni mal
+        seguido("debil_nada", "nada", 1.0, 15, 12, 0.5),  # una métrica que el Duende no conoce
+    ]
+    for s in casos:
+        assert not {"consejo_funciona", "consejo_no_funciona"} & set(ids(generar_insights(peticion(seguimiento=[s])))), s
+
+
+def test_solo_el_que_mas_mejora_y_el_que_peor_va():
+    s = [
+        seguido("debil_adr", "adr", 70.0, 15, 12, 80.0),  # +14 %
+        seguido("debil_hs_pct", "hs_pct", 30.0, 15, 12, 40.0),  # +10 puntos: +0,2
+        seguido("debil_kd", "kd", 0.9, 15, 12, 0.85),  # −6 %
+        seguido("debil_kr", "kr", 0.7, 15, 12, 0.6),  # −14 %
+    ]
+    insights = generar_insights(peticion(seguimiento=s))
+    assert [(i.id, i.titulo) for i in insights if i.id.startswith("consejo_")] == [
+        ("consejo_no_funciona", "Kills / ronda sigue sin mejorar"),
+        ("consejo_funciona", "Mejora en % headshot"),
+    ]
+
+
+def test_seguimiento_en_ingles_y_avisos_de_reglas_especiales():
+    s = [seguido("kd_sin_victorias", "winrate", 40.0, 30, 20, 52.0)]
+    bien = next(i for i in generar_insights(peticion(lang="en", seguimiento=s)) if i.id == "consejo_funciona")
+    assert bien.titulo == "Win rate is improving"
+    assert bien.texto == (
+        "30 days ago I warned you: 'Your kills don't turn into wins'. You had 40.0%; over the 20 matches since, 52.0%."
+    )
+    assert [b.etiqueta for b in bien.barras] == ["Since then", "Back then"]
+    es = next(i for i in generar_insights(peticion(seguimiento=s)) if i.id == "consejo_funciona")
+    assert es.titulo == "Mejora en winrate"
+    assert [en_frase(n) for n in ("Winrate", "ADR", "K/D", "% headshot", "Muertes / partida")] == [
+        "winrate", "ADR", "K/D", "% headshot", "muertes / partida",
+    ]
 
 
 def test_cada_fila_de_las_sesiones_tiene_nombre():

@@ -10,6 +10,7 @@ from app.modelos import (
     MediasEquipo,
     Resumen,
     ResumenPeriodo,
+    SeguimientoConsejo,
     Sesiones,
     Sinergias,
 )
@@ -104,6 +105,7 @@ def jugador(
     sinergias=None,
     sesiones=None,
     periodos=None,
+    seguimiento=None,
 ):
     return JugadorContexto(
         slug=slug,
@@ -118,8 +120,24 @@ def jugador(
                 sinergias=sinergias,
                 sesiones=sesiones,
                 periodos=periodos or [],
+                seguimiento=seguimiento or [],
             )
         ],
+    )
+
+
+def seguido(
+    insight: str, metrica: str, valor: float, dias: int, partidas: int, valor_desde: float | None
+) -> SeguimientoConsejo:
+    """Un consejo de hace `dias` días, con el valor de entonces y el de las `partidas` jugadas desde entonces."""
+    return SeguimientoConsejo(
+        insight=insight,
+        metrica=metrica,
+        valor=valor,
+        dado_en="2026-09-20T18:00:00Z",
+        dias=dias,
+        partidas_desde=partidas,
+        valor_desde=valor_desde,
     )
 
 
@@ -128,5 +146,6 @@ def en_periodo(periodo: str, resumen: Resumen, equipo: MediasEquipo | None = Non
 
 
 __all__ = [
-    "resumen_cs2", "equipo_cs2", "companero", "momento", "sesiones", "jugador", "en_periodo", "Desglose", "Sinergias"
+    "resumen_cs2", "equipo_cs2", "companero", "momento", "sesiones", "jugador", "en_periodo", "seguido", "Desglose",
+    "Sinergias",
 ]

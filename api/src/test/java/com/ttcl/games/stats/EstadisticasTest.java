@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 import com.ttcl.games.juego.Juego;
+import com.ttcl.games.stats.Modelos.ConsejoAnterior;
 import com.ttcl.games.stats.Modelos.FilaComparacion;
 import com.ttcl.games.stats.Modelos.FilaDesglose;
 import com.ttcl.games.stats.Modelos.FilaMomento;
@@ -14,6 +15,7 @@ import com.ttcl.games.stats.Modelos.MediasEquipo;
 import com.ttcl.games.stats.Modelos.Miembro;
 import com.ttcl.games.stats.Modelos.Presencia;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
+import com.ttcl.games.stats.Modelos.SeguimientoConsejo;
 import com.ttcl.games.stats.Modelos.Sesiones;
 import com.ttcl.games.stats.Modelos.Sinergias;
 import java.time.Instant;
@@ -304,6 +306,27 @@ class EstadisticasTest {
         assertThat(s.trasResultado()).isEmpty();
         assertThat(Estadisticas.sesiones(Juego.CS2, List.of(), ZoneOffset.UTC))
                 .isEqualTo(new Sesiones(0, null, List.of(), List.of(), List.of()));
+    }
+
+    @Test
+    void seguimientoDeCadaConsejoDesdeLaPrimeraVezQueSeDio() {
+        Instant dado = BASE.plusSeconds(2 * 86400L);
+        List<FilaParticipacion> filas = List.of(
+                cs2(1, true, 10, 10, 2, Map.of("adr", 60.0)), // antes del consejo: no cuenta
+                cs2(3, true, 10, 10, 2, Map.of("adr", 90.0)),
+                cs2(4, false, 10, 10, 2, Map.of("adr", 100.0)));
+        List<ConsejoAnterior> consejos = List.of(
+                new ConsejoAnterior("debil_adr", "adr", 75.0, dado.plusSeconds(3 * 86400L)), // repetido: vale el primero
+                new ConsejoAnterior("debil_adr", "adr", 70.0, dado),
+                new ConsejoAnterior("tilt_sesion", null, null, dado), // sin métrica: no hay nada que seguir
+                new ConsejoAnterior("debil_kd", "kd", 0.8, BASE.minusSeconds(70 * 86400L)), // hace más de 60 días
+                new ConsejoAnterior("debil_hs_pct", "hs_pct", 30.0, BASE.plusSeconds(9 * 86400L)));
+        Instant ahora = BASE.plusSeconds(10 * 86400L);
+
+        assertThat(Estadisticas.seguimiento(Juego.CS2, filas, consejos, ahora)).containsExactly(
+                new SeguimientoConsejo("debil_adr", "adr", 70.0, dado, 8, 2, 95.0),
+                // Sin partidas desde entonces, aún no se sabe.
+                new SeguimientoConsejo("debil_hs_pct", "hs_pct", 30.0, BASE.plusSeconds(9 * 86400L), 1, 0, null));
     }
 
     private static FilaComparacion fila(List<FilaComparacion> filas, String metrica) {

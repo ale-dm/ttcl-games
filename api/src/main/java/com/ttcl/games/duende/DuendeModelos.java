@@ -6,6 +6,7 @@ import com.ttcl.games.stats.Modelos.FilaDesglose;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
 import com.ttcl.games.stats.Modelos.ResumenPeriodo;
+import com.ttcl.games.stats.Modelos.SeguimientoConsejo;
 import com.ttcl.games.stats.Modelos.Sesiones;
 import com.ttcl.games.stats.Modelos.Sinergias;
 import com.ttcl.games.stats.Periodo;
@@ -42,6 +43,7 @@ public final class DuendeModelos {
      * @param rol rol declarado en ese juego, o null: el Duende juzga cada métrica según lo que pide el rol
      * @param sinergias con quién del equipo le va mejor o peor (y solo)
      * @param sesiones cómo le va según el orden en la sesión, lo que pasó en la anterior y la hora del día
+     * @param seguimiento cómo han ido los consejos que se le dieron (vacío si se piden por periodo)
      */
     public record PeticionInsights(
             String lang,
@@ -53,7 +55,8 @@ public final class DuendeModelos {
             MediasEquipo equipo,
             List<FilaDesglose> desglose,
             Sinergias sinergias,
-            Sesiones sesiones) {}
+            Sesiones sesiones,
+            List<SeguimientoConsejo> seguimiento) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record RespuestaInsights(List<Insight> insights) {}
@@ -73,10 +76,12 @@ public final class DuendeModelos {
      * Datos de un jugador en un juego para el chat, con todas sus partidas.
      *
      * @param periodos resumen de los últimos 7 y 30 días, los que tengan partidas ("¿cómo voy esta semana?")
+     * @param seguimiento cómo han ido los consejos que se le dieron ("¿ha funcionado lo que me dijiste?")
      */
     public record JuegoContexto(
             Juego juego, String rol, ResumenJuego resumen, ResumenJuego reciente, MediasEquipo equipo,
-            List<FilaDesglose> desglose, Sinergias sinergias, Sesiones sesiones, List<ResumenPeriodo> periodos) {}
+            List<FilaDesglose> desglose, Sinergias sinergias, Sesiones sesiones, List<ResumenPeriodo> periodos,
+            List<SeguimientoConsejo> seguimiento) {}
 
     public record JugadorContexto(String slug, String nombre, List<JuegoContexto> juegos) {}
 

@@ -8,7 +8,16 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Literal
 
-from .insights import MIN_SESIONES, companeros_destacados, generar_insights, sesiones_destacadas
+from .insights import (
+    MEJORA_CONSEJO,
+    MIN_SESIONES,
+    aviso_de,
+    companeros_destacados,
+    efecto,
+    generar_insights,
+    seguimiento_destacado,
+    sesiones_destacadas,
+)
 from .metricas import METRICAS, NOMBRE_JUEGO, formatear, metrica, rol_de
 from .modelos import (
     Idioma,
@@ -25,7 +34,8 @@ from .modelos import (
 from .textos import NOMBRES_MOMENTO, NOMBRES_ROL
 
 Intencion = Literal[
-    "hola", "companeros", "sesiones", "ranking", "comparar", "racha", "desglose", "fuerte", "mejorar", "stats", "ayuda"
+    "hola", "seguimiento", "companeros", "sesiones", "ranking", "comparar", "racha", "desglose", "fuerte", "mejorar",
+    "stats", "ayuda",
 ]
 
 
@@ -61,6 +71,13 @@ def detectar_intencion(pregunta: str, num_foco: int) -> Intencion:
     palabras = re.findall(r"[a-z0-9/]+", t)
     if len(palabras) <= 3 and _contiene(t, ["hola", "buenas", "hey", "hello", "hi", "ey"]):
         return "hola"
+    # "¿Ha funcionado lo que me dijiste?": antes que todo lo demás (lleva "mejor", "quién"...).
+    if _contiene(
+        t,
+        ["funciona", "sirvi", "me dijiste", "me has dicho", "tus consejos", "consejos de antes", "did it work",
+         "has it worked", "is it working", "your advice", "you told me", "your tips"],
+    ):
+        return "seguimiento"
     # Antes que "quién" (ranking y comparar): "¿con quién juego mejor?" va de compañeros.
     if _contiene(t, ["con quien", "companer", "duo", "trio", "sinergi", "synerg", "teammate", "partner"]) or re.search(
         r"\bwho\b.*\bwith\b", t
@@ -145,6 +162,7 @@ def _peticion(j: JugadorContexto, g: JuegoContexto, lang: Idioma) -> PeticionIns
         desglose=g.desglose,
         sinergias=g.sinergias,
         sesiones=g.sesiones,
+        seguimiento=g.seguimiento,
     )
 
 
@@ -333,6 +351,66 @@ def _sesiones(f: Foco, lang: Idioma) -> str:
     return texto
 
 
+def _hace(dias: int, lang: Idioma) -> str:
+    if dias == 0:
+        return _t(lang, "hoy", "today")
+    if dias == 1:
+        return _t(lang, "ayer", "yesterday")
+    return _t(lang, f"hace {dias} días", f"{dias} days ago")
+
+
+def _seguimiento(f: Foco, lang: Idioma) -> str:
+    """Los consejos que se le han dado y cómo ha ido cada uno desde entonces."""
+    juego = f.juego.juego
+    seguimiento = [s for s in f.juego.seguimiento if metrica(juego, s.metrica)]
+    if not seguimiento:
+        return _t(
+            lang,
+            f"Aún no tengo consejos tuyos de {NOMBRE_JUEGO[juego]} que revisar. Cuando te avise de algo, en una o dos "
+            "semanas te digo si ha funcionado.",
+            f"I don't have any {NOMBRE_JUEGO[juego]} tips of yours to review yet. Once I warn you about something, "
+            "give it a week or two and I'll tell you whether it worked.",
+        )
+    lineas = []
+    for s in seguimiento:
+        m = metrica(juego, s.metrica)
+        assert m is not None
+        cuando = _hace(s.dias, lang)
+        antes = formatear(s.valor, m.formato, lang)
+        cabeza = f"- **{aviso_de(s, m, lang)}** ({cuando}): {m.nombre(lang)} {antes}"
+        if s.valor_desde is None:
+            lineas.append(cabeza + _t(lang, "; aún no has jugado desde entonces.", "; you haven't played since."))
+            continue
+        ahora = formatear(s.valor_desde, m.formato, lang)
+        d = efecto(s, juego)
+        if d is None:
+            veredicto = _t(lang, "Aún es pronto para saberlo.", "Too early to tell.")
+        elif d >= MEJORA_CONSEJO:
+            veredicto = _t(lang, "Funciona.", "It's working.")
+        elif d <= 0:
+            veredicto = _t(lang, "Sigue sin mejorar.", "Still not improving.")
+        else:
+            veredicto = _t(lang, "Algo mejor, pero poco.", "A bit better, but not much.")
+        lineas.append(
+            cabeza
+            + _t(
+                lang,
+                f" → {ahora} en {s.partidas_desde} partidas desde entonces. {veredicto}",
+                f" → {ahora} over {s.partidas_desde} matches since. {veredicto}",
+            )
+        )
+    texto = _t(
+        lang,
+        f"Lo que te he ido diciendo en {NOMBRE_JUEGO[juego]}, {f.jugador.nombre}:",
+        f"What I've been telling you in {NOMBRE_JUEGO[juego]}, {f.jugador.nombre}:",
+    )
+    texto += "\n\n" + "\n".join(lineas)
+    # Sin el tope del panel: aquí se pregunta justo por esto.
+    for i in seguimiento_destacado(_peticion(f.jugador, f.juego, lang)):
+        texto += f"\n\n**{i.titulo}.** {i.consejo or ''}".rstrip()
+    return texto
+
+
 def _mejores_duos(equipo: list[JugadorContexto], juego: Juego, lang: Idioma) -> str:
     """Los dúos del equipo con mejor winrate juntos, a partir de las sinergias de cada uno."""
     duos: dict[tuple[str, str], tuple[str, float, int, int]] = {}
@@ -491,11 +569,13 @@ def _equipo_mejorar(equipo: list[JugadorContexto], juego: Juego | None, lang: Id
 
 AYUDA = {
     "es": "Puedo decirte en qué mejorar, qué haces bien, cómo vas últimamente, qué mapa o dios se te da peor, "
-    "con quién juegas mejor, cuándo juegas mejor (si te tilteas, a qué hora rindes más) o comparar a dos del equipo. "
-    "Y si dices «esta semana» o «este mes», miro solo esos días. Pregúntame algo de eso.",
+    "con quién juegas mejor, cuándo juegas mejor (si te tilteas, a qué hora rindes más), si ha funcionado lo que te "
+    "dije o comparar a dos del equipo. Y si dices «esta semana» o «este mes», miro solo esos días. Pregúntame algo de "
+    "eso.",
     "en": "I can tell you what to improve, what you do well, how you've been doing lately, your worst map or god, "
-    "who you play best with, when you play best (whether you tilt, what time suits you) or compare two teammates. "
-    "And if you say 'this week' or 'this month', I'll look at just those days. Ask me any of that.",
+    "who you play best with, when you play best (whether you tilt, what time suits you), whether my advice worked or "
+    "compare two teammates. And if you say 'this week' or 'this month', I'll look at just those days. Ask me any of "
+    "that.",
 }
 
 # ─── Periodos ────────────────────────────────────────────────────────────────
@@ -505,7 +585,7 @@ ETIQUETA_PERIODO: dict[str, dict[Idioma, str]] = {
     "30d": {"es": "Últimos 30 días", "en": "Last 30 days"},
 }
 # Esto solo se calcula con todas las partidas: con unos pocos días no hay muestra.
-SOLO_CON_TODAS = ("companeros", "desglose", "sesiones")
+SOLO_CON_TODAS = ("companeros", "desglose", "sesiones", "seguimiento")
 
 
 def detectar_periodo(pregunta: str, por_defecto: Periodo | None) -> Periodo | None:
@@ -669,7 +749,7 @@ def _responder(p: PeticionChat, pregunta: str) -> str:
     if not foco:
         if intencion == "mejorar":
             return _equipo_mejorar(p.equipo, juego, lang)
-        if intencion in ("racha", "desglose", "sesiones"):
+        if intencion in ("racha", "desglose", "sesiones", "seguimiento"):
             return _t(
                 lang,
                 "Dime de quién: abre su perfil o pon su nombre en la pregunta.",
@@ -694,6 +774,8 @@ def _responder(p: PeticionChat, pregunta: str) -> str:
         return _companeros(f, lang)
     if intencion == "sesiones":
         return _sesiones(f, lang)
+    if intencion == "seguimiento":
+        return _seguimiento(f, lang)
     if intencion == "fuerte":
         return _fuerte(f, lang)
     if intencion == "racha":
@@ -721,8 +803,12 @@ def sugerencias(p: PeticionChat) -> list[str]:
         ]
     if len(foco) == 1:
         que = _t(lang, "mapa", "map") if juego == "cs2" else _t(lang, "dios", "god")
+        g = _juego_de(foco[0], juego)
+        # Si ya le ha dado consejos, preguntar si han funcionado va arriba.
+        seguimiento = [_t(lang, "¿Ha funcionado lo que me dijiste?", "Did your advice work?")] if g and g.seguimiento else []
         return [
             _t(lang, "¿En qué tengo que mejorar?", "What should I improve?"),
+            *seguimiento,
             _t(lang, "¿Qué hago bien?", "What am I good at?"),
             _t(lang, "¿Cómo voy últimamente?", "How have I been doing lately?"),
             _t(lang, "¿Con quién juego mejor?", "Who do I play best with?"),

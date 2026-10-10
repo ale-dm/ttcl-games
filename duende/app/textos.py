@@ -453,6 +453,35 @@ ESPECIALES: dict[str, dict[Idioma, T]] = {
             "consejo": "If you're playing to climb, play {franja}; at other times, keep it casual.",
         },
     },
+    "consejo_funciona": {
+        "es": {
+            "titulo": "Mejora en {metrica_frase}",
+            "frase": "Hace {dias} días te avisé: «{aviso}». Entonces tenías {antes}; en las {partidas} partidas desde "
+            "entonces, {ahora}.",
+            "consejo": "Lo que estés haciendo, funciona: no lo sueltes.",
+        },
+        "en": {
+            "titulo": "{metrica} is improving",
+            "frase": "{dias} days ago I warned you: '{aviso}'. You had {antes}; over the {partidas} matches since, "
+            "{ahora}.",
+            "consejo": "Whatever you're doing is working: keep it up.",
+        },
+    },
+    "consejo_no_funciona": {
+        "es": {
+            "titulo": "{metrica} sigue sin mejorar",
+            "frase": "Hace {dias} días te avisé: «{aviso}». Entonces tenías {antes}; en las {partidas} partidas desde "
+            "entonces, {ahora}.",
+            # Si el aviso tenía consejo, se repite con "insiste" (FRASES); si no, este.
+            "consejo": "Toca insistir o probar otra cosa: así no basta.",
+        },
+        "en": {
+            "titulo": "{metrica} still isn't improving",
+            "frase": "{dias} days ago I warned you: '{aviso}'. You had {antes}; over the {partidas} matches since, "
+            "{ahora}.",
+            "consejo": "Time to keep at it or try something else: this isn't enough.",
+        },
+    },
     "desglose_bueno": {
         "es": {
             "titulo": "{clave} es tu casa",
@@ -487,6 +516,9 @@ FRASES: dict[Idioma, dict[str, str]] = {
         "primeras": "1ª y 2ª",
         "resto": "El resto",
         "resto_dia": "Resto del día",
+        "entonces": "Entonces",
+        "desde_entonces": "Desde entonces",
+        "insiste": "Toca insistir: {consejo}",
         "cmp_equipo_ref": "Tienes {tu}; el resto del equipo, {equipo}, y un jugador medio anda por {ref}.",
         "cmp_equipo": "Tienes {tu}; el resto del equipo, {equipo}.",
         "cmp_ref": "Tienes {tu}; un jugador medio anda por {ref}.",
@@ -506,6 +538,9 @@ FRASES: dict[Idioma, dict[str, str]] = {
         "primeras": "1st and 2nd",
         "resto": "The rest",
         "resto_dia": "Rest of the day",
+        "entonces": "Back then",
+        "desde_entonces": "Since then",
+        "insiste": "Time to keep at it: {consejo}",
         "cmp_equipo_ref":"You have {tu}; the rest of the team, {equipo}, and an average player sits around {ref}.",
         "cmp_equipo": "You have {tu}; the rest of the team, {equipo}.",
         "cmp_ref": "You have {tu}; an average player sits around {ref}.",

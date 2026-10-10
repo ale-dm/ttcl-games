@@ -1,16 +1,19 @@
 package com.ttcl.games.carga;
 
 import com.ttcl.games.config.TtclProperties;
+import com.ttcl.games.dominio.ConsejoDado;
 import com.ttcl.games.dominio.Cuenta;
 import com.ttcl.games.dominio.Jugador;
 import com.ttcl.games.dominio.Participacion;
 import com.ttcl.games.dominio.Partida;
+import com.ttcl.games.dominio.Repositorios.ConsejoDadoRepo;
 import com.ttcl.games.dominio.Repositorios.CuentaRepo;
 import com.ttcl.games.dominio.Repositorios.JugadorRepo;
 import com.ttcl.games.dominio.Repositorios.ParticipacionRepo;
 import com.ttcl.games.dominio.Repositorios.PartidaRepo;
 import com.ttcl.games.juego.Juego;
 import com.ttcl.games.stats.Estadisticas;
+import com.ttcl.games.stats.Modelos.FilaParticipacion;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -42,6 +45,8 @@ public class DemoSeeder implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DemoSeeder.class);
     private static final Period PERIODO = Period.ofDays(45);
+    /** Hace cuántos días se le avisó a Jugador 4 de que moría demasiado (P6). */
+    private static final int DIAS_CONSEJO_J4 = 25;
     private static final List<String> MAPAS =
             List.of("de_mirage", "de_inferno", "de_nuke", "de_ancient", "de_anubis", "de_dust2", "de_train");
     private static final List<String> COLAS = List.of("Conquest", "Conquest", "Conquest", "Arena", "Joust");
@@ -80,7 +85,8 @@ public class DemoSeeder implements ApplicationRunner {
                     "demo_tres", "entry",
                     new PerfilCs2(0.72, 0.64, 0.14, 78, 34, 4.6, 0.36, 1.3, 0.42, 85, 0.57, null, "de_ancient"),
                     null, null, null),
-            // Solo SMITE, de jungla con asesinos: muere demasiado y farmea poco. Por la tarde rinde mucho más.
+            // Solo SMITE, de jungla con asesinos: muere demasiado y farmea poco. Por la tarde rinde mucho más. Desde
+            // que el Duende le avisó de las muertes, muere todavía más.
             new Demo("j4", "Jugador 4", null, null, null,
                     "DemoCuatro", "jungla", new PerfilSmite(5.5, 7.6, 6, 720, 395, 9000, 700, 0.44,
                             List.of("Loki", "Thanatos", "Fenrir", "Susano"), "Loki")));
@@ -90,6 +96,7 @@ public class DemoSeeder implements ApplicationRunner {
     private final CuentaRepo cuentas;
     private final PartidaRepo partidas;
     private final ParticipacionRepo participaciones;
+    private final ConsejoDadoRepo consejos;
     private final Random rnd = new Random(2026);
 
     public DemoSeeder(
@@ -97,12 +104,14 @@ public class DemoSeeder implements ApplicationRunner {
             JugadorRepo jugadores,
             CuentaRepo cuentas,
             PartidaRepo partidas,
-            ParticipacionRepo participaciones) {
+            ParticipacionRepo participaciones,
+            ConsejoDadoRepo consejos) {
         this.props = props;
         this.jugadores = jugadores;
         this.cuentas = cuentas;
         this.partidas = partidas;
         this.participaciones = participaciones;
+        this.consejos = consejos;
     }
 
     @Override
@@ -126,6 +135,11 @@ public class DemoSeeder implements ApplicationRunner {
         LocalDate hoy = ahora.atZone(props.zona()).toLocalDate();
         int cs2 = generarCs2(porSlug, hoy);
         int smite = generarSmite(porSlug, hoy);
+        // Consejos de hace unos días (P6): a Jugador 3 se le avisó del ADR y ha mejorado mucho desde entonces; a
+        // Jugador 4, de que moría demasiado, y desde entonces muere aún más.
+        apuntarConsejo(porSlug.get("j3"), Juego.CS2, "debil_adr", "adr", ahora.minus(Duration.ofDays(12)));
+        apuntarConsejo(porSlug.get("j4"), Juego.SMITE2, "debil_muertes_media", "muertes_media",
+                ahora.minus(Duration.ofDays(DIAS_CONSEJO_J4)));
         log.info("Datos de ejemplo creados: {} jugadores, {} partidas de CS2 y {} de SMITE 2", EQUIPO.size(), cs2, smite);
     }
 
@@ -293,10 +307,13 @@ public class DemoSeeder implements ApplicationRunner {
                 Partida partida = partidas.save(new Partida(Juego.SMITE2, "demo-smite2-%04d".formatted(i), inicio,
                         (int) (minutos * 60), cola));
                 inicio = inicio.plusSeconds((long) (minutos * 60) + pausa());
+                // Desde que el Duende le avisó, Jugador 4 muere todavía más.
+                boolean trasElAviso = sesion.inicio().toLocalDate().isAfter(hoy.minusDays(DIAS_CONSEJO_J4));
                 for (Demo d : grupo) {
                     PerfilSmite p = d.smite();
                     double efecto = gano ? 1.1 : 0.9;
                     double escala = minutos / 30;
+                    double muere = d == cuatro && trasElAviso ? 1.25 : 1.0;
                     Map<String, Object> datos = new LinkedHashMap<>();
                     datos.put("dios", dios.get(d.slug()));
                     datos.put("dano", (int) Math.max(1000, normal(p.danoMin() * minutos * efecto, p.danoMin() * 3)));
@@ -306,13 +323,26 @@ public class DemoSeeder implements ApplicationRunner {
                     datos.put("minutos", minutos);
                     guardar(partida, porSlug.get(d.slug()), gano,
                             positivo(normal(p.kills() * escala * efecto, 2)),
-                            positivo(normal(p.muertes() * escala / efecto, 1.6)),
+                            positivo(normal(p.muertes() * escala / efecto * muere, 1.6)),
                             positivo(normal(p.asist() * escala * efecto, 2.5)),
                             datos);
                 }
             }
         }
         return total;
+    }
+
+    // ─── Consejos ───────────────────────────────────────────────────────────
+
+    /** Apunta un consejo como si el Duende lo hubiera dado ese día, con el valor que tenía la métrica entonces. */
+    private void apuntarConsejo(Jugador jugador, Juego juego, String insight, String metrica, Instant dadoEn) {
+        List<FilaParticipacion> antes = participaciones.findAllCompletas().stream()
+                .filter(p -> p.getJugador().getId().equals(jugador.getId()) && p.getJuego() == juego)
+                .map(FilaParticipacion::de)
+                .filter(f -> f.jugadaEn().isBefore(dadoEn))
+                .toList();
+        Double valor = Estadisticas.valor(Estadisticas.resumir(juego, antes), metrica);
+        consejos.save(new ConsejoDado(jugador, juego, insight, metrica, valor, "alto", dadoEn));
     }
 
     // ─── Utilidades ─────────────────────────────────────────────────────────

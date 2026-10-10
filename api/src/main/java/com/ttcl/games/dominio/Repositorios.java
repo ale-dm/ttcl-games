@@ -44,4 +44,14 @@ public final class Repositorios {
     }
 
     public interface SyncRepo extends JpaRepository<Sync, Long> {}
+
+    public interface ConsejoDadoRepo extends JpaRepository<ConsejoDado, Long> {
+        /** Los dados desde una fecha, con su jugador, para calcular el seguimiento en memoria. */
+        @Query("select c from ConsejoDado c join fetch c.jugador where c.dadoEn >= ?1")
+        List<ConsejoDado> findAllDesde(Instant desde);
+
+        /** Si ya se le dio esa recomendación hace poco (para no apuntarla dos veces). */
+        boolean existsByJugadorAndJuegoAndInsightAndDadoEnAfter(
+                Jugador jugador, Juego juego, String insight, Instant desde);
+    }
 }

@@ -102,6 +102,19 @@ class Sesiones(Base):
     por_franja: list[FilaMomento] = Field(default_factory=list)
 
 
+class SeguimientoConsejo(Base):
+    """Un consejo que se le dio (P6): la métrica de la que hablaba, su valor ese día («valor», con todas las partidas
+    de entonces) y en las partidas jugadas desde entonces («valor_desde»). Lo calcula la API."""
+
+    insight: str
+    metrica: str
+    valor: float
+    dado_en: str
+    dias: int
+    partidas_desde: int = 0
+    valor_desde: float | None = None
+
+
 class ResumenPeriodo(Base):
     """Resumen de los últimos días (7 o 30), con la media del resto del equipo en esos mismos días."""
 
@@ -144,6 +157,8 @@ class PeticionInsights(Base):
     desglose: list[Desglose] = Field(default_factory=list)
     sinergias: Sinergias | None = None
     sesiones: Sesiones | None = None
+    # Cómo han ido los consejos que se le dieron (vacío si se piden por periodo).
+    seguimiento: list[SeguimientoConsejo] = Field(default_factory=list)
 
 
 class RespuestaInsights(Base):
@@ -183,6 +198,7 @@ class JuegoContexto(Base):
     sesiones: Sesiones | None = None
     # Los últimos 7 y 30 días, los que tengan partidas: para "¿cómo voy esta semana?". Lo demás, con todas.
     periodos: list[ResumenPeriodo] = Field(default_factory=list)
+    seguimiento: list[SeguimientoConsejo] = Field(default_factory=list)
 
 
 class JugadorContexto(Base):
