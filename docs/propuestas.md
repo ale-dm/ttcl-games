@@ -14,7 +14,7 @@ lo que se aprendió en su apartado y apuntar la entrega en [CHANGELOG.md](../CHA
 | P4 | Filtros por periodo | 1 | Bajo | Ya guardados | Hecho |
 | P5 | Objetivos personales | 2 | Medio | Nuevos (los da el jugador) | Pendiente |
 | P6 | Memoria de consejos | 2 | Medio | Se generan | Hecho |
-| P7 | Valoración de las respuestas | 2 | Bajo | Se generan | Pendiente |
+| P7 | Valoración de las respuestas | 2 | Bajo | Se generan | Hecho |
 | P8 | Comparar con jugadores de tu nivel (FACEIT) | 3 | Medio | Ya llegan, se tiran | Pendiente |
 | P9 | Chat que consulta la API (function calling) | 3 | Medio | Ya guardados | Pendiente |
 | P10 | Informe de cada partida | 3 | Bajo | Ya guardados | Pendiente |
@@ -245,6 +245,35 @@ sin mejorar" (de 6,63 a 9,22), con el consejo de entonces otra vez. Lo que qued�
 - Web: 👍/👎 bajo cada respuesta del chat y cada recomendación.
 - API: tabla `valoraciones` (tipo, id de recomendación o hash de respuesta, voto, origen gemini/reglas).
 - Uso: revisar las peor valoradas para cambiar reglas o el prompt de `personalidad.py`.
+
+**Hecho** (10 de octubre de 2026). Con los datos de ejemplo, un 👎 a "Las sesiones largas se te atragantan" de Jugador 3
+y otro a la respuesta de "¿Qué tal el tiempo?" (que las reglas no entienden) salen en `GET /api/duende/valoraciones`
+como `tilt_sesion` y como `reglas / ayuda`, cada uno con su texto. Lo que quedó y lo que se aprendió:
+- **Un voto por navegador y cosa valorada, y se puede cambiar o quitar.** Sin usuarios (llegan con P5), cada navegador
+  vota con un id al azar que guarda en localStorage (con `getRandomValues`: `randomUUID` solo existe con HTTPS y la web
+  puede servirse por http en la red de casa). Así, cambiar de 👍 a 👎 no cuenta dos votos y pulsar el marcado lo quita.
+  Nada impide votar desde otro navegador: sirve para saber qué revisar, no para contar votos al detalle.
+- **Qué es "la misma cosa"**: una recomendación es su id con el jugador y el juego (la misma a otro jugador es otra); una
+  respuesta, el hash (SHA-256, 32 caracteres) de la pregunta y la respuesta, no solo de la respuesta: la de ayuda es
+  igual para todo lo que no se entiende, y con un solo voto por navegador se perderían preguntas.
+- **Se guarda lo que se vio**, no solo el id o el hash: con el hash solo no se puede revisar nada. De las
+  recomendaciones, título, texto, consejo y nivel; de las respuestas, la pregunta, la respuesta (cortada a 8000
+  caracteres), reglas o Gemini con su modelo, y de quién iba la charla (el primero del foco) y en qué juego.
+- **Cambio sobre lo previsto: el Duende dice de qué iba cada pregunta.** La respuesta del chat trae `intencion` (la que
+  detectan las reglas, conteste quien conteste) y la web la devuelve al votar. Sin ella, el resumen solo podría separar
+  reglas de Gemini; con ella se ve qué tema falla, y *ayuda* son las preguntas que las reglas no entienden: lo primero
+  que mirar para ampliar `reglas_chat.py`.
+- **Para revisar**, `GET /api/duende/valoraciones`: totales, recomendaciones por id (sumando todos los jugadores) y
+  respuestas por origen e intención, lo peor valorado primero (más 👎 por encima de los 👍; a igualdad, más 👎), y las 20
+  últimas valoraciones negativas con su texto. No hay página en la web: lo mira quien mantiene el Duende.
+- En la web, los votos a recomendaciones se recuerdan en el navegador (siguen marcados al volver al perfil; los 300 más
+  recientes); los del chat duran lo que la conversación. El voto se marca al momento y, si la API falla, vuelve atrás.
+- Los votos no le llegan al Duende: con los que dará un equipo pequeño no hay para que aprenda nada solo.
+- Sin datos de ejemplo: votos inventados en `DemoSeeder` ensuciarían el resumen.
+- Endpoints nuevos: `PUT /api/duende/valoraciones/consejo`, `PUT /api/duende/valoraciones/respuesta` (voto 1, -1 o 0
+  para quitarlo; responden 204) y `GET /api/duende/valoraciones`. Migración `V4__valoraciones.sql`.
+- **Queda pendiente**: un voto por usuario cuando haya autenticación (P5); cruzar las valoraciones con lo que se apunta
+  en `consejos_dados` (P6) para ver si los consejos peor valorados son también los que menos funcionan.
 
 ---
 

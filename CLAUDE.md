@@ -8,7 +8,7 @@ Tres servicios; el navegador solo habla con la API Java y la API pasa resúmenes
 - `duende/` — Python, FastAPI. Recomendaciones por reglas (`app/insights.py`) y chat con Gemini o, sin clave, con reglas.
 
 **Hoja de ruta**: `docs/propuestas.md` (P1–P12) — lo siguiente que hay que construir para dar mejores datos al Duende.
-Al terminar una propuesta, marcarla allí (con lo aprendido) y anotar la entrega en `CHANGELOG.md`. Hechas: P1, P2, P3, P4, P6.
+Al terminar una propuesta, marcarla allí (con lo aprendido) y anotar la entrega en `CHANGELOG.md`. Hechas: P1, P2, P3, P4, P6, P7.
 
 ## Comandos
 
@@ -37,6 +37,8 @@ funciona con la API arrancada).
 - Periodo (P4): `?periodo=7d|30d|todo` (por defecto, todo). En `EquipoServicio` basta con pedir la foto recortada
   (`instantanea(periodo)`); el 404 es solo para quien nunca ha jugado a ese juego (`exigirPartidas`). En la web, el
   periodo va en la URL y en el contexto del chat.
+- Valoraciones (P7): `GET /api/duende/valoraciones` da lo peor valorado (recomendaciones por id; respuestas por origen e
+  `intencion`, que es el `Intencion` de `reglas_chat.py`). Mirarlo antes de retocar reglas, textos o el prompt.
 - `DemoSeeder` es determinista (semilla fija, horas en la zona del equipo): tocarlo cambia todos los números de ejemplo
   y lo que dice el Duende. `ApiTest` comprueba que sigan saliendo los patrones (tilt, hora buena, rachas, compañeros).
 - Todo texto visible, en los dos idiomas (web y `duende/app/textos.py`).

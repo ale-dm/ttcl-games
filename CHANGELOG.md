@@ -3,6 +3,52 @@
 Lo que se ha entregado, de lo más reciente a lo más antiguo. Lo que falta por hacer está en
 [docs/propuestas.md](docs/propuestas.md) (P1–P12); al terminar una propuesta se marca allí y se anota aquí.
 
+## 2026-10-10 · P7: valoración de las respuestas
+
+Commit `8282302`. Ya se puede decir si lo que dice el Duende sirve o no, y quien lo mantiene sabe qué revisar.
+
+**Qué se nota**
+- Bajo cada recomendación del perfil, "¿Te sirve?" con un 👍 y un 👎; al votar pasa a "¡Gracias!". Bajo cada respuesta
+  del chat, junto a "Sin IA · con reglas" o "Gemini · modelo", los mismos dos botones.
+- Pulsar el marcado quita el voto y pulsar el otro lo cambia. Los votos a recomendaciones siguen marcados al volver al
+  perfil (se recuerdan en el navegador); los del chat duran lo que la conversación.
+- Para revisar: `GET /api/duende/valoraciones`. Con los datos de ejemplo, un 👎 a "Las sesiones largas se te
+  atragantan" de Jugador 3 sale como `tilt_sesion`, y uno a la respuesta de "¿Qué tal el tiempo?" como `reglas / ayuda`
+  (una pregunta que las reglas no entienden), cada uno con su texto.
+
+**Cómo funciona**
+- Cada navegador vota con un id al azar, sin datos personales, guardado en localStorage: un voto por cosa valorada.
+  Una recomendación es su id con el jugador y el juego; una respuesta, el hash de la pregunta y la respuesta.
+- La API guarda el voto con lo que se vio: de las recomendaciones, título, texto, consejo y nivel; de las respuestas, la
+  pregunta, la respuesta, reglas o Gemini (con el modelo), de quién iba la charla y de qué iba la pregunta según las
+  reglas (`intencion`, que ahora devuelve el Duende con cada respuesta).
+- El resumen da los totales, las recomendaciones por id y las respuestas por origen e intención (lo peor valorado
+  primero) y las 20 últimas valoraciones negativas con su texto.
+
+**Cambios por servicio**
+- **Base de datos**: migración `V4__valoraciones.sql` (tabla `valoraciones`). Flyway la aplica sola.
+- **API**: entidad `Valoracion` y su repositorio; servicio `Valoraciones` (votar, cambiar o quitar el voto y el
+  resumen). Endpoints `PUT /api/duende/valoraciones/consejo`, `PUT /api/duende/valoraciones/respuesta` (voto 1, -1 o 0;
+  204) y `GET /api/duende/valoraciones`. `DemoSeeder` no cambia.
+- **Contrato compartido**: `intencion` en `RespuestaChat` (Duende → API → web).
+- **Duende**: `reglas_chat.intencion` (lo que entienden las reglas de la última pregunta) en todas las respuestas del
+  chat, también las de Gemini y las de la caché.
+- **Web**: componente `BotonesVoto`; servicio `Valoraciones` (id del navegador y votos a recomendaciones);
+  `DuendeEstado.valorar` para el chat; `Api.valorarConsejo` y `Api.valorarRespuesta`; textos `duende.voto*`. El panel
+  de recomendaciones recibe el jugador y el juego.
+
+**Tests**: Duende 86 → 87, API 49 → 52, web 24 → 29, todos en verde.
+- API: un voto por navegador y recomendación (cambiar, quitar, la misma a otro jugador cuenta aparte), validación
+  (jugador que no existe, voto, votante, campos que faltan, origen), respuestas por pregunta y respuesta (hash, primer
+  jugador del foco que existe, idioma) y el resumen (grupos, orden, negativas con su texto); `intencion` en el chat.
+- Duende: la intención en las respuestas por reglas (también *ayuda*) y en las de Gemini, también desde la caché.
+- Web: valorar una recomendación (lo que se manda, marcado, recordado, quitar y cambiar el voto, sin jugador no hay
+  botones, si falla vuelve atrás) y una respuesta del chat (con la pregunta que la provocó, quitar el voto, si falla
+  vuelve atrás, la pregunta no se valora).
+
+**Para actualizar una instalación**: parar la API, `./mvnw package -DskipTests` y arrancar (Flyway crea la tabla);
+reiniciar el Duende y la web.
+
 ## 2026-10-09 · P6: memoria de consejos
 
 Commit `7c91ccb`. El Duende ya se acuerda de lo que le dijo a cada uno y comprueba si ha servido.

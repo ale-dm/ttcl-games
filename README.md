@@ -10,6 +10,7 @@ un entrenador que mira los números de cada uno, dice en qué mejorar y contesta
 - **Ranking**: el equipo ordenado por la métrica que elijas.
 - **Buscador** de jugadores y nicks en la barra superior.
 - **Chat del Duende** en toda la web; sabe de quién estás hablando según la página.
+- **Valoraciones**: 👍/👎 en cada recomendación y cada respuesta del Duende, para saber qué hay que mejorar de él.
 - **Modo claro y oscuro**, y **español e inglés** (se recuerdan en el navegador).
 
 ## Arquitectura
@@ -87,9 +88,9 @@ Web en http://localhost:4200, con Postgres y datos de ejemplo (`TTCL_DEMO=true`;
 
 | Parte | Comando | Qué cubre |
 |---|---|---|
-| Duende | `cd duende && .venv/Scripts/python -m pytest` | Reglas de recomendación (también por rol, por compañero, tilt, hora del día y seguimiento de consejos), chat por reglas (también "esta semana" o "este mes"), uso y caché de Gemini, API |
-| API | `cd api && ./mvnw test` | Estadísticas (también sinergias, dúos y tríos, sesiones y franjas horarias, seguimiento de consejos), periodos, memoria de consejos, mapeo de FACEIT y Hi-Rez, carga del equipo con roles, API completa contra H2 con datos de ejemplo |
-| Web | `cd frontend && npm test` | Texto del Duende, i18n y formatos, estado del chat, rol, "Con quién", "Cuándo juegas mejor" y el periodo en el perfil, el periodo en el ranking, dúos y tríos en el equipo |
+| Duende | `cd duende && .venv/Scripts/python -m pytest` | Reglas de recomendación (también por rol, por compañero, tilt, hora del día y seguimiento de consejos), chat por reglas (también "esta semana" o "este mes") y de qué iba cada pregunta, uso y caché de Gemini, API |
+| API | `cd api && ./mvnw test` | Estadísticas (también sinergias, dúos y tríos, sesiones y franjas horarias, seguimiento de consejos), periodos, memoria de consejos, valoraciones, mapeo de FACEIT y Hi-Rez, carga del equipo con roles, API completa contra H2 con datos de ejemplo |
+| Web | `cd frontend && npm test` | Texto del Duende, i18n y formatos, estado del chat, rol, "Con quién", "Cuándo juegas mejor" y el periodo en el perfil, el periodo en el ranking, dúos y tríos en el equipo, valorar recomendaciones y respuestas |
 
 ## El Duende
 
@@ -159,6 +160,15 @@ Si la pregunta dice "esta semana" o "este mes" (o la página tiene un periodo el
 días, y "¿cómo voy esta semana?" los compara con los de siempre. La web indica bajo cada respuesta si la escribió
 Gemini o las reglas.
 
+**Valoraciones** (P7): bajo cada recomendación del perfil y cada respuesta del chat hay un 👍 y un 👎 (pulsar el marcado
+quita el voto). Cada navegador vota con un id al azar, sin datos personales: un voto por cosa valorada, que se puede
+cambiar. La API guarda el voto con lo que se vio (tabla `valoraciones`): de las recomendaciones, su id, el jugador, el
+nivel y el texto; de las respuestas, la pregunta, la respuesta, quién la escribió (reglas o Gemini, con el modelo) y de
+qué iba la pregunta según las reglas (`intencion`: mejorar, companeros… o *ayuda* si no la entienden). Para revisar,
+`GET /api/duende/valoraciones`: las recomendaciones y los tipos de pregunta peor valorados primero y las 20 últimas
+valoraciones negativas con su texto. Con eso se cambian las reglas (`insights.py`, `reglas_chat.py`) o el prompt
+(`personalidad.py`).
+
 **Personalidad** (`personalidad.py`): pica con las estadísticas como un colega del grupo, pero nunca entra en lo
 personal (aspecto, familia, origen, salud, dinero…). Solo se mete con lo que pasa en el juego.
 
@@ -181,8 +191,8 @@ Parte del prototipo `TTCL Stats.html` y lo lleva a una web de estadísticas comp
 - **Accesibilidad**: foco visible, etiquetas para lectores de pantalla, `prefers-reduced-motion` y textos del Duende
   pintados como texto (nunca como HTML).
 
-Siguientes pasos: la hoja de ruta está en [docs/propuestas.md](docs/propuestas.md) (objetivos, valoración de las
-respuestas, percentiles por nivel de FACEIT, Duende en Discord, análisis de demos…). Lo ya entregado, con lo que cambia en cada
+Siguientes pasos: la hoja de ruta está en [docs/propuestas.md](docs/propuestas.md) (objetivos, percentiles por nivel de
+FACEIT, chat que consulta la API, Duende en Discord, análisis de demos…). Lo ya entregado, con lo que cambia en cada
 servicio y cómo actualizar, está en [CHANGELOG.md](CHANGELOG.md).
 
 ## Fuentes de datos: estado
@@ -211,7 +221,7 @@ partida jugada por dos del equipo se guarda una vez con dos participaciones.
 frontend/src/app/
   core/        API, i18n (textos ES/EN), tema, métricas, carga reactiva
   layout/      barra superior con buscador, idioma y tema
-  duende/      estado del chat, panel lateral, panel de recomendaciones
+  duende/      estado del chat, panel lateral, panel de recomendaciones, valoraciones (👍/👎)
   compartido/  avatar, forma (V/D), gráfica SVG
   paginas/     equipo, jugador, comparar, ranking
 api/src/main/java/com/ttcl/games/
