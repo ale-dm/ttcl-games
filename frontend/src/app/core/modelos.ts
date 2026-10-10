@@ -44,6 +44,9 @@ export interface CuentaVista {
   nick: string;
   /** Rol declarado en ese juego (entry, soporte... o solo, guardian...), o null si no lo ha dicho. */
   rol: string | null;
+  /** Nivel de FACEIT (1 a 10) y ELO en la última sincronización; null en SMITE 2 o si aún no se saben. */
+  nivel: number | null;
+  elo: number | null;
   ultimaSync: string | null;
 }
 

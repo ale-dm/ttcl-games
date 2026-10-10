@@ -2,10 +2,12 @@ package com.ttcl.games.sync;
 
 import com.ttcl.games.dominio.Cuenta;
 import com.ttcl.games.dominio.Jugador;
+import com.ttcl.games.dominio.Muestra;
 import com.ttcl.games.dominio.Participacion;
 import com.ttcl.games.dominio.Partida;
 import com.ttcl.games.dominio.Repositorios.CuentaRepo;
 import com.ttcl.games.dominio.Repositorios.JugadorRepo;
+import com.ttcl.games.dominio.Repositorios.MuestraRepo;
 import com.ttcl.games.dominio.Repositorios.ParticipacionRepo;
 import com.ttcl.games.dominio.Repositorios.PartidaRepo;
 import com.ttcl.games.dominio.Repositorios.SyncRepo;
@@ -14,9 +16,12 @@ import com.ttcl.games.juego.Juego;
 import com.ttcl.games.sync.FuenteJuego.ParticipacionExterna;
 import com.ttcl.games.sync.FuenteJuego.PartidaExterna;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -27,7 +32,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Para cada cuenta del equipo, pide las partidas recientes a su fuente y guarda las que tienen a algún miembro del
- * equipo. Una partida jugada por dos del equipo se guarda una vez, con dos participaciones.
+ * equipo. Una partida jugada por dos del equipo se guarda una vez, con dos participaciones. De los demás jugadores de
+ * cada partida nueva se guarda lo que hicieron y su nivel, sin identificarlos (P8: muestras de lo normal en cada
+ * nivel), y de cada cuenta, su nivel y ELO actuales.
  */
 @Service
 public class Sincronizador {
@@ -38,6 +45,7 @@ public class Sincronizador {
     private final JugadorRepo jugadores;
     private final PartidaRepo partidas;
     private final ParticipacionRepo participaciones;
+    private final MuestraRepo muestras;
     private final SyncRepo syncs;
     private final TransactionTemplate tx;
 
@@ -46,12 +54,14 @@ public class Sincronizador {
             JugadorRepo jugadores,
             PartidaRepo partidas,
             ParticipacionRepo participaciones,
+            MuestraRepo muestras,
             SyncRepo syncs,
             TransactionTemplate tx) {
         this.cuentas = cuentas;
         this.jugadores = jugadores;
         this.partidas = partidas;
         this.participaciones = participaciones;
+        this.muestras = muestras;
         this.syncs = syncs;
         this.tx = tx;
     }
@@ -107,6 +117,7 @@ public class Sincronizador {
                     List<PartidaExterna> lote = fuente.partidasRecientes(cuenta.getExternalId(), limite, conocidas);
                     int nuevas = guardar(juego, lote, jugadorPorExternalId);
                     lote.forEach(p -> conocidas.add(p.externalId()));
+                    actualizarNivel(fuente, cuenta);
                     cuenta.setUltimaSync(Instant.now());
                     cuentas.save(cuenta);
                     syncs.save(Sync.ok(cuenta, inicio, nuevas));
@@ -120,6 +131,16 @@ public class Sincronizador {
         return resultados;
     }
 
+    /** Nivel y ELO actuales de la cuenta. Si no se pueden pedir, se quedan los de antes: las partidas ya se guardaron. */
+    private void actualizarNivel(FuenteJuego fuente, Cuenta cuenta) {
+        try {
+            fuente.nivel(cuenta.getExternalId()).ifPresent(n -> cuenta.setNivel(n.nivel(), n.elo()));
+        } catch (RuntimeException e) {
+            log.warn("{} ({}): no se pudo leer el nivel: {}",
+                    cuenta.getJugador().getNombre(), cuenta.getJuego().codigo(), e.getMessage());
+        }
+    }
+
     private ResultadoCuenta fallo(Cuenta cuenta, Juego juego, Instant inicio, RuntimeException e) {
         String mensaje = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
         syncs.save(Sync.error(cuenta, inicio, mensaje));
@@ -127,7 +148,10 @@ public class Sincronizador {
         return new ResultadoCuenta(cuenta.getJugador().getNombre(), juego, false, 0, mensaje);
     }
 
-    /** Guarda las partidas que tengan a algún miembro del equipo. Devuelve cuántas eran nuevas. */
+    /**
+     * Guarda las partidas que tengan a algún miembro del equipo y, de las nuevas, una muestra por cada jugador que no
+     * es del equipo y del que se sabe el nivel. Devuelve cuántas partidas eran nuevas.
+     */
     int guardar(Juego juego, List<PartidaExterna> lote, Map<String, Long> jugadorPorExternalId) {
         int nuevas = 0;
         for (PartidaExterna externa : lote) {
@@ -149,6 +173,9 @@ public class Sincronizador {
                     participacion.actualizar(p.gano(), p.kills(), p.muertes(), p.asistencias(), p.datos());
                     participaciones.save(participacion);
                 }
+                if (existente.isEmpty()) {
+                    guardarMuestras(juego, externa, jugadorPorExternalId);
+                }
                 return existente.isEmpty();
             });
             if (Boolean.TRUE.equals(nueva)) {
@@ -156,5 +183,19 @@ public class Sincronizador {
             }
         }
         return nuevas;
+    }
+
+    /** Los que no son del equipo, sin nick ni id (ni suyo ni de la partida) y sin el marcador: solo números y nivel. */
+    private void guardarMuestras(Juego juego, PartidaExterna externa, Map<String, Long> jugadorPorExternalId) {
+        LocalDate fecha = LocalDate.ofInstant(externa.jugadaEn(), ZoneOffset.UTC);
+        for (ParticipacionExterna p : externa.participaciones()) {
+            if (p.nivel() == null || jugadorPorExternalId.containsKey(p.externalPlayerId())) {
+                continue;
+            }
+            Map<String, Object> datos = new LinkedHashMap<>(p.datos() == null ? Map.of() : p.datos());
+            datos.keySet().removeAll(Set.of("mapa", "marcador"));
+            muestras.save(new Muestra(
+                    juego, p.nivel(), externa.modo(), fecha, p.gano(), p.kills(), p.muertes(), p.asistencias(), datos));
+        }
     }
 }

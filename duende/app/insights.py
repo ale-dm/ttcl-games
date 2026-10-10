@@ -1,8 +1,9 @@
 """Motor de recomendaciones: a partir del resumen de un jugador, decide en qué tiene que mejorar y qué hace bien.
 
-Es determinista y no necesita Gemini: compara cada métrica con la media del resto del equipo y con una referencia,
-y añade reglas con más contexto (kills que no dan victorias, rachas, tendencia reciente, mapas o dioses flojos,
-compañeros, tilt en las sesiones largas, la mejor hora del día y si los consejos de antes han funcionado).
+Es determinista y no necesita Gemini: compara cada métrica con la media del resto del equipo y con una referencia
+(lo normal en su nivel de FACEIT si la API lo sabe; si no, la fija de metricas.py), y añade reglas con más contexto
+(kills que no dan victorias, rachas, tendencia reciente, mapas o dioses flojos, compañeros, tilt en las sesiones
+largas, la mejor hora del día y si los consejos de antes han funcionado).
 Si se conoce el rol del jugador, cada métrica pesa lo que pide ese rol (metricas.AJUSTES_ROL).
 """
 
@@ -46,6 +47,29 @@ MEJORA_CONSEJO = 0.1
 ORDEN_NIVEL: dict[Nivel, int] = {"info": 0, "alto": 1, "medio": 2, "bien": 3}
 
 
+@dataclass(frozen=True)
+class Referencia:
+    """Con qué se compara una métrica además de con el equipo: lo normal en su nivel de FACEIT (P8) o, si no se sabe,
+    la referencia fija de metricas.py (entonces `nivel` es None)."""
+
+    valor: float
+    nivel: int | None = None
+    # % de las partidas de su nivel en las que se hace peor que él (ya girado en las que es mejor bajo).
+    mejor_que: float | None = None
+
+
+def referencia_de(p: PeticionInsights, metrica: Metrica) -> Referencia | None:
+    """Lo normal en su nivel si la API lo manda (solo llega con muestra suficiente); si no, la fija, si la hay."""
+    if p.nivel:
+        m = next((x for x in p.nivel.metricas if x.metrica == metrica.clave), None)
+        if m:
+            mejor_que = None
+            if m.percentil is not None:
+                mejor_que = m.percentil if metrica.mejor == "alto" else 100 - m.percentil
+            return Referencia(m.referencia, p.nivel.nivel, mejor_que)
+    return Referencia(metrica.referencia) if metrica.referencia is not None else None
+
+
 @dataclass
 class Candidato:
     insight: Insight
@@ -74,28 +98,39 @@ def _nivel_debilidad(d: float) -> Nivel | None:
     return None
 
 
-def _barras(metrica: Metrica, tu: float, equipo: float | None, lang: Idioma) -> list[Barra]:
+def _barras(metrica: Metrica, tu: float, equipo: float | None, ref: Referencia | None, lang: Idioma) -> list[Barra]:
     f = FRASES[lang]
     barras = [Barra(etiqueta=f["tu"], valor=round(tu, 2), tuyo=True)]
     if equipo is not None:
         barras.append(Barra(etiqueta=f["equipo"], valor=round(equipo, 2)))
-    if metrica.referencia is not None:
-        barras.append(Barra(etiqueta=f["referencia"], valor=metrica.referencia))
+    if ref is not None:
+        etiqueta = f["referencia"] if ref.nivel is None else f["nivel"].format(nivel=ref.nivel)
+        barras.append(Barra(etiqueta=etiqueta, valor=round(ref.valor, 2)))
     return barras
 
 
-def _comparativa(metrica: Metrica, tu: float, equipo: float | None, lang: Idioma) -> str:
+def _pct_entero(valor: float, lang: Idioma) -> str:
+    return f"{round(valor)} %" if lang == "es" else f"{round(valor)}%"
+
+
+def _comparativa(metrica: Metrica, tu: float, equipo: float | None, ref: Referencia | None, lang: Idioma) -> str:
     f = FRASES[lang]
     v = {
         "tu": formatear(tu, metrica.formato, lang),
         "equipo": formatear(equipo, metrica.formato, lang),
-        "ref": formatear(metrica.referencia, metrica.formato, lang),
+        "ref": formatear(ref.valor if ref else None, metrica.formato, lang),
+        "nivel": ref.nivel if ref else None,
     }
-    if equipo is not None and metrica.referencia is not None:
+    if ref is not None and ref.nivel is not None:
+        texto = f["cmp_equipo_nivel" if equipo is not None else "cmp_nivel"].format(**v)
+        if ref.mejor_que is not None:
+            texto += " " + f["mejor_que"].format(pct=_pct_entero(ref.mejor_que, lang))
+        return texto
+    if equipo is not None and ref is not None:
         return f["cmp_equipo_ref"].format(**v)
     if equipo is not None:
         return f["cmp_equipo"].format(**v)
-    if metrica.referencia is not None:
+    if ref is not None:
         return f["cmp_ref"].format(**v)
     return f["cmp_solo"].format(**v)
 
@@ -114,7 +149,8 @@ def _nota_rol(rol: str | None, factor: float, debilidad: bool, lang: Idioma) -> 
 
 
 def _por_metrica(p: PeticionInsights, ocupadas: set[str]) -> list[Candidato]:
-    """Debilidades y fortalezas métrica a métrica, frente al equipo y la referencia, según lo que pide su rol."""
+    """Debilidades y fortalezas métrica a métrica, frente al equipo y la referencia (la de su nivel, si se sabe),
+    según lo que pide su rol."""
     lang, juego = p.lang, p.juego
     rol = rol_de(juego, p.rol)
     candidatos: list[Candidato] = []
@@ -125,8 +161,9 @@ def _por_metrica(p: PeticionInsights, ocupadas: set[str]) -> list[Candidato]:
         if tu is None:
             continue
         equipo = metrica.valor(p.equipo)
+        ref = referencia_de(p, metrica)
         d_equipo = _desviacion(metrica, tu, equipo)
-        d_ref = _desviacion(metrica, tu, metrica.referencia)
+        d_ref = _desviacion(metrica, tu, ref.valor if ref else None)
         disponibles = [d for d in (d_equipo, d_ref) if d is not None]
         if not disponibles:
             continue
@@ -135,6 +172,10 @@ def _por_metrica(p: PeticionInsights, ocupadas: set[str]) -> list[Candidato]:
         factor = factor_rol(juego, rol, metrica.clave)
         peor = min(disponibles) * factor
         nivel = _nivel_debilidad(peor)
+        if nivel == "alto" and ref and ref.nivel and d_ref is not None and not _nivel_debilidad(d_ref * factor):
+            # Frente a su nivel no habría aviso (va en lo normal de su nivel): lo que le separe del equipo es para
+            # vigilar, no para mejorar ya.
+            nivel = "medio"
         if nivel:
             textos = DEBILIDADES.get(metrica.clave, {}).get(lang)
             if textos:
@@ -150,9 +191,11 @@ def _por_metrica(p: PeticionInsights, ocupadas: set[str]) -> list[Candidato]:
                         nivel=nivel,
                         metrica=metrica.clave,
                         titulo=titulo,
-                        texto=frase + _comparativa(metrica, tu, equipo, lang) + _nota_rol(rol, factor, True, lang),
+                        texto=frase
+                        + _comparativa(metrica, tu, equipo, ref, lang)
+                        + _nota_rol(rol, factor, True, lang),
                         consejo=consejo_para(textos, juego) if textos else None,
-                        barras=_barras(metrica, tu, equipo, lang),
+                        barras=_barras(metrica, tu, equipo, ref, lang),
                         formato=metrica.formato,
                     ),
                     abs(peor),
@@ -175,9 +218,9 @@ def _por_metrica(p: PeticionInsights, ocupadas: set[str]) -> list[Candidato]:
                         nivel="bien",
                         metrica=metrica.clave,
                         titulo=textos_f["titulo"],
-                        texto=_comparativa(metrica, tu, equipo, lang) + _nota_rol(rol, factor, False, lang),
+                        texto=_comparativa(metrica, tu, equipo, ref, lang) + _nota_rol(rol, factor, False, lang),
                         consejo=textos_f["consejo"],
-                        barras=_barras(metrica, tu, equipo, lang),
+                        barras=_barras(metrica, tu, equipo, ref, lang),
                         formato=metrica.formato,
                     ),
                     max(disponibles) * refuerzo,
@@ -219,7 +262,9 @@ def _kd_sin_victorias(p: PeticionInsights) -> Candidato | None:
     insight.metrica = "winrate"
     insight.formato = "pct"
     metrica_wr = next(m for m in METRICAS[p.juego] if m.clave == "winrate")
-    insight.barras = _barras(metrica_wr, r.winrate, p.equipo.winrate if p.equipo else None, lang)
+    insight.barras = _barras(
+        metrica_wr, r.winrate, p.equipo.winrate if p.equipo else None, referencia_de(p, metrica_wr), lang
+    )
     # Es la recomendación con más miga: va la primera entre las graves.
     return Candidato(insight, (50 - r.winrate) / 50 + 1)
 

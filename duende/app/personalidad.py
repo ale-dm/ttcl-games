@@ -48,7 +48,11 @@ _CABECERA_DATOS: dict[Idioma, str] = {
         "página (null o «todo»: todas las partidas). «seguimiento» son los consejos que ya le diste: la métrica, su "
         "valor ese día («valor»), los días que han pasado y el valor en las partidas jugadas desde entonces "
         "(«valorDesde», «partidasDesde»). Si preguntan si ha funcionado, usa eso; con menos de 7 días o de 5 partidas "
-        "desde entonces, di que aún es pronto."
+        "desde entonces, di que aún es pronto. «nivel» es su nivel de FACEIT (1 a 10) y su ELO, solo en CS2: en "
+        "«metricas», «referencia» es lo normal en ese nivel (la mediana de las partidas de jugadores de ese nivel; en "
+        "entradas y clutches, el porcentaje de todas juntas) y «percentil», el % de esas partidas con un valor más "
+        "bajo que el suyo (en muertes, más bajo es mejor). Las recomendaciones ya comparan con eso cuando está; si no "
+        "está, las referencias son fijas y orientativas."
     ),
     "en": (
         "Available data (JSON). 'foco' are the players this conversation is about; 'equipo' is the whole group. "
@@ -67,7 +71,11 @@ _CABECERA_DATOS: dict[Idioma, str] = {
         "the page (null or 'todo': all matches). 'seguimiento' are the tips you already gave them: the metric, its "
         "value that day ('valor'), the days since and the value over the matches played since ('valorDesde', "
         "'partidasDesde'). If they ask whether it worked, use that; with fewer than 7 days or 5 matches since, say it's "
-        "too early to tell."
+        "too early to tell. 'nivel' is their FACEIT level (1 to 10) and ELO, CS2 only: in 'metricas', 'referencia' is "
+        "what's normal at that level (the median of matches by players at that level; for entries and clutches, the "
+        "percentage over all of them) and 'percentil' is the % of those matches with a lower value than theirs (for "
+        "deaths, lower is better). The recommendations already compare against it when it's there; when it isn't, the "
+        "benchmarks are fixed and only a rough guide."
     ),
 }
 

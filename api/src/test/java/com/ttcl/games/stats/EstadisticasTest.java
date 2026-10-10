@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 import com.ttcl.games.juego.Juego;
+import com.ttcl.games.stats.Modelos.ComparativaNivel;
 import com.ttcl.games.stats.Modelos.ConsejoAnterior;
 import com.ttcl.games.stats.Modelos.FilaComparacion;
 import com.ttcl.games.stats.Modelos.FilaDesglose;
@@ -12,6 +13,7 @@ import com.ttcl.games.stats.Modelos.FilaParticipacion;
 import com.ttcl.games.stats.Modelos.FilaSinergia;
 import com.ttcl.games.stats.Modelos.Grupo;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
+import com.ttcl.games.stats.Modelos.MetricaNivel;
 import com.ttcl.games.stats.Modelos.Miembro;
 import com.ttcl.games.stats.Modelos.Presencia;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
@@ -327,6 +329,49 @@ class EstadisticasTest {
                 new SeguimientoConsejo("debil_adr", "adr", 70.0, dado, 8, 2, 95.0),
                 // Sin partidas desde entonces, aún no se sabe.
                 new SeguimientoConsejo("debil_hs_pct", "hs_pct", 30.0, BASE.plusSeconds(9 * 86400L), 1, 0, null));
+    }
+
+    @Test
+    void comparativaConLasPartidasDeSuNivel() {
+        // 60 partidas de nivel 6: ADR de 61 a 120, 10 kills y 0, 1 o 2 muertes, y una entrada ganada de cada dos.
+        List<FilaParticipacion> muestras = new ArrayList<>();
+        for (int i = 0; i < 60; i++) {
+            muestras.add(cs2(i, null, 10, i % 3, 1, Map.of("adr", 61.0 + i, "entry_intentos", 2, "entry_ganados", 1)));
+        }
+        ResumenJuego tu = Estadisticas.resumir(Juego.CS2, List.of(cs2(1, true, 20, 10, 5, Map.of("adr", 75.0))));
+
+        ComparativaNivel c = Estadisticas.comparativaNivel(Juego.CS2, 6, 1290, tu, muestras);
+
+        assertThat(c.nivel()).isEqualTo(6);
+        assertThat(c.elo()).isEqualTo(1290);
+        assertThat(c.partidas()).isEqualTo(60);
+        // La mediana de sus partidas, y en cuántas lo hacen peor que él: 14 por debajo y 1 igual (cuenta la mitad).
+        assertThat(nivel(c, "adr")).isEqualTo(new MetricaNivel("adr", 90.5, 24.2, 60));
+        // K/D de cada partida: sin muertes cuenta como una (10, 10 y 5): mediana 10 y él, con 2, el peor.
+        assertThat(nivel(c, "kd")).isEqualTo(new MetricaNivel("kd", 10.0, 0.0, 60));
+        // En muertes no se gira: el percentil dice cuántas partidas tienen menos que él.
+        assertThat(nivel(c, "muertes_media")).isEqualTo(new MetricaNivel("muertes_media", 1.0, 100.0, 60));
+        // Las entradas salen del total del nivel, sin percentil.
+        assertThat(nivel(c, "entry_pct")).isEqualTo(new MetricaNivel("entry_pct", 50.0, null, 60));
+        // El winrate no se compara (en tu nivel es un 50 %); lo que no tiene dato, tampoco.
+        assertThat(c.metricas()).extracting(MetricaNivel::metrica).doesNotContain("winrate", "hs_pct", "clutch_pct");
+    }
+
+    @Test
+    void sinNivelNoHayComparativaYConPocasPartidasSoloElNivel() {
+        ResumenJuego tu = Estadisticas.resumir(Juego.CS2, List.of(cs2(1, true, 20, 10, 5, Map.of("adr", 75.0))));
+        assertThat(Estadisticas.comparativaNivel(Juego.CS2, null, null, tu, List.of())).isNull();
+
+        List<FilaParticipacion> pocas = new ArrayList<>();
+        for (int i = 0; i < Estadisticas.MIN_MUESTRAS_NIVEL - 1; i++) {
+            pocas.add(cs2(i, true, 10, 10, 1, Map.of("adr", 80.0, "entry_intentos", 2, "entry_ganados", 1)));
+        }
+        assertThat(Estadisticas.comparativaNivel(Juego.CS2, 3, null, tu, pocas))
+                .isEqualTo(new ComparativaNivel(3, null, 49, List.of()));
+    }
+
+    private static MetricaNivel nivel(ComparativaNivel c, String metrica) {
+        return c.metricas().stream().filter(m -> m.metrica().equals(metrica)).findFirst().orElseThrow();
     }
 
     private static FilaComparacion fila(List<FilaComparacion> filas, String metrica) {

@@ -35,6 +35,12 @@ public class Cuenta {
     /** Rol que juega en ese juego (uno de {@link Juego#roles()}), si lo ha dicho en config/equipo.json. */
     private String rol;
 
+    /** Nivel de FACEIT (1 a 10) en la última sincronización; null en SMITE 2 o si aún no se sabe. */
+    private Integer nivel;
+
+    /** ELO de FACEIT en la última sincronización. */
+    private Integer elo;
+
     private Instant ultimaSync;
 
     protected Cuenta() {}
@@ -79,6 +85,20 @@ public class Cuenta {
 
     public void setRol(String rol) {
         this.rol = rol;
+    }
+
+    public Integer getNivel() {
+        return nivel;
+    }
+
+    public Integer getElo() {
+        return elo;
+    }
+
+    /** Nivel y ELO de la fuente (P8). */
+    public void setNivel(Integer nivel, Integer elo) {
+        this.nivel = nivel;
+        this.elo = elo;
     }
 
     public Instant getUltimaSync() {

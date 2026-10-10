@@ -1,6 +1,6 @@
 from app import chat, gemini
 from app.config import get_config
-from app.modelos import Desglose, Mensaje, PeticionChat
+from app.modelos import Desglose, Mensaje, PeticionChat, Resumen
 from app.reglas_chat import detectar_intencion, detectar_juego, detectar_periodo, insights_de
 
 from .conftest import (
@@ -10,6 +10,7 @@ from .conftest import (
     equipo_cs2,
     jugador,
     momento,
+    nivel_faceit,
     resumen_cs2,
     seguido,
     sesiones,
@@ -471,6 +472,90 @@ def test_el_seguimiento_llega_a_gemini(monkeypatch):
     assert '"partidasDesde":12,"valorDesde":90.0' in sistema
     assert "«seguimiento» son los consejos que ya le diste" in sistema
     assert "Mejora en ADR" in sistema  # y la recomendación ya calculada
+
+
+# ─── Nivel de FACEIT (P8) ────────────────────────────────────────────────────
+
+
+def equipo_con_nivel():
+    ana = nivel_faceit(
+        adr=(82.0, 38.0), hs_pct=(44.0, 81.0), muertes_media=(17.0, 90.0), entry_pct=(47.0, None)
+    )
+    return [
+        jugador("j1", "Ana", resumen_cs2(), equipo_cs2(), nivel=ana),
+        jugador("j2", "Bea", resumen_cs2(), equipo_cs2(), nivel=nivel_faceit(nivel=8, elo=1802)),
+    ]
+
+
+def preguntar_a(equipo, texto: str, foco=(), lang="es", periodo=None) -> chat.RespuestaChat:
+    return chat.responder(
+        PeticionChat(lang=lang, mensajes=[Mensaje(rol="usuario", texto=texto)], foco=list(foco), equipo=equipo,
+                     periodo=periodo)
+    )
+
+
+def test_intencion_de_nivel():
+    assert detectar_intencion("¿Cómo voy para mi nivel?", 1) == "nivel"
+    assert detectar_intencion("¿Quién tiene más ELO?", 0) == "nivel"
+    assert detectar_intencion("How am I doing for my FACEIT level?", 1) == "nivel"
+    assert detectar_intencion("¿Qué tengo que mejorar para subir de nivel?", 1) == "mejorar"
+
+
+def test_como_voy_para_mi_nivel():
+    r = preguntar_a(equipo_con_nivel(), "¿Cómo voy para mi nivel?", foco=["j1"])
+    assert r.intencion == "nivel"
+    assert r.respuesta.startswith(
+        "**Ana · nivel 6 de FACEIT (1290 ELO)**. Comparado con 200 partidas de jugadores de ese nivel:"
+    )
+    assert "- ADR: **80** · nivel 6: 82 · mejor que el 38 % de las partidas" in r.respuesta
+    # En las muertes, mejor es tener menos: muere más que en el 90 % de las partidas.
+    assert "- Muertes / partida: **18,00** · nivel 6: 17,00 · mejor que el 10 % de las partidas" in r.respuesta
+    # Las entradas salen del total del nivel: sin percentil.
+    assert "- Éxito de entrada: **50,0 %** · nivel 6: 47,0 %\n" in r.respuesta + "\n"
+    assert r.respuesta.endswith("Donde más destaca para su nivel: % headshot. Donde más le queda: Muertes / partida.")
+
+    en = preguntar_a(equipo_con_nivel(), "How am I doing for my level?", foco=["j1"], lang="en")
+    assert "**Ana · FACEIT level 6 (1,290 ELO)**" in en.respuesta
+    assert "- ADR: **80** · level 6: 82 · better than 38% of matches" in en.respuesta
+
+
+def test_niveles_del_equipo_y_sin_nivel():
+    equipo = preguntar_a(equipo_con_nivel(), "¿Quién tiene más nivel?")
+    assert equipo.respuesta == (
+        "Niveles de FACEIT del equipo:\n\n- Bea: nivel 8 (1802 ELO)\n- Ana: nivel 6 (1290 ELO)"
+    )
+    # Sin nivel (aún no se ha sincronizado con FACEIT) o en SMITE 2.
+    assert "Aún no sé el nivel de FACEIT de Ana" in preguntar("¿Cómo voy para mi nivel?", foco=["j1"]).respuesta
+    assert "Aún no sé el nivel de FACEIT de nadie" in preguntar("¿Quién tiene más ELO?").respuesta
+    smite = [jugador("j4", "Dani", Resumen(juego="smite2", partidas=20))]
+    assert "El nivel solo lo sé de FACEIT (CS2)" in preguntar_a(smite, "¿Y mi nivel?", foco=["j4"]).respuesta
+    # Con nivel pero sin partidas suficientes de jugadores de ese nivel.
+    poco = [jugador("j1", "Ana", resumen_cs2(), nivel=nivel_faceit())]
+    assert "Aún no tengo partidas suficientes" in preguntar_a(poco, "¿Cómo voy para mi nivel?", foco=["j1"]).respuesta
+
+
+def test_nivel_con_periodo_sugerencias_y_gemini(monkeypatch):
+    # Con un periodo, se avisa de que es con todas las partidas (la comparación con el nivel se hace con todas).
+    semana = preguntar_a(equipo_con_nivel(), "¿Cómo voy para mi nivel esta semana?", foco=["j1"])
+    assert semana.respuesta.startswith("Esto lo miro con todas las partidas")
+    # Se sugiere preguntarlo solo si se sabe su nivel.
+    assert "¿Cómo voy para mi nivel?" in semana.sugerencias
+    assert "¿Cómo voy para mi nivel?" not in preguntar("hola", foco=["j1"]).sugerencias
+
+    monkeypatch.setenv("GOOGLE_API_KEY", "clave-de-prueba")
+    get_config.cache_clear()
+    sistemas = []
+
+    def falso(sistema, contenidos, temperatura=0.8):
+        sistemas.append(sistema)
+        return "Respuesta de Gemini", "gemini-falso"
+
+    monkeypatch.setattr(gemini, "generar", falso)
+    preguntar_a(equipo_con_nivel(), "¿Cómo voy para mi nivel? (Gemini)", foco=["j1"])
+    sistema = sistemas[0]
+    assert "«nivel» es su nivel de FACEIT" in sistema
+    assert '"metrica":"adr","referencia":82.0,"percentil":38.0' in sistema
+    assert '"nivel":{"nivel":8,"elo":1802}' in sistema  # del resto, solo el nivel y el ELO
 
 
 def test_mejorar_tiene_en_cuenta_el_rol():

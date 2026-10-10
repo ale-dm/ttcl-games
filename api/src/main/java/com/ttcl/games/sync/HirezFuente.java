@@ -143,6 +143,7 @@ public class HirezFuente implements FuenteJuego {
                 texto(fila.get("Queue")),
                 List.of(new ParticipacionExterna(
                         playerId,
+                        null,
                         estado == null ? null : estado.equalsIgnoreCase("Winner"),
                         entero(fila.get("Kills")),
                         entero(fila.get("Deaths")),

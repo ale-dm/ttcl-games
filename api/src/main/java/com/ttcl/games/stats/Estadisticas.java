@@ -1,6 +1,7 @@
 package com.ttcl.games.stats;
 
 import com.ttcl.games.juego.Juego;
+import com.ttcl.games.stats.Modelos.ComparativaNivel;
 import com.ttcl.games.stats.Modelos.ConsejoAnterior;
 import com.ttcl.games.stats.Modelos.FilaComparacion;
 import com.ttcl.games.stats.Modelos.FilaDesglose;
@@ -9,6 +10,7 @@ import com.ttcl.games.stats.Modelos.FilaParticipacion;
 import com.ttcl.games.stats.Modelos.FilaSinergia;
 import com.ttcl.games.stats.Modelos.Grupo;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
+import com.ttcl.games.stats.Modelos.MetricaNivel;
 import com.ttcl.games.stats.Modelos.Miembro;
 import com.ttcl.games.stats.Modelos.Presencia;
 import com.ttcl.games.stats.Modelos.PuntoSerie;
@@ -41,6 +43,8 @@ public final class Estadisticas {
     public static final Duration PAUSA_SESION = Duration.ofMinutes(45);
     /** Hasta cuándo se mira atrás para ver si un consejo ha funcionado. */
     public static final Duration VENTANA_SEGUIMIENTO = Duration.ofDays(60);
+    /** Partidas de un nivel con dato de una métrica para decir qué es lo normal en él (P8). */
+    public static final int MIN_MUESTRAS_NIVEL = 50;
 
     /** Recuentos que no se promedian: con ellos se calculan porcentajes sobre el total (entry_pct, dano_min...). */
     private static final Set<String> RECUENTOS = Set.of(
@@ -427,6 +431,77 @@ public final class Estadisticas {
                             c.insight(), c.metrica(), c.valor(), c.dadoEn(), dias, desde.size(), valorDesde);
                 })
                 .toList();
+    }
+
+    // ─── Nivel (P8) ─────────────────────────────────────────────────────────
+
+    /**
+     * Cómo queda {@code resumen} frente a {@code muestras}, partidas de jugadores de su nivel que no son del equipo.
+     * Por cada métrica (menos el winrate, que en tu nivel es siempre de un 50 % por cómo se emparejan las partidas),
+     * lo normal en ese nivel y su percentil, si hay al menos {@value #MIN_MUESTRAS_NIVEL} partidas con dato. Null sin
+     * nivel.
+     */
+    public static ComparativaNivel comparativaNivel(
+            Juego juego, Integer nivel, Integer elo, ResumenJuego resumen, List<FilaParticipacion> muestras) {
+        if (nivel == null) {
+            return null;
+        }
+        long kills = suma(muestras, FilaParticipacion::kills);
+        long muertes = suma(muestras, FilaParticipacion::muertes);
+        long asist = suma(muestras, FilaParticipacion::asistencias);
+        List<MetricaNivel> metricas = new ArrayList<>();
+        for (String clave : metricas(juego)) {
+            if (clave.equals("winrate")) {
+                continue;
+            }
+            // Las que salen de totales (un 3/4 y un 0/1 no son un 37,5 %) se comparan con el total del nivel.
+            Double total = metricaDerivada(juego, clave, muestras, kills, muertes, asist);
+            if (total != null) {
+                if (muestras.size() >= MIN_MUESTRAS_NIVEL) {
+                    metricas.add(new MetricaNivel(clave, total, null, muestras.size()));
+                }
+                continue;
+            }
+            List<Double> valores = muestras.stream()
+                    .map(f -> valorPartida(f, clave))
+                    .filter(Objects::nonNull)
+                    .sorted()
+                    .toList();
+            if (valores.size() >= MIN_MUESTRAS_NIVEL) {
+                metricas.add(new MetricaNivel(
+                        clave, mediana(valores), percentil(valores, valor(resumen, clave)), valores.size()));
+            }
+        }
+        return new ComparativaNivel(nivel, elo, muestras.size(), metricas);
+    }
+
+    /** Valor de una métrica en una sola partida. En el K/D, sin muertes cuenta como una (si no, sería infinito). */
+    static Double valorPartida(FilaParticipacion f, String metrica) {
+        return switch (metrica) {
+            case "kills_media" -> entero(f.kills());
+            case "muertes_media" -> entero(f.muertes());
+            case "asistencias_media" -> entero(f.asistencias());
+            case "kd" -> f.kills() == null || f.muertes() == null
+                    ? null
+                    : (double) f.kills() / Math.max(1, f.muertes());
+            default -> numero(f.datos().get(metrica));
+        };
+    }
+
+    private static double mediana(List<Double> ordenados) {
+        int n = ordenados.size();
+        double m = n % 2 == 1 ? ordenados.get(n / 2) : (ordenados.get(n / 2 - 1) + ordenados.get(n / 2)) / 2;
+        return redondear(m, 2);
+    }
+
+    /** Porcentaje de {@code valores} por debajo de {@code tu}; los empates cuentan la mitad. */
+    private static Double percentil(List<Double> valores, Double tu) {
+        if (tu == null) {
+            return null;
+        }
+        long debajo = valores.stream().filter(v -> v < tu).count();
+        long iguales = valores.stream().filter(v -> v.equals(tu)).count();
+        return redondear(100.0 * (debajo + iguales / 2.0) / valores.size(), 1);
     }
 
     // ─── Comparación ────────────────────────────────────────────────────────

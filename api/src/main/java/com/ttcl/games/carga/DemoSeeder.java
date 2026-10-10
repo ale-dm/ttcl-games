@@ -4,11 +4,13 @@ import com.ttcl.games.config.TtclProperties;
 import com.ttcl.games.dominio.ConsejoDado;
 import com.ttcl.games.dominio.Cuenta;
 import com.ttcl.games.dominio.Jugador;
+import com.ttcl.games.dominio.Muestra;
 import com.ttcl.games.dominio.Participacion;
 import com.ttcl.games.dominio.Partida;
 import com.ttcl.games.dominio.Repositorios.ConsejoDadoRepo;
 import com.ttcl.games.dominio.Repositorios.CuentaRepo;
 import com.ttcl.games.dominio.Repositorios.JugadorRepo;
+import com.ttcl.games.dominio.Repositorios.MuestraRepo;
 import com.ttcl.games.dominio.Repositorios.ParticipacionRepo;
 import com.ttcl.games.dominio.Repositorios.PartidaRepo;
 import com.ttcl.games.juego.Juego;
@@ -61,35 +63,44 @@ public class DemoSeeder implements ApplicationRunner {
             double kills, double muertes, double asist, double danoMin, double oroMin, double mitigado,
             double curacion, double ganar, List<String> dioses, String diosMalo) {}
 
+    /** Nivel y ELO de FACEIT (P8). */
+    record NivelDemo(int nivel, int elo) {}
+
     record Demo(
             String slug, String nombre, String nickCs2, String rolCs2, PerfilCs2 cs2, String nickSmite,
-            String rolSmite, PerfilSmite smite) {}
+            String rolSmite, PerfilSmite smite, NivelDemo faceit) {}
 
     private static final List<Demo> EQUIPO = List.of(
             // Rifler que mata mucho y gana poco; buena puntería; Nuke se le atraganta. En SMITE juega magos (mid).
+            // Nivel 7 de FACEIT.
             new Demo("j1", "Jugador 1",
                     "demo_uno", "rifler",
                     new PerfilCs2(0.84, 0.66, 0.12, 88, 53, 3.0, 0.55, 1.4, 0.28, 110, 0.22, "de_nuke", null),
                     "DemoUno", "mid", new PerfilSmite(7.5, 4.2, 8, 930, 540, 11000, 1500, 0.6,
-                            List.of("Zeus", "Ra", "Agni", "Poseidon"), null)),
+                            List.of("Zeus", "Ra", "Agni", "Poseidon"), null), new NivelDemo(7, 1438)),
             // Soporte: poca kill, muchas asistencias y mucha utilidad; en SMITE es el guardián. Con su rol, el
-            // Duende no le regaña por las kills.
+            // Duende no le regaña por las kills. Nivel 6.
             new Demo("j2", "Jugador 2",
                     "demo_dos", "soporte",
                     new PerfilCs2(0.6, 0.66, 0.24, 69, 44, 1.2, 0.47, 1.1, 0.22, 215, 0.5, null, "de_mirage"),
                     "DemoDos", "guardian", new PerfilSmite(3.5, 3.6, 15, 610, 470, 26000, 5200, 0.56,
-                            List.of("Ymir", "Athena", "Geb", "Khepri"), null)),
+                            List.of("Ymir", "Athena", "Geb", "Khepri"), null), new NivelDemo(6, 1287)),
             // Entry que abre mucho pero con poco éxito y poca cabeza; buenos clutches; viene mejorando. Se tiltea: a
-            // partir de la 3ª partida seguida gana mucho menos.
+            // partir de la 3ª partida seguida gana mucho menos. Nivel 5.
             new Demo("j3", "Jugador 3",
                     "demo_tres", "entry",
                     new PerfilCs2(0.72, 0.64, 0.14, 78, 34, 4.6, 0.36, 1.3, 0.42, 85, 0.57, null, "de_ancient"),
-                    null, null, null),
+                    null, null, null, new NivelDemo(5, 1164)),
             // Solo SMITE, de jungla con asesinos: muere demasiado y farmea poco. Por la tarde rinde mucho más. Desde
             // que el Duende le avisó de las muertes, muere todavía más.
             new Demo("j4", "Jugador 4", null, null, null,
                     "DemoCuatro", "jungla", new PerfilSmite(5.5, 7.6, 6, 720, 395, 9000, 700, 0.44,
-                            List.of("Loki", "Thanatos", "Fenrir", "Susano"), "Loki")));
+                            List.of("Loki", "Thanatos", "Fenrir", "Susano"), "Loki"), null));
+
+    /** Niveles de los que se generan partidas de otros jugadores (P8), y cuántas de cada uno. */
+    private static final int NIVEL_MIN_MUESTRAS = 4;
+    private static final int NIVEL_MAX_MUESTRAS = 8;
+    private static final int MUESTRAS_POR_NIVEL = 180;
 
     private final TtclProperties props;
     private final JugadorRepo jugadores;
@@ -97,6 +108,7 @@ public class DemoSeeder implements ApplicationRunner {
     private final PartidaRepo partidas;
     private final ParticipacionRepo participaciones;
     private final ConsejoDadoRepo consejos;
+    private final MuestraRepo muestras;
     private final Random rnd = new Random(2026);
 
     public DemoSeeder(
@@ -105,13 +117,15 @@ public class DemoSeeder implements ApplicationRunner {
             CuentaRepo cuentas,
             PartidaRepo partidas,
             ParticipacionRepo participaciones,
-            ConsejoDadoRepo consejos) {
+            ConsejoDadoRepo consejos,
+            MuestraRepo muestras) {
         this.props = props;
         this.jugadores = jugadores;
         this.cuentas = cuentas;
         this.partidas = partidas;
         this.participaciones = participaciones;
         this.consejos = consejos;
+        this.muestras = muestras;
     }
 
     @Override
@@ -126,10 +140,10 @@ public class DemoSeeder implements ApplicationRunner {
             Jugador j = jugadores.save(new Jugador(d.slug(), d.nombre(), true));
             porSlug.put(d.slug(), j);
             if (d.nickCs2() != null) {
-                cuenta(j, Juego.CS2, d.nickCs2(), d.rolCs2(), ahora);
+                cuenta(j, Juego.CS2, d.nickCs2(), d.rolCs2(), d.faceit(), ahora);
             }
             if (d.nickSmite() != null) {
-                cuenta(j, Juego.SMITE2, d.nickSmite(), d.rolSmite(), ahora);
+                cuenta(j, Juego.SMITE2, d.nickSmite(), d.rolSmite(), null, ahora);
             }
         }
         LocalDate hoy = ahora.atZone(props.zona()).toLocalDate();
@@ -140,12 +154,17 @@ public class DemoSeeder implements ApplicationRunner {
         apuntarConsejo(porSlug.get("j3"), Juego.CS2, "debil_adr", "adr", ahora.minus(Duration.ofDays(12)));
         apuntarConsejo(porSlug.get("j4"), Juego.SMITE2, "debil_muertes_media", "muertes_media",
                 ahora.minus(Duration.ofDays(DIAS_CONSEJO_J4)));
-        log.info("Datos de ejemplo creados: {} jugadores, {} partidas de CS2 y {} de SMITE 2", EQUIPO.size(), cs2, smite);
+        int otros = generarMuestras(hoy);
+        log.info("Datos de ejemplo creados: {} jugadores, {} partidas de CS2 y {} de SMITE 2, y {} partidas de "
+                + "otros jugadores de FACEIT", EQUIPO.size(), cs2, smite, otros);
     }
 
-    private void cuenta(Jugador j, Juego juego, String nick, String rol, Instant ahora) {
+    private void cuenta(Jugador j, Juego juego, String nick, String rol, NivelDemo faceit, Instant ahora) {
         Cuenta c = new Cuenta(j, juego, nick);
         c.setRol(rol);
+        if (faceit != null) {
+            c.setNivel(faceit.nivel(), faceit.elo());
+        }
         c.setExternalId("demo-" + j.getSlug() + "-" + juego.codigo());
         c.setUltimaSync(ahora.minus(Duration.ofMinutes(12)));
         cuentas.save(c);
@@ -332,6 +351,43 @@ public class DemoSeeder implements ApplicationRunner {
         return total;
     }
 
+    // ─── Otros jugadores de FACEIT (P8) ─────────────────────────────────────
+
+    /**
+     * Partidas de jugadores que no son del equipo, de cada nivel: lo que se guardaría al sincronizar con FACEIT. Con
+     * su propio generador, para no cambiar ni un número de lo demás. A más nivel, más kills, menos muertes, más daño,
+     * más cabeza y más utilidad.
+     */
+    private int generarMuestras(LocalDate hoy) {
+        Random r = new Random(8);
+        int total = 0;
+        for (int nivel = NIVEL_MIN_MUESTRAS; nivel <= NIVEL_MAX_MUESTRAS; nivel++) {
+            int n = nivel - 5;
+            for (int i = 0; i < MUESTRAS_POR_NIVEL; i++, total++) {
+                boolean gano = r.nextBoolean();
+                int rondas = 13 + 3 + r.nextInt(10);
+                int kills = positivo((0.63 + 0.035 * n) * rondas + r.nextGaussian() * 3);
+                int muertes = Math.min(rondas, positivo((0.7 - 0.02 * n) * rondas + r.nextGaussian() * 2.5));
+                int entradas = positivo(2.5 + r.nextGaussian() * 1.3);
+                int clutches = positivo(1.2 + r.nextGaussian() * 0.9);
+                Map<String, Object> datos = new LinkedHashMap<>();
+                datos.put("rondas", rondas);
+                datos.put("adr", redondear(Math.max(20, 72 + 3.5 * n + r.nextGaussian() * 18), 1));
+                datos.put("hs_pct", redondear(Math.clamp(43 + 1.2 * n + r.nextGaussian() * 10, 5, 95), 1));
+                datos.put("kr", redondear((double) kills / rondas, 2));
+                datos.put("entry_intentos", entradas);
+                datos.put("entry_ganados", binomial(r, entradas, 0.47 + 0.01 * n));
+                datos.put("clutch_intentos", clutches);
+                datos.put("clutch_ganados", binomial(r, clutches, 0.24 + 0.01 * n));
+                datos.put("dano_utilidad", positivo(85 + 9 * n + r.nextGaussian() * 40));
+                muestras.save(new Muestra(Juego.CS2, nivel, MAPAS.get(r.nextInt(MAPAS.size())),
+                        hoy.minusDays(r.nextInt(PERIODO.getDays())), gano,
+                        kills, muertes, positivo(0.14 * rondas + r.nextGaussian() * 1.6), datos));
+            }
+        }
+        return total;
+    }
+
     // ─── Consejos ───────────────────────────────────────────────────────────
 
     /** Apunta un consejo como si el Duende lo hubiera dado ese día, con el valor que tenía la métrica entonces. */
@@ -374,9 +430,13 @@ public class DemoSeeder implements ApplicationRunner {
     }
 
     private int binomial(int intentos, double exito) {
+        return binomial(rnd, intentos, exito);
+    }
+
+    private static int binomial(Random r, int intentos, double exito) {
         int ganados = 0;
         for (int i = 0; i < intentos; i++) {
-            if (rnd.nextDouble() < exito) {
+            if (r.nextDouble() < exito) {
                 ganados++;
             }
         }

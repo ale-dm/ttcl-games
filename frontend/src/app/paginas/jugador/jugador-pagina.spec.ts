@@ -12,8 +12,8 @@ const BEA: JugadorVista = {
   nombre: 'Bea',
   demo: false,
   cuentas: [
-    { juego: 'cs2', nick: 'bea_faceit', rol: 'soporte', ultimaSync: null },
-    { juego: 'smite2', nick: 'BeaSmite', rol: null, ultimaSync: null },
+    { juego: 'cs2', nick: 'bea_faceit', rol: 'soporte', nivel: 6, elo: 1287, ultimaSync: null },
+    { juego: 'smite2', nick: 'BeaSmite', rol: null, nivel: null, elo: null, ultimaSync: null },
   ],
   resumenes: [],
 };
@@ -42,8 +42,10 @@ describe('JugadorPagina', () => {
   const cuentas = () =>
     [...(pagina.nativeElement as HTMLElement).querySelectorAll('.acct')].map((c) => ({
       nick: texto(c.querySelector('b')),
-      rol: texto(c.querySelector('.acct-rol')),
+      rol: texto(c.querySelector('.acct-rol:not(.acct-nivel)')),
     }));
+  const nivel = (i: number) =>
+    texto((pagina.nativeElement as HTMLElement).querySelectorAll('.acct')[i].querySelector('.acct-nivel'));
 
   it('enseña el rol junto al nick de cada juego, si lo ha dicho', () => {
     // El lector de pantalla oye "Rol en Counter-Strike 2: Soporte"; a la vista queda "Soporte".
@@ -59,6 +61,14 @@ describe('JugadorPagina', () => {
     i18n.cambiar('en');
     await pagina.whenStable();
     expect(cuentas()[0]).toEqual({ nick: 'bea_faceit', rol: 'Role in Counter-Strike 2: Support' });
+  });
+
+  it('enseña el nivel y el ELO de FACEIT junto a la cuenta de CS2, si se saben', async () => {
+    expect(nivel(0)).toBe('Nivel y ELO de FACEIT: Nivel 6 · 1287 ELO');
+    expect(nivel(1)).toBeNull();
+    i18n.cambiar('en');
+    await pagina.whenStable();
+    expect(nivel(0)).toBe('FACEIT level and ELO: Level 6 · 1,287 ELO');
   });
 });
 

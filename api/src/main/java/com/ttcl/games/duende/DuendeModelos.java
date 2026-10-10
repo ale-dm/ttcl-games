@@ -2,6 +2,7 @@ package com.ttcl.games.duende;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.ttcl.games.juego.Juego;
+import com.ttcl.games.stats.Modelos.ComparativaNivel;
 import com.ttcl.games.stats.Modelos.FilaDesglose;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
@@ -44,6 +45,8 @@ public final class DuendeModelos {
      * @param sinergias con quién del equipo le va mejor o peor (y solo)
      * @param sesiones cómo le va según el orden en la sesión, lo que pasó en la anterior y la hora del día
      * @param seguimiento cómo han ido los consejos que se le dieron (vacío si se piden por periodo)
+     * @param nivel cómo queda frente a jugadores de su nivel de FACEIT, o null si no se sabe su nivel: con él, el
+     *     Duende compara con lo normal en su nivel en vez de con las referencias fijas
      */
     public record PeticionInsights(
             String lang,
@@ -56,7 +59,8 @@ public final class DuendeModelos {
             List<FilaDesglose> desglose,
             Sinergias sinergias,
             Sesiones sesiones,
-            List<SeguimientoConsejo> seguimiento) {}
+            List<SeguimientoConsejo> seguimiento,
+            ComparativaNivel nivel) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record RespuestaInsights(List<Insight> insights) {}
@@ -77,11 +81,12 @@ public final class DuendeModelos {
      *
      * @param periodos resumen de los últimos 7 y 30 días, los que tengan partidas ("¿cómo voy esta semana?")
      * @param seguimiento cómo han ido los consejos que se le dieron ("¿ha funcionado lo que me dijiste?")
+     * @param nivel cómo queda frente a jugadores de su nivel de FACEIT ("¿cómo voy para mi nivel?"), o null
      */
     public record JuegoContexto(
             Juego juego, String rol, ResumenJuego resumen, ResumenJuego reciente, MediasEquipo equipo,
             List<FilaDesglose> desglose, Sinergias sinergias, Sesiones sesiones, List<ResumenPeriodo> periodos,
-            List<SeguimientoConsejo> seguimiento) {}
+            List<SeguimientoConsejo> seguimiento, ComparativaNivel nivel) {}
 
     public record JugadorContexto(String slug, String nombre, List<JuegoContexto> juegos) {}
 

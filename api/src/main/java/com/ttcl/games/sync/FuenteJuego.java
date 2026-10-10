@@ -24,14 +24,25 @@ public interface FuenteJuego {
      */
     List<PartidaExterna> partidasRecientes(String externalId, int limite, Set<String> conocidas);
 
+    /** Nivel y ELO actuales de la cuenta (P8). Vacío si la fuente no los da (SMITE 2). */
+    default Optional<NivelCuenta> nivel(String externalId) {
+        return Optional.empty();
+    }
+
     record CuentaResuelta(String externalId, String nombre) {}
 
+    /** @param elo null si la fuente da el nivel pero no el ELO */
+    record NivelCuenta(int nivel, Integer elo) {}
+
     /**
-     * @param externalPlayerId ID del jugador en la fuente; solo se guardan las de miembros del equipo
+     * @param externalPlayerId ID del jugador en la fuente; los del equipo se guardan como participaciones
+     * @param nivel su nivel en esa partida (FACEIT), o null si no se sabe: los que no son del equipo y tienen nivel
+     *     se guardan, sin identificarlos, como muestras de lo normal en su nivel
      * @param datos lo específico del juego: números o texto, nunca objetos anidados
      */
     record ParticipacionExterna(
             String externalPlayerId,
+            Integer nivel,
             Boolean gano,
             Integer kills,
             Integer muertes,

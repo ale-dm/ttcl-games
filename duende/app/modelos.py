@@ -115,6 +115,27 @@ class SeguimientoConsejo(Base):
     valor_desde: float | None = None
 
 
+class MetricaNivel(Base):
+    """Una métrica frente a las partidas de jugadores de su nivel de FACEIT (P8). «referencia» es lo normal en ese
+    nivel: la mediana de sus partidas o, en las que salen de totales (entradas, clutches), el porcentaje de todas
+    juntas. «percentil» es el % de esas partidas con un valor más bajo que el suyo, sin girar en las que es mejor bajo
+    (muertes); null en las que salen de totales. Lo calcula la API."""
+
+    metrica: str
+    referencia: float
+    percentil: float | None = None
+    muestras: int = 0
+
+
+class ComparativaNivel(Base):
+    """Cómo queda frente a los jugadores de su nivel de FACEIT. «metricas», solo las que tienen muestra suficiente."""
+
+    nivel: int
+    elo: int | None = None
+    partidas: int = 0
+    metricas: list[MetricaNivel] = Field(default_factory=list)
+
+
 class ResumenPeriodo(Base):
     """Resumen de los últimos días (7 o 30), con la media del resto del equipo en esos mismos días."""
 
@@ -159,6 +180,8 @@ class PeticionInsights(Base):
     sesiones: Sesiones | None = None
     # Cómo han ido los consejos que se le dieron (vacío si se piden por periodo).
     seguimiento: list[SeguimientoConsejo] = Field(default_factory=list)
+    # Su nivel de FACEIT y lo normal en él (P8): con él se compara en vez de con las referencias fijas.
+    nivel: ComparativaNivel | None = None
 
 
 class RespuestaInsights(Base):
@@ -199,6 +222,7 @@ class JuegoContexto(Base):
     # Los últimos 7 y 30 días, los que tengan partidas: para "¿cómo voy esta semana?". Lo demás, con todas.
     periodos: list[ResumenPeriodo] = Field(default_factory=list)
     seguimiento: list[SeguimientoConsejo] = Field(default_factory=list)
+    nivel: ComparativaNivel | None = None
 
 
 class JugadorContexto(Base):

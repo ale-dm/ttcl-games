@@ -54,6 +54,28 @@ def test_insights_con_rol():
     assert "fuerte_asistencias_media" in con_rol
 
 
+def test_insights_con_el_nivel_de_faceit_en_camel_case():
+    resumen = {**RESUMEN, "winrate": 50.0, "kd": 1.0, "datosMedios": {"adr": 84.0, "hs_pct": 38.0}}
+    nivel = {"nivel": 6, "elo": 1290, "partidas": 200, "metricas": [
+        {"metrica": "hs_pct", "referencia": 44.0, "percentil": 20.0, "muestras": 200}]}
+    r = cliente.post(
+        "/v1/insights",
+        json={"lang": "es", "jugador": {"slug": "j1", "nombre": "J1"}, "juego": "cs2", "resumen": resumen,
+              "nivel": nivel},
+    )
+    assert r.status_code == 200
+    hs = next(i for i in r.json()["insights"] if i["id"] == "debil_hs_pct")
+    assert "nivel 6 de FACEIT anda por 44,0 %" in hs["texto"]
+    assert hs["barras"][-1] == {"etiqueta": "Nivel 6", "valor": 44.0, "tuyo": False}
+    # La API manda null si no sabe su nivel.
+    sin = cliente.post(
+        "/v1/insights",
+        json={"lang": "es", "jugador": {"slug": "j1", "nombre": "J1"}, "juego": "cs2", "resumen": resumen,
+              "nivel": None},
+    )
+    assert sin.status_code == 200
+
+
 def test_insights_con_sinergias_en_camel_case():
     fila = {"slug": "j3", "nombre": "Jugador 3", "partidas": 20, "victorias": 13, "winrate": 65.0, "kd": 1.1,
             "partidasSin": 10, "winrateSin": 38.0}

@@ -523,6 +523,11 @@ FRASES: dict[Idioma, dict[str, str]] = {
         "cmp_equipo": "Tienes {tu}; el resto del equipo, {equipo}.",
         "cmp_ref": "Tienes {tu}; un jugador medio anda por {ref}.",
         "cmp_solo": "Tienes {tu}.",
+        "nivel": "Nivel {nivel}",
+        "cmp_equipo_nivel": "Tienes {tu}; el resto del equipo, {equipo}, y un jugador de nivel {nivel} de FACEIT anda "
+        "por {ref}.",
+        "cmp_nivel": "Tienes {tu}; un jugador de nivel {nivel} de FACEIT anda por {ref}.",
+        "mejor_que": "Lo haces mejor que en el {pct} de las partidas de ese nivel.",
         "rol_pesa_debil": "Y en tu rol de {rol}, esto es lo que más cuenta.",
         "rol_pesa_fuerte": "Justo lo que pide tu rol de {rol}.",
         "rol_tolera": "En tu rol de {rol} se perdona algo, pero no tanto.",
@@ -545,6 +550,11 @@ FRASES: dict[Idioma, dict[str, str]] = {
         "cmp_equipo": "You have {tu}; the rest of the team, {equipo}.",
         "cmp_ref": "You have {tu}; an average player sits around {ref}.",
         "cmp_solo": "You have {tu}.",
+        "nivel": "Level {nivel}",
+        "cmp_equipo_nivel": "You have {tu}; the rest of the team, {equipo}, and a FACEIT level {nivel} player sits "
+        "around {ref}.",
+        "cmp_nivel": "You have {tu}; a FACEIT level {nivel} player sits around {ref}.",
+        "mejor_que": "You do better than in {pct} of the matches at that level.",
         "rol_pesa_debil": "And in your {rol} role, this is what counts most.",
         "rol_pesa_fuerte": "Exactly what your {rol} role calls for.",
         "rol_tolera": "Your {rol} role buys you some slack, but not this much.",

@@ -4,10 +4,12 @@ import com.ttcl.games.config.TtclProperties;
 import com.ttcl.games.dominio.ConsejoDado;
 import com.ttcl.games.dominio.Cuenta;
 import com.ttcl.games.dominio.Jugador;
+import com.ttcl.games.dominio.Muestra;
 import com.ttcl.games.dominio.Participacion;
 import com.ttcl.games.dominio.Repositorios.ConsejoDadoRepo;
 import com.ttcl.games.dominio.Repositorios.CuentaRepo;
 import com.ttcl.games.dominio.Repositorios.JugadorRepo;
+import com.ttcl.games.dominio.Repositorios.MuestraRepo;
 import com.ttcl.games.dominio.Repositorios.ParticipacionRepo;
 import com.ttcl.games.duende.DuendeModelos.JuegoContexto;
 import com.ttcl.games.duende.DuendeModelos.JugadorContexto;
@@ -37,6 +39,7 @@ import com.ttcl.games.stats.Periodo;
 import java.text.Normalizer;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -48,7 +51,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -66,16 +71,18 @@ public class EquipoServicio {
     private final CuentaRepo cuentas;
     private final ParticipacionRepo participaciones;
     private final ConsejoDadoRepo consejosDados;
+    private final MuestraRepo muestras;
     /** Zona del equipo: con ella se sabe a qué hora del día se jugó cada partida. */
     private final ZoneId zona;
 
     public EquipoServicio(
             JugadorRepo jugadores, CuentaRepo cuentas, ParticipacionRepo participaciones,
-            ConsejoDadoRepo consejosDados, TtclProperties props) {
+            ConsejoDadoRepo consejosDados, MuestraRepo muestras, TtclProperties props) {
         this.jugadores = jugadores;
         this.cuentas = cuentas;
         this.participaciones = participaciones;
         this.consejosDados = consejosDados;
+        this.muestras = muestras;
         this.zona = props.zona();
     }
 
@@ -146,14 +153,18 @@ public class EquipoServicio {
             return filas.getOrDefault(j.getId(), Map.of()).values().stream().flatMap(List::stream).toList();
         }
 
+        Optional<Cuenta> cuenta(Jugador j, Juego juego) {
+            return cuentas.getOrDefault(j.getId(), List.of()).stream().filter(c -> c.getJuego() == juego).findFirst();
+        }
+
         /** Rol del jugador en ese juego, o null si no lo ha dicho. */
         String rol(Jugador j, Juego juego) {
-            return cuentas.getOrDefault(j.getId(), List.of()).stream()
-                    .filter(c -> c.getJuego() == juego)
-                    .map(Cuenta::getRol)
-                    .filter(Objects::nonNull)
-                    .findFirst()
-                    .orElse(null);
+            return cuenta(j, juego).map(Cuenta::getRol).orElse(null);
+        }
+
+        /** Nivel de FACEIT de su cuenta de ese juego, o null. */
+        Integer nivel(Jugador j, Juego juego) {
+            return cuenta(j, juego).map(Cuenta::getNivel).orElse(null);
         }
 
         Jugador porSlug(String slug) {
@@ -200,7 +211,8 @@ public class EquipoServicio {
 
     private static List<CuentaVista> cuentasVista(Instantanea foto, Jugador j) {
         return foto.cuentas().getOrDefault(j.getId(), List.of()).stream()
-                .map(c -> new CuentaVista(c.getJuego(), c.getNombreExterno(), c.getRol(), c.getUltimaSync()))
+                .map(c -> new CuentaVista(
+                        c.getJuego(), c.getNombreExterno(), c.getRol(), c.getNivel(), c.getElo(), c.getUltimaSync()))
                 .toList();
     }
 
@@ -269,19 +281,57 @@ public class EquipoServicio {
         return Estadisticas.mediasEquipo(otros);
     }
 
-    private JuegoContexto contexto(Instantanea foto, Jugador j, Juego juego, List<ResumenPeriodo> periodos) {
+    /**
+     * Todo lo de un jugador en un juego. {@code muestras} son las partidas de jugadores de cada nivel (P8), para
+     * compararle con los de su nivel; {@link MuestrasPorNivel#NINGUNA} si no hace falta.
+     */
+    private JuegoContexto contexto(
+            Instantanea foto, Jugador j, Juego juego, List<ResumenPeriodo> periodos, MuestrasPorNivel muestras) {
         List<FilaParticipacion> filas = foto.filas(j, juego);
+        ResumenJuego resumen = Estadisticas.resumir(juego, filas);
+        Integer nivel = foto.nivel(j, juego);
+        Integer elo = foto.cuenta(j, juego).map(Cuenta::getElo).orElse(null);
         return new JuegoContexto(
                 juego,
                 foto.rol(j, juego),
-                Estadisticas.resumir(juego, filas),
+                resumen,
                 Estadisticas.resumir(juego, Estadisticas.recientes(filas, Estadisticas.PARTIDAS_RECIENTES)),
                 mediasSin(foto, j, juego),
                 Estadisticas.desglose(juego, filas),
                 Estadisticas.sinergias(juego, j.getSlug(), filas, foto.presencias(juego)),
                 Estadisticas.sesiones(juego, filas, zona),
                 periodos,
-                Estadisticas.seguimiento(juego, filas, foto.consejos(j, juego), Instant.now()));
+                Estadisticas.seguimiento(juego, filas, foto.consejos(j, juego), Instant.now()),
+                Estadisticas.comparativaNivel(juego, nivel, elo, resumen, muestras.de(juego, nivel)));
+    }
+
+    /** Partidas de jugadores que no son del equipo, por juego y nivel (P8). */
+    record MuestrasPorNivel(Map<Juego, Map<Integer, List<FilaParticipacion>>> porJuego) {
+        static final MuestrasPorNivel NINGUNA = new MuestrasPorNivel(Map.of());
+
+        List<FilaParticipacion> de(Juego juego, Integer nivel) {
+            return nivel == null ? List.of() : porJuego.getOrDefault(juego, Map.of()).getOrDefault(nivel, List.of());
+        }
+    }
+
+    /** Las muestras de los niveles que tiene alguien del equipo (las demás no hacen falta). */
+    private MuestrasPorNivel muestras(Instantanea foto) {
+        Map<Juego, Set<Integer>> niveles = new EnumMap<>(Juego.class);
+        foto.cuentas().values().stream()
+                .flatMap(List::stream)
+                .filter(c -> c.getNivel() != null)
+                .forEach(c -> niveles.computeIfAbsent(c.getJuego(), k -> new HashSet<>()).add(c.getNivel()));
+        Map<Juego, Map<Integer, List<FilaParticipacion>>> porJuego = new EnumMap<>(Juego.class);
+        niveles.forEach((juego, lista) -> porJuego.put(juego, muestras.findByJuegoAndNivelIn(juego, lista).stream()
+                .collect(Collectors.groupingBy(
+                        Muestra::getNivel, Collectors.mapping(EquipoServicio::fila, Collectors.toList())))));
+        return new MuestrasPorNivel(porJuego);
+    }
+
+    /** Una muestra como una participación más, para calcular con las mismas funciones. */
+    private static FilaParticipacion fila(Muestra m) {
+        return new FilaParticipacion(m.getId(), m.getJuego(), m.getFecha().atStartOfDay(ZoneOffset.UTC).toInstant(),
+                null, m.getMapa(), m.getGano(), m.getKills(), m.getMuertes(), m.getAsistencias(), m.getDatos());
     }
 
     /** Con quién del equipo juega mejor un jugador en un juego (y cómo le va solo), en el periodo. */
@@ -318,7 +368,7 @@ public class EquipoServicio {
         Instantanea foto = instantanea(periodo);
         Jugador j = foto.porSlug(slug);
         foto.exigirPartidas(j, juego);
-        JuegoContexto c = contexto(foto, j, juego, List.of());
+        JuegoContexto c = contexto(foto, j, juego, List.of(), MuestrasPorNivel.NINGUNA);
         return new DetalleJuego(juego, c.resumen(), c.reciente(), c.equipo(), c.desglose(),
                 Estadisticas.serie(juego, foto.filas(j, juego), PUNTOS_GRAFICA));
     }
@@ -381,23 +431,25 @@ public class EquipoServicio {
         Instantanea foto = instantanea(periodo);
         Jugador j = foto.porSlug(slug);
         foto.exigirPartidas(j, juego);
-        return peticion(foto, j, juego, lang);
+        return peticion(foto, j, juego, lang, muestras(foto));
     }
 
-    private PeticionInsights peticion(Instantanea foto, Jugador j, Juego juego, String lang) {
-        JuegoContexto c = contexto(foto, j, juego, List.of());
+    private PeticionInsights peticion(
+            Instantanea foto, Jugador j, Juego juego, String lang, MuestrasPorNivel muestras) {
+        JuegoContexto c = contexto(foto, j, juego, List.of(), muestras);
         return new PeticionInsights(lang, new JugadorRef(j.getSlug(), j.getNombre()), juego, c.rol(), c.resumen(),
-                c.reciente(), c.equipo(), c.desglose(), c.sinergias(), c.sesiones(), c.seguimiento());
+                c.reciente(), c.equipo(), c.desglose(), c.sinergias(), c.sesiones(), c.seguimiento(), c.nivel());
     }
 
     /** Peticiones de recomendaciones de todo el equipo (una por jugador y juego), para las tarjetas. */
     public List<PeticionInsights> peticionesEquipo(Juego soloJuego, String lang) {
         Instantanea foto = instantanea();
+        MuestrasPorNivel muestras = muestras(foto);
         List<PeticionInsights> lista = new ArrayList<>();
         for (Jugador j : foto.jugadores()) {
             for (Juego juego : Juego.values()) {
                 if ((soloJuego == null || soloJuego == juego) && !foto.filas(j, juego).isEmpty()) {
-                    lista.add(peticion(foto, j, juego, lang));
+                    lista.add(peticion(foto, j, juego, lang, muestras));
                 }
             }
         }
@@ -410,6 +462,7 @@ public class EquipoServicio {
      */
     public List<JugadorContexto> contextoEquipo() {
         Instantanea foto = instantanea();
+        MuestrasPorNivel muestras = muestras(foto);
         Instant ahora = Instant.now();
         Map<Periodo, Instantanea> recortes = new EnumMap<>(Periodo.class);
         Periodo.RECORTADOS.forEach(p -> recortes.put(p, foto.desde(p.inicio(ahora))));
@@ -419,7 +472,7 @@ public class EquipoServicio {
                         j.getNombre(),
                         Arrays.stream(Juego.values())
                                 .filter(juego -> !foto.filas(j, juego).isEmpty())
-                                .map(juego -> contexto(foto, j, juego, periodos(recortes, j, juego)))
+                                .map(juego -> contexto(foto, j, juego, periodos(recortes, j, juego), muestras))
                                 .toList()))
                 .toList();
     }

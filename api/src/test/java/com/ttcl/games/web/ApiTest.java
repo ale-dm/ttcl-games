@@ -26,8 +26,10 @@ import com.ttcl.games.duende.DuendeModelos.RespuestaChat;
 import com.ttcl.games.duende.DuendeModelos.Salud;
 import com.ttcl.games.duende.DuendeNoDisponibleException;
 import com.ttcl.games.juego.Juego;
+import com.ttcl.games.stats.Modelos.ComparativaNivel;
 import com.ttcl.games.stats.Modelos.FilaMomento;
 import com.ttcl.games.stats.Modelos.FilaSinergia;
+import com.ttcl.games.stats.Modelos.MetricaNivel;
 import com.ttcl.games.stats.Modelos.ResumenPeriodo;
 import com.ttcl.games.stats.Periodo;
 import java.nio.charset.StandardCharsets;
@@ -639,6 +641,52 @@ class ApiTest {
                                  "origen": "yo"}
                                 """))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ─── Nivel (P8) ─────────────────────────────────────────────────────────
+
+    @Test
+    void elDuendeRecibeComoQuedaCadaUnoFrenteASuNivel() throws Exception {
+        // En los datos de ejemplo, Jugador 3 es nivel 5 de FACEIT y hay 180 partidas de otros jugadores de cada nivel.
+        mvc.perform(get("/api/jugadores/j3/consejos?juego=cs2")).andExpect(status().isOk());
+        ComparativaNivel nivel = duende.ultimaInsights.nivel();
+        assertThat(nivel.nivel()).isEqualTo(5);
+        assertThat(nivel.elo()).isEqualTo(1164);
+        assertThat(nivel.partidas()).isEqualTo(180);
+        assertThat(nivel.metricas()).extracting(MetricaNivel::metrica)
+                .contains("kd", "adr", "hs_pct", "kr", "entry_pct", "clutch_pct", "dano_utilidad", "muertes_media")
+                .doesNotContain("winrate");
+        // Apunta poco a la cabeza: un 34 % de media, por debajo de casi todas las partidas de su nivel.
+        MetricaNivel hs = nivel.metricas().stream().filter(m -> m.metrica().equals("hs_pct")).findFirst().orElseThrow();
+        assertThat(hs.referencia()).isBetween(40.0, 46.0);
+        assertThat(hs.percentil()).isLessThan(30.0);
+        assertThat(hs.muestras()).isEqualTo(180);
+
+        // Con un periodo, las mismas referencias y su percentil en esos días.
+        mvc.perform(get("/api/jugadores/j3/consejos?juego=cs2&periodo=7d")).andExpect(status().isOk());
+        assertThat(duende.ultimaInsights.nivel().partidas()).isEqualTo(180);
+        // En SMITE 2 no hay nivel.
+        mvc.perform(get("/api/jugadores/j4/consejos?juego=smite2")).andExpect(status().isOk());
+        assertThat(duende.ultimaInsights.nivel()).isNull();
+
+        // El perfil enseña nivel y ELO junto a la cuenta de CS2; la de SMITE 2 no tiene.
+        mvc.perform(get("/api/jugadores/j1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cuentas[0].juego").value("cs2"))
+                .andExpect(jsonPath("$.cuentas[0].nivel").value(7))
+                .andExpect(jsonPath("$.cuentas[0].elo").value(1438))
+                .andExpect(jsonPath("$.cuentas[1].nivel").doesNotExist());
+
+        // El chat y las tarjetas del equipo también lo reciben.
+        duende.respuesta = new RespuestaChat("Hola", "reglas", null, null, List.of());
+        mvc.perform(post("/api/duende/chat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mensajes\": [{\"rol\": \"usuario\", \"texto\": \"¿Cómo voy para mi nivel?\"}]}"))
+                .andExpect(status().isOk());
+        assertThat(juegoDe(duende.ultimaChat, "j1", Juego.CS2).nivel().nivel()).isEqualTo(7);
+        assertThat(juegoDe(duende.ultimaChat, "j2", Juego.CS2).nivel().metricas()).isNotEmpty();
+        mvc.perform(get("/api/equipo?juego=cs2")).andExpect(status().isOk());
+        assertThat(duende.ultimoLote).allSatisfy(p -> assertThat(p.nivel()).isNotNull());
     }
 
     @Test

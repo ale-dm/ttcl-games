@@ -2,6 +2,7 @@ package com.ttcl.games.dominio;
 
 import com.ttcl.games.juego.Juego;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -53,6 +54,11 @@ public final class Repositorios {
         /** Si ya se le dio esa recomendación hace poco (para no apuntarla dos veces). */
         boolean existsByJugadorAndJuegoAndInsightAndDadoEnAfter(
                 Jugador jugador, Juego juego, String insight, Instant desde);
+    }
+
+    public interface MuestraRepo extends JpaRepository<Muestra, Long> {
+        /** Las partidas de jugadores de esos niveles en un juego, para saber qué es lo normal en cada uno. */
+        List<Muestra> findByJuegoAndNivelIn(Juego juego, Collection<Integer> niveles);
     }
 
     public interface ValoracionRepo extends JpaRepository<Valoracion, Long> {

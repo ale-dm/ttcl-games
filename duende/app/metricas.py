@@ -1,7 +1,8 @@
 """Catálogo de métricas por juego: de dónde sale cada valor, hacia dónde es mejor y una referencia orientativa.
 
 Las referencias son valores de un jugador medio-bueno de FACEIT (CS2) o de partidas casuales (SMITE 2). Sirven para
-no dar por bueno algo solo porque el resto del equipo va igual de mal.
+no dar por bueno algo solo porque el resto del equipo va igual de mal. Son el respaldo: si la API sabe el nivel de
+FACEIT del jugador y tiene partidas suficientes de ese nivel (P8), se compara con lo normal en él (insights.Referencia).
 """
 
 from dataclasses import dataclass

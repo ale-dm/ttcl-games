@@ -54,6 +54,32 @@ class FuentesTest {
     }
 
     @Test
+    void nivelYEloDelJugadorYNivelDeCadaUnoEnLaPartida() {
+        JsonMapper json = JsonMapper.builder().build();
+        Object jugador = json.readValue("""
+                {"player_id": "p1", "nickname": "uno", "games": {"cs2": {"region": "EU", "skill_level": 6,
+                 "faceit_elo": 1287, "game_player_id": "76561198000000000"}}}
+                """, Object.class);
+        assertThat(FaceitFuente.mapearNivel(jugador)).contains(new FuenteJuego.NivelCuenta(6, 1287));
+        assertThat(FaceitFuente.mapearNivel(Map.of("games", Map.of("csgo", Map.of("skill_level", 4))))).isEmpty();
+
+        Object detalles = json.readValue("""
+                {"match_id": "m1", "teams": {
+                  "faction1": {"roster": [{"player_id": "p1", "nickname": "uno", "game_skill_level": 6},
+                                          {"player_id": "p3", "game_skill_level": "7"}]},
+                  "faction2": {"roster": [{"player_id": "p2", "game_skill_level": 5}, {"player_id": "p4"}]}}}
+                """, Object.class);
+        Map<String, Integer> niveles = FaceitFuente.nivelesDelRoster(detalles);
+        assertThat(niveles).containsExactlyInAnyOrderEntriesOf(Map.of("p1", 6, "p2", 5, "p3", 7));
+
+        // Cada participación de las estadísticas, con su nivel en esa partida.
+        FaceitFuente.Mapeo m = FaceitFuente.conNiveles(
+                FaceitFuente.mapearEstadisticas(json.readValue(STATS_FACEIT, Object.class)), niveles);
+        assertThat(m.participaciones()).extracting(ParticipacionExterna::nivel).containsExactly(6, 5);
+        assertThat(FaceitFuente.nivelesDelRoster(Map.of())).isEmpty();
+    }
+
+    @Test
     void mapeaSinRondasSinRomperse() {
         assertThat(FaceitFuente.mapearEstadisticas(Map.of()).participaciones()).isEmpty();
     }

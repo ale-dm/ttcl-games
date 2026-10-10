@@ -152,6 +152,26 @@ public final class Modelos {
             String insight, String metrica, Double valor, Instant dadoEn, int dias, int partidasDesde,
             Double valorDesde) {}
 
+    /**
+     * Una métrica de un jugador frente a las partidas de jugadores de su nivel (P8).
+     *
+     * @param referencia lo normal en ese nivel: la mediana de sus partidas o, en las que salen de totales (entradas,
+     *     clutches...), el porcentaje de todas juntas
+     * @param percentil porcentaje de esas partidas con un valor más bajo que el suyo (los empates cuentan la mitad),
+     *     sin girar en las que es mejor bajo (muertes); null en las que salen de totales o si él no tiene valor
+     * @param muestras partidas de ese nivel con dato de esta métrica
+     */
+    public record MetricaNivel(String metrica, double referencia, Double percentil, int muestras) {}
+
+    /**
+     * Cómo queda un jugador frente a los jugadores de su nivel de FACEIT (P8).
+     *
+     * @param elo ELO de FACEIT, o null si la fuente no lo dio
+     * @param partidas partidas de jugadores de ese nivel que hay guardadas
+     * @param metricas solo las que tienen muestra suficiente (vacía si aún no hay)
+     */
+    public record ComparativaNivel(int nivel, Integer elo, int partidas, List<MetricaNivel> metricas) {}
+
     /** Un punto de la gráfica de partidas. */
     public record PuntoSerie(
             long partidaId, Instant fecha, Boolean gano, Integer kills, Integer muertes, Integer asistencias,

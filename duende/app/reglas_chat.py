@@ -34,8 +34,8 @@ from .modelos import (
 from .textos import NOMBRES_MOMENTO, NOMBRES_ROL
 
 Intencion = Literal[
-    "hola", "seguimiento", "companeros", "sesiones", "ranking", "comparar", "racha", "desglose", "fuerte", "mejorar",
-    "stats", "ayuda",
+    "hola", "seguimiento", "companeros", "sesiones", "nivel", "ranking", "comparar", "racha", "desglose", "fuerte",
+    "mejorar", "stats", "ayuda",
 ]
 
 
@@ -91,6 +91,12 @@ def detectar_intencion(pregunta: str, num_foco: int) -> Intencion:
          "when should i play", "despues de perder", "tras perder", "after losing", "after a loss"],
     ):
         return "sesiones"
+    # Antes que "quién" y "mejor": "¿cómo voy para mi nivel?" o "¿quién tiene más ELO?" van del nivel de FACEIT. Pero
+    # "¿qué mejoro para subir de nivel?" es de mejorar.
+    if _contiene(t, ["nivel", "elo", "faceit", "percentil", "level", "percentile"]) and not _contiene(
+        t, ["mejorar", "mejoro", "subir", "improve", "level up"]
+    ):
+        return "nivel"
     if _contiene(t, ["compar", "vs", "versus", "contra", "frente a", "head to head"]) or (
         num_foco == 2 and _contiene(t, ["quien", "who"])
     ):
@@ -163,6 +169,7 @@ def _peticion(j: JugadorContexto, g: JuegoContexto, lang: Idioma) -> PeticionIns
         sinergias=g.sinergias,
         sesiones=g.sesiones,
         seguimiento=g.seguimiento,
+        nivel=g.nivel,
     )
 
 
@@ -462,6 +469,95 @@ def _stats(f: Foco, pregunta: str, lang: Idioma) -> str:
     return f"{f.jugador.nombre} · {NOMBRE_JUEGO[juego]}\n\n" + "\n".join(lineas)
 
 
+def _nivel(f: Foco, lang: Idioma) -> str:
+    """Cómo va frente a los jugadores de su nivel de FACEIT: cada métrica, lo normal en ese nivel y su percentil."""
+    nombre, g = f.jugador.nombre, f.juego
+    n = g.nivel
+    if n is None:
+        if g.juego != "cs2":
+            return _t(
+                lang,
+                f"El nivel solo lo sé de FACEIT (CS2). En {NOMBRE_JUEGO[g.juego]} comparo con el equipo y con "
+                "referencias fijas.",
+                f"I only know levels from FACEIT (CS2). In {NOMBRE_JUEGO[g.juego]} I compare with the team and with "
+                "fixed benchmarks.",
+            )
+        return _t(
+            lang,
+            f"Aún no sé el nivel de FACEIT de {nombre}: lo leo al sincronizar con FACEIT.",
+            f"I don't know {nombre}'s FACEIT level yet: I read it when syncing with FACEIT.",
+        )
+    elo = f" ({formatear(n.elo, 'int', lang)} ELO)" if n.elo else ""
+    cabecera = f"**{nombre} · " + _t(lang, f"nivel {n.nivel} de FACEIT", f"FACEIT level {n.nivel}") + f"{elo}**"
+    lineas: list[str] = []
+    con_percentil: list[tuple[str, float]] = []
+    for m in METRICAS[g.juego]:
+        mn = next((x for x in n.metricas if x.metrica == m.clave), None)
+        tu = m.valor(g.resumen)
+        if mn is None or tu is None:
+            continue
+        linea = (
+            f"- {m.nombre(lang)}: **{formatear(tu, m.formato, lang)}** · "
+            + _t(lang, f"nivel {n.nivel}: ", f"level {n.nivel}: ")
+            + formatear(mn.referencia, m.formato, lang)
+        )
+        if mn.percentil is not None:
+            mejor = mn.percentil if m.mejor == "alto" else 100 - mn.percentil
+            con_percentil.append((m.nombre(lang), mejor))
+            linea += _t(
+                lang, f" · mejor que el {round(mejor)} % de las partidas", f" · better than {round(mejor)}% of matches"
+            )
+        lineas.append(linea)
+    if not lineas:
+        return (
+            cabecera
+            + "\n\n"
+            + _t(
+                lang,
+                "Aún no tengo partidas suficientes de jugadores de ese nivel para comparar.",
+                "I don't have enough matches from players at that level to compare yet.",
+            )
+        )
+    texto = (
+        cabecera
+        + ". "
+        + _t(
+            lang,
+            f"Comparado con {n.partidas} partidas de jugadores de ese nivel:",
+            f"Compared with {n.partidas} matches from players at that level:",
+        )
+        + "\n\n"
+        + "\n".join(lineas)
+    )
+    if len(con_percentil) >= 2:
+        mejor_m = max(con_percentil, key=lambda x: x[1])[0]
+        peor_m = min(con_percentil, key=lambda x: x[1])[0]
+        texto += "\n\n" + _t(
+            lang,
+            f"Donde más destaca para su nivel: {mejor_m}. Donde más le queda: {peor_m}.",
+            f"Best for that level: {mejor_m}. Furthest behind: {peor_m}.",
+        )
+    return texto
+
+
+def _niveles_equipo(equipo: list[JugadorContexto], lang: Idioma) -> str:
+    """El nivel de FACEIT de cada uno, el de más ELO primero."""
+    con_nivel = [(j.nombre, g.nivel) for j in equipo for g in j.juegos if g.nivel]
+    if not con_nivel:
+        return _t(
+            lang,
+            "Aún no sé el nivel de FACEIT de nadie: lo leo al sincronizar con FACEIT (solo CS2).",
+            "I don't know anyone's FACEIT level yet: I read it when syncing with FACEIT (CS2 only).",
+        )
+    con_nivel.sort(key=lambda x: (x[1].nivel, x[1].elo or 0), reverse=True)
+    lineas = [
+        f"- {nombre}: " + _t(lang, f"nivel {n.nivel}", f"level {n.nivel}")
+        + (f" ({formatear(n.elo, 'int', lang)} ELO)" if n.elo else "")
+        for nombre, n in con_nivel
+    ]
+    return _t(lang, "Niveles de FACEIT del equipo:", "The team's FACEIT levels:") + "\n\n" + "\n".join(lineas)
+
+
 def _metricas_clave(juego: Juego) -> list[str]:
     return ["winrate", "kd", "adr", "hs_pct"] if juego == "cs2" else ["winrate", "kda", "dano_min", "oro_min"]
 
@@ -570,12 +666,12 @@ def _equipo_mejorar(equipo: list[JugadorContexto], juego: Juego | None, lang: Id
 AYUDA = {
     "es": "Puedo decirte en qué mejorar, qué haces bien, cómo vas últimamente, qué mapa o dios se te da peor, "
     "con quién juegas mejor, cuándo juegas mejor (si te tilteas, a qué hora rindes más), si ha funcionado lo que te "
-    "dije o comparar a dos del equipo. Y si dices «esta semana» o «este mes», miro solo esos días. Pregúntame algo de "
-    "eso.",
+    "dije, cómo vas para tu nivel de FACEIT o comparar a dos del equipo. Y si dices «esta semana» o «este mes», miro "
+    "solo esos días. Pregúntame algo de eso.",
     "en": "I can tell you what to improve, what you do well, how you've been doing lately, your worst map or god, "
-    "who you play best with, when you play best (whether you tilt, what time suits you), whether my advice worked or "
-    "compare two teammates. And if you say 'this week' or 'this month', I'll look at just those days. Ask me any of "
-    "that.",
+    "who you play best with, when you play best (whether you tilt, what time suits you), whether my advice worked, "
+    "how you're doing for your FACEIT level or compare two teammates. And if you say 'this week' or 'this month', "
+    "I'll look at just those days. Ask me any of that.",
 }
 
 # ─── Periodos ────────────────────────────────────────────────────────────────
@@ -585,7 +681,7 @@ ETIQUETA_PERIODO: dict[str, dict[Idioma, str]] = {
     "30d": {"es": "Últimos 30 días", "en": "Last 30 days"},
 }
 # Esto solo se calcula con todas las partidas: con unos pocos días no hay muestra.
-SOLO_CON_TODAS = ("companeros", "desglose", "sesiones", "seguimiento")
+SOLO_CON_TODAS = ("companeros", "desglose", "sesiones", "seguimiento", "nivel")
 
 
 def detectar_periodo(pregunta: str, por_defecto: Periodo | None) -> Periodo | None:
@@ -749,6 +845,10 @@ def _responder(p: PeticionChat, pregunta: str) -> str:
             return _t(lang, "Aún no hay partidas guardadas.", "There are no saved matches yet.")
         return _mejores_duos(p.equipo, juego_d, lang)
 
+    # "¿Quién tiene más nivel?": el de todos.
+    if intencion == "nivel" and (not foco or _contiene(normalizar(pregunta), ["quien", "who", "cada uno", "each of"])):
+        return _niveles_equipo(p.equipo, lang)
+
     if intencion == "ranking" or (not foco and intencion in ("comparar", "fuerte", "stats")):
         juego_r = juego or next((g.juego for j in p.equipo for g in j.juegos), None)
         if not juego_r:
@@ -767,6 +867,9 @@ def _responder(p: PeticionChat, pregunta: str) -> str:
         return AYUDA[lang]
 
     principal = foco[0]
+    if intencion == "nivel" and not juego:
+        # El nivel es de FACEIT: si la página no dice juego, el que lo tenga.
+        juego = next((g.juego for g in principal.juegos if g.nivel), None)
     g = _juego_de(principal, juego)
     if not g:
         if not juego:
@@ -785,6 +888,8 @@ def _responder(p: PeticionChat, pregunta: str) -> str:
         return _sesiones(f, lang)
     if intencion == "seguimiento":
         return _seguimiento(f, lang)
+    if intencion == "nivel":
+        return _nivel(f, lang)
     if intencion == "fuerte":
         return _fuerte(f, lang)
     if intencion == "racha":
@@ -815,6 +920,7 @@ def sugerencias(p: PeticionChat) -> list[str]:
         g = _juego_de(foco[0], juego)
         # Si ya le ha dado consejos, preguntar si han funcionado va arriba.
         seguimiento = [_t(lang, "¿Ha funcionado lo que me dijiste?", "Did your advice work?")] if g and g.seguimiento else []
+        nivel = [_t(lang, "¿Cómo voy para mi nivel?", "How am I doing for my level?")] if g and g.nivel else []
         return [
             _t(lang, "¿En qué tengo que mejorar?", "What should I improve?"),
             *seguimiento,
@@ -822,6 +928,7 @@ def sugerencias(p: PeticionChat) -> list[str]:
             _t(lang, "¿Cómo voy últimamente?", "How have I been doing lately?"),
             _t(lang, "¿Con quién juego mejor?", "Who do I play best with?"),
             _t(lang, "¿Cuándo juego mejor?", "When do I play best?"),
+            *nivel,
             _t(lang, f"¿Qué {que} se me da peor?", f"What's my worst {que}?"),
         ]
     juegos = sorted({g.juego for j in p.equipo for g in j.juegos})

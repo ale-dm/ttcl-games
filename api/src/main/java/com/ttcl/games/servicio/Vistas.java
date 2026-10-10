@@ -18,8 +18,12 @@ public final class Vistas {
 
     private Vistas() {}
 
-    /** @param rol rol declarado en ese juego ("entry", "soporte", "guardian"...) o null si no lo ha dicho */
-    public record CuentaVista(Juego juego, String nick, String rol, Instant ultimaSync) {}
+    /**
+     * @param rol rol declarado en ese juego ("entry", "soporte", "guardian"...) o null si no lo ha dicho
+     * @param nivel nivel de FACEIT (1 a 10) en la última sincronización, o null (SMITE 2, o aún sin sincronizar)
+     * @param elo ELO de FACEIT en la última sincronización, o null
+     */
+    public record CuentaVista(Juego juego, String nick, String rol, Integer nivel, Integer elo, Instant ultimaSync) {}
 
     public record JugadorVista(
             String slug, String nombre, boolean demo, List<CuentaVista> cuentas, List<ResumenJuego> resumenes) {}

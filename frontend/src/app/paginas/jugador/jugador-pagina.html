@@ -30,6 +30,15 @@
                   {{ i18n.rol(c.rol) }}
                 </span>
               }
+              @if (c.nivel) {
+                <span class="acct-rol acct-nivel" [title]="t('jugador.nivelFaceit')">
+                  <span class="sr-only">{{ t('jugador.nivelFaceit') }}:</span>
+                  {{ t('jugador.nivel', { nivel: c.nivel }) }}
+                  @if (c.elo) {
+                    <span class="muted">· {{ i18n.entero(c.elo) }} ELO</span>
+                  }
+                </span>
+              }
             </span>
           }
           @if (ultimaPartida(); as ultima) {

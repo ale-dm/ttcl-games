@@ -3,7 +3,7 @@ from app.metricas import AJUSTES_ROL, METRICAS, NO_SE_JUZGA, PESA_MAS, TOLERA, f
 from app.modelos import Desglose, JugadorRef, MediasEquipo, PeticionInsights, Resumen, Sinergias
 from app.textos import NOMBRES_MOMENTO, NOMBRES_ROL
 
-from .conftest import companero, equipo_cs2, momento, resumen_cs2, seguido, sesiones
+from .conftest import companero, equipo_cs2, momento, nivel_faceit, resumen_cs2, seguido, sesiones
 
 
 def peticion(**cambios) -> PeticionInsights:
@@ -456,3 +456,89 @@ def test_formatear():
     assert formatear(1234, "int", "es") == "1234"
     assert formatear(12345, "int", "en") == "12,345"
     assert formatear(None, "pct", "es") == "—"
+
+
+# ─── Nivel de FACEIT (P8) ────────────────────────────────────────────────────
+
+
+def datos_cs2(**cambios) -> dict[str, float]:
+    return {"adr": 80.0, "hs_pct": 45.0, "kr": 0.7, "entry_pct": 50.0, "clutch_pct": 25.0, **cambios}
+
+
+def test_con_su_nivel_compara_con_lo_normal_en_el_y_no_con_la_referencia_fija():
+    r = resumen_cs2(datos_medios=datos_cs2(hs_pct=38.0))
+    insights = generar_insights(peticion(resumen=r, nivel=nivel_faceit(hs_pct=(44.0, 20.0))))
+    hs = next(i for i in insights if i.id == "debil_hs_pct")
+    assert "el resto del equipo, 45,0 %, y un jugador de nivel 6 de FACEIT anda por 44,0 %." in hs.texto
+    assert "Lo haces mejor que en el 20 % de las partidas de ese nivel." in hs.texto
+    assert "jugador medio" not in hs.texto
+    assert [(b.etiqueta, b.valor) for b in hs.barras] == [("Tú", 38.0), ("Equipo", 45.0), ("Nivel 6", 44.0)]
+
+    # Sin nivel, como siempre: la referencia fija.
+    hs_fija = next(i for i in generar_insights(peticion(resumen=r)) if i.id == "debil_hs_pct")
+    assert "un jugador medio anda por 45,0 %" in hs_fija.texto
+    assert hs_fija.barras[-1].etiqueta == "Referencia"
+
+
+def test_el_nivel_cambia_lo_que_se_le_pide():
+    # Un 41 % de cabeza, como el resto del equipo: frente a la referencia fija (45 %) no es para avisar; en un nivel
+    # donde lo normal es un 48 %, sí; y en uno donde es un 38 %, nada.
+    r, eq = resumen_cs2(datos_medios=datos_cs2(hs_pct=41.0)), equipo_cs2(datos_medios=datos_cs2(hs_pct=41.0))
+    assert "debil_hs_pct" not in ids(generar_insights(peticion(resumen=r, equipo=eq)))
+    exigente = nivel_faceit(hs_pct=(48.0, 25.0))
+    assert "debil_hs_pct" in ids(generar_insights(peticion(resumen=r, equipo=eq, nivel=exigente)))
+    flojo = nivel_faceit(hs_pct=(38.0, 60.0))
+    assert "debil_hs_pct" not in ids(generar_insights(peticion(resumen=r, equipo=eq, nivel=flojo)))
+
+
+def test_metricas_sin_referencia_fija_y_las_que_es_mejor_tener_bajas():
+    # Las muertes no tienen referencia fija; con el nivel, sí. Muere más que en el 85 % de las partidas de su nivel,
+    # así que lo hace mejor que en el 15 %.
+    r = resumen_cs2(muertes_media=21.0)
+    insights = generar_insights(
+        peticion(resumen=r, equipo=equipo_cs2(muertes_media=21.0), nivel=nivel_faceit(muertes_media=(17.0, 85.0)))
+    )
+    muertes = next(i for i in insights if i.id == "debil_muertes_media")
+    assert muertes.nivel == "alto"  # un 24 % más que lo normal en su nivel
+    assert "Lo haces mejor que en el 15 % de las partidas de ese nivel." in muertes.texto
+    assert "debil_muertes_media" not in ids(generar_insights(peticion(resumen=r, equipo=equipo_cs2(muertes_media=21.0))))
+
+
+def test_en_lo_normal_de_su_nivel_lo_que_le_separa_del_equipo_es_para_vigilar():
+    # Tira la mitad de utilidad que el resto del equipo, pero lo normal en su nivel: a vigilar, no mejorar ya.
+    eq = equipo_cs2(datos_medios=datos_cs2(dano_utilidad=165.0))
+    r = resumen_cs2(datos_medios=datos_cs2(dano_utilidad=81.0))
+    sin_nivel = next(i for i in generar_insights(peticion(resumen=r, equipo=eq)) if i.id == "debil_dano_utilidad")
+    assert sin_nivel.nivel == "alto"
+    normal = nivel_faceit(dano_utilidad=(81.5, 50.0))
+    con_nivel = next(i for i in generar_insights(peticion(resumen=r, equipo=eq, nivel=normal)) if i.id == "debil_dano_utilidad")
+    assert con_nivel.nivel == "medio"
+    # Si también va por debajo de su nivel, sí es para mejorar ya.
+    bajo = nivel_faceit(dano_utilidad=(100.0, 30.0))
+    peor = next(i for i in generar_insights(peticion(resumen=r, equipo=eq, nivel=bajo)) if i.id == "debil_dano_utilidad")
+    assert peor.nivel == "alto"
+
+
+def test_entradas_frente_al_total_de_su_nivel_sin_percentil():
+    r = resumen_cs2(datos_medios=datos_cs2(entry_pct=36.0))
+    insights = generar_insights(peticion(resumen=r, nivel=nivel_faceit(entry_pct=(47.0, None))))
+    entry = next(i for i in insights if i.id == "debil_entry_pct")
+    assert entry.texto.endswith("y un jugador de nivel 6 de FACEIT anda por 47,0 %.")
+    assert entry.barras[-1].etiqueta == "Nivel 6"
+
+
+def test_lo_que_no_viene_del_nivel_sigue_con_la_referencia_fija():
+    # El winrate no lo manda la API (en tu nivel es un 50 % por cómo se emparejan las partidas).
+    r = resumen_cs2(winrate=38.0, kd=0.9)
+    insights = generar_insights(peticion(resumen=r, nivel=nivel_faceit(hs_pct=(44.0, 50.0))))
+    winrate = next(i for i in insights if i.id == "debil_winrate")
+    assert "un jugador medio anda por 50,0 %" in winrate.texto
+
+
+def test_fortaleza_frente_a_su_nivel_en_ingles():
+    r = resumen_cs2(datos_medios=datos_cs2(adr=96.0))
+    insights = generar_insights(peticion(lang="en", resumen=r, nivel=nivel_faceit(adr=(82.0, 88.4))))
+    adr = next(i for i in insights if i.id == "fuerte_adr")
+    assert "and a FACEIT level 6 player sits around 82." in adr.texto
+    assert "You do better than in 88% of the matches at that level." in adr.texto
+    assert adr.barras[-1].etiqueta == "Level 6"

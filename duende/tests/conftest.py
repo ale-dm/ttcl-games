@@ -2,12 +2,14 @@ import pytest
 
 from app.config import get_config
 from app.modelos import (
+    ComparativaNivel,
     Desglose,
     FilaMomento,
     FilaSinergia,
     JuegoContexto,
     JugadorContexto,
     MediasEquipo,
+    MetricaNivel,
     Resumen,
     ResumenPeriodo,
     SeguimientoConsejo,
@@ -106,6 +108,7 @@ def jugador(
     sesiones=None,
     periodos=None,
     seguimiento=None,
+    nivel=None,
 ):
     return JugadorContexto(
         slug=slug,
@@ -121,7 +124,20 @@ def jugador(
                 sesiones=sesiones,
                 periodos=periodos or [],
                 seguimiento=seguimiento or [],
+                nivel=nivel,
             )
+        ],
+    )
+
+
+def nivel_faceit(nivel: int = 6, elo: int | None = 1290, **metricas: tuple[float, float | None]) -> ComparativaNivel:
+    """Nivel de FACEIT con 200 partidas de ese nivel y, por cada métrica que se pase, (lo normal en él, percentil)."""
+    return ComparativaNivel(
+        nivel=nivel,
+        elo=elo,
+        partidas=200,
+        metricas=[
+            MetricaNivel(metrica=m, referencia=ref, percentil=pct, muestras=200) for m, (ref, pct) in metricas.items()
         ],
     )
 
