@@ -60,14 +60,16 @@ export class Api {
     });
   }
 
+  /** Historial, con lo que dice el Duende de cada partida en el idioma pedido. */
   partidas(
     slug: string,
     juego: Juego | null,
     limite: number,
     offset: number,
     periodo: Periodo = 'todo',
+    lang: Idioma = 'es',
   ): Observable<PaginaPartidas> {
-    let params = new HttpParams().set('limite', limite).set('offset', offset);
+    let params = new HttpParams().set('limite', limite).set('offset', offset).set('lang', lang);
     if (juego) params = params.set('juego', juego);
     return this.http.get<PaginaPartidas>(`/api/jugadores/${encodeURIComponent(slug)}/partidas`, {
       params: conPeriodo(params, periodo),

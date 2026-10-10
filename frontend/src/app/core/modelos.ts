@@ -178,6 +178,8 @@ export interface PartidaVista {
   asistencias: number | null;
   datos: Record<string, number | string | null>;
   companeros: string[];
+  /** Lo que dice el Duende de la partida (rachas, récords del mes...), o null si no tiene nada especial. */
+  comentario: string | null;
 }
 
 export interface PaginaPartidas {

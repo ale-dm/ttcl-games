@@ -30,6 +30,9 @@ public class Partida {
     /** Cola, mapa o modo de juego. */
     private String modo;
 
+    /** Cuándo se guardó (P11: las novedades son lo guardado desde la última vez que se preguntó). */
+    private Instant guardadaEn;
+
     protected Partida() {}
 
     public Partida(Juego juego, String externalId, Instant jugadaEn, Integer duracionSeg, String modo) {
@@ -38,6 +41,7 @@ public class Partida {
         this.jugadaEn = jugadaEn;
         this.duracionSeg = duracionSeg;
         this.modo = modo;
+        this.guardadaEn = Instant.now();
     }
 
     public Long getId() {
@@ -62,5 +66,14 @@ public class Partida {
 
     public String getModo() {
         return modo;
+    }
+
+    public Instant getGuardadaEn() {
+        return guardadaEn;
+    }
+
+    /** Para los datos de ejemplo: como si se hubiera sincronizado al acabar. */
+    public void setGuardadaEn(Instant guardadaEn) {
+        this.guardadaEn = guardadaEn;
     }
 }

@@ -260,7 +260,7 @@ public class DemoSeeder implements ApplicationRunner {
                 int rondas = rondasNuestras + rondasRival;
                 int duracion = rondas * 105 + rnd.nextInt(240);
 
-                Partida partida = partidas.save(
+                Partida partida = guardarPartida(
                         new Partida(Juego.CS2, "demo-cs2-%04d".formatted(i), inicio, duracion, mapa));
                 inicio = inicio.plusSeconds(duracion + pausa());
                 for (Demo d : grupo) {
@@ -323,7 +323,7 @@ public class DemoSeeder implements ApplicationRunner {
                 double minutos = redondear(
                         cola.equals("Conquest") ? 24 + rnd.nextDouble() * 14 : 14 + rnd.nextDouble() * 8, 1);
 
-                Partida partida = partidas.save(new Partida(Juego.SMITE2, "demo-smite2-%04d".formatted(i), inicio,
+                Partida partida = guardarPartida(new Partida(Juego.SMITE2, "demo-smite2-%04d".formatted(i), inicio,
                         (int) (minutos * 60), cola));
                 inicio = inicio.plusSeconds((long) (minutos * 60) + pausa());
                 // Desde que el Duende le avisó, Jugador 4 muere todavía más.
@@ -412,6 +412,12 @@ public class DemoSeeder implements ApplicationRunner {
         List<Demo> mezcla = new ArrayList<>(candidatos);
         Collections.shuffle(mezcla, rnd);
         return mezcla.subList(0, r < 0.8 ? Math.min(2, mezcla.size()) : 1);
+    }
+
+    /** Como si se hubiera sincronizado al acabar (P11: así las novedades de ejemplo son las partidas del último día). */
+    private Partida guardarPartida(Partida partida) {
+        partida.setGuardadaEn(partida.getJugadaEn().plusSeconds(partida.getDuracionSeg()));
+        return partidas.save(partida);
     }
 
     private void guardar(Partida partida, Jugador jugador, boolean gano, int kills, int muertes, int asist,

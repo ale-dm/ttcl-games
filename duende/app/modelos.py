@@ -202,6 +202,69 @@ class RespuestaInsightsLote(Base):
     items: list[ItemLote]
 
 
+# ─── Informe de cada partida (P10) y semana (P11) ────────────────────────────
+
+
+class Hecho(Base):
+    """Algo especial de una partida frente a su historial. Lo calcula la API; aquí solo se cuenta."""
+
+    tipo: str
+    metrica: str | None = None
+    valor: float | None = None
+    referencia: float | None = None
+    n: int | None = None
+    clave: str | None = None
+
+
+class ItemInforme(Base):
+    # Lo elige la API para casar la respuesta (una partida con dos del equipo son dos informes).
+    id: str
+    juego: Juego
+    hechos: list[Hecho] = Field(default_factory=list)
+
+
+class PeticionInformes(Base):
+    lang: Idioma = "es"
+    items: list[ItemInforme] = Field(default_factory=list, max_length=200)
+
+
+class TextoInforme(Base):
+    id: str
+    texto: str | None = None
+
+
+class RespuestaInformes(Base):
+    items: list[TextoInforme]
+
+
+class FilaSemana(Base):
+    slug: str
+    nombre: str
+    partidas: int
+    victorias: int = 0
+    winrate: float | None = None
+    kd: float | None = None
+
+
+class SemanaJuego(Base):
+    """Los últimos 7 días de un juego: el mejor y el peor ya los elige la API (con un mínimo de partidas)."""
+
+    juego: Juego
+    partidas: int = 0
+    jugadores: list[FilaSemana] = Field(default_factory=list)
+    mejor: FilaSemana | None = None
+    peor: FilaSemana | None = None
+
+
+class PeticionSemana(Base):
+    lang: Idioma = "es"
+    juegos: list[SemanaJuego] = Field(default_factory=list)
+
+
+class RespuestaSemana(Base):
+    texto: str
+
+
 # ─── Chat ────────────────────────────────────────────────────────────────────
 
 

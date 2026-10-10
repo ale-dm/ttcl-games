@@ -24,27 +24,34 @@ import com.ttcl.games.servicio.Vistas.DetalleJuego;
 import com.ttcl.games.servicio.Vistas.FilaRanking;
 import com.ttcl.games.servicio.Vistas.GruposJuego;
 import com.ttcl.games.servicio.Vistas.JugadorVista;
+import com.ttcl.games.servicio.Vistas.Novedad;
 import com.ttcl.games.servicio.Vistas.PaginaPartidas;
 import com.ttcl.games.servicio.Vistas.PartidaVista;
 import com.ttcl.games.servicio.Vistas.Ranking;
 import com.ttcl.games.stats.Estadisticas;
 import com.ttcl.games.stats.FiltroPartidas;
+import com.ttcl.games.stats.Informes;
 import com.ttcl.games.stats.Modelos.ConsejoAnterior;
 import com.ttcl.games.stats.Modelos.FilaParticipacion;
+import com.ttcl.games.stats.Modelos.FilaSemana;
+import com.ttcl.games.stats.Modelos.Hecho;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
 import com.ttcl.games.stats.Modelos.Presencia;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
 import com.ttcl.games.stats.Modelos.ResumenPeriodo;
+import com.ttcl.games.stats.Modelos.SemanaJuego;
 import com.ttcl.games.stats.Modelos.Sesiones;
 import com.ttcl.games.stats.Modelos.Sinergias;
 import com.ttcl.games.stats.Periodo;
 import java.text.Normalizer;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -69,6 +76,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class EquipoServicio {
 
     private static final int PUNTOS_GRAFICA = 20;
+    /** Novedades que se dan de una vez (P11); las demás, en la siguiente consulta. */
+    public static final int MAX_NOVEDADES = 100;
+    static final Duration SEMANA = Duration.ofDays(7);
 
     private final JugadorRepo jugadores;
     private final CuentaRepo cuentas;
@@ -391,7 +401,7 @@ public class EquipoServicio {
         return new PaginaPartidas(items, filas.size());
     }
 
-    /** Una partida con los compañeros del equipo que estaban. */
+    /** Una partida con los compañeros del equipo que estaban (sin comentario del Duende: lo pone DuendeServicio). */
     private static PartidaVista partidaVista(Instantanea foto, Jugador j, FilaParticipacion f) {
         return new PartidaVista(
                 f.partidaId(), f.juego(), f.jugadaEn(), f.modo(), f.gano(), f.kills(), f.muertes(), f.asistencias(),
@@ -399,7 +409,77 @@ public class EquipoServicio {
                 foto.presencias(f.juego()).getOrDefault(f.partidaId(), List.of()).stream()
                         .filter(p -> !p.slug().equals(j.getSlug()))
                         .map(Presencia::nombre)
-                        .toList());
+                        .toList(),
+                null);
+    }
+
+    /**
+     * Lo especial de cada una de esas partidas de un jugador (P10), por id. Con todas sus partidas aunque la página
+     * enseñe un periodo: el informe de una partida no depende de lo que se esté viendo.
+     */
+    public Map<Long, List<Hecho>> hechos(String slug, Collection<Long> partidaIds) {
+        Instantanea foto = instantanea();
+        Jugador j = foto.porSlug(slug);
+        Set<Long> ids = Set.copyOf(partidaIds);
+        Map<Long, List<Hecho>> hechos = new HashMap<>();
+        for (Juego juego : Juego.values()) {
+            List<FilaParticipacion> filas = foto.filas(j, juego);
+            filas.stream()
+                    .filter(f -> ids.contains(f.partidaId()))
+                    .forEach(f -> hechos.put(f.partidaId(), Informes.hechos(juego, f, filas)));
+        }
+        return hechos;
+    }
+
+    /** Una novedad con lo que tiene de especial, para que el Duende la cuente. */
+    public record NovedadConHechos(Novedad novedad, List<Hecho> hechos) {}
+
+    /** Las novedades de (desde, hasta]; {@code hasta} es hasta dónde se ha llegado (antes, si había demasiadas). */
+    public record LoteNovedades(Instant desde, Instant hasta, List<NovedadConHechos> items) {}
+
+    /**
+     * Lo guardado entre {@code desde} (sin incluir) y {@code hasta}, una novedad por jugador y partida, la primera
+     * guardada primero (P11). Como mucho unas {@value #MAX_NOVEDADES}, sin partir las guardadas en el mismo instante.
+     */
+    public LoteNovedades novedades(Instant desde, Instant hasta) {
+        List<Participacion> guardadas = participaciones.findGuardadasEntre(desde, hasta);
+        if (guardadas.size() > MAX_NOVEDADES) {
+            Instant corte = guardadas.get(MAX_NOVEDADES - 1).getPartida().getGuardadaEn();
+            guardadas = guardadas.stream().filter(p -> !p.getPartida().getGuardadaEn().isAfter(corte)).toList();
+            hasta = corte;
+        }
+        if (guardadas.isEmpty()) {
+            return new LoteNovedades(desde, hasta, List.of());
+        }
+        Instantanea foto = instantanea();
+        List<NovedadConHechos> items = guardadas.stream()
+                .map(p -> {
+                    Jugador j = p.getJugador();
+                    FilaParticipacion f = FilaParticipacion.de(p);
+                    Novedad novedad = new Novedad(new JugadorRef(j.getSlug(), j.getNombre()), partidaVista(foto, j, f));
+                    return new NovedadConHechos(novedad, Informes.hechos(f.juego(), f, foto.filas(j, f.juego())));
+                })
+                .toList();
+        return new LoteNovedades(desde, hasta, items);
+    }
+
+    /** Los últimos 7 días de cada juego con partidas: cada jugador, el mejor y el peor (P11). */
+    public List<SemanaJuego> semana(Instant ahora) {
+        Instantanea foto = instantanea().desde(ahora.minus(SEMANA));
+        List<SemanaJuego> juegos = new ArrayList<>();
+        for (Juego juego : Juego.values()) {
+            List<FilaSemana> filas = foto.jugadores().stream()
+                    .filter(j -> !foto.filas(j, juego).isEmpty())
+                    .map(j -> {
+                        ResumenJuego r = Estadisticas.resumir(juego, foto.filas(j, juego));
+                        return new FilaSemana(j.getSlug(), j.getNombre(), r.partidas(), r.victorias(), r.winrate(), r.kd());
+                    })
+                    .toList();
+            if (!filas.isEmpty()) {
+                juegos.add(Informes.semana(juego, foto.presencias(juego).size(), filas));
+            }
+        }
+        return juegos;
     }
 
     /**

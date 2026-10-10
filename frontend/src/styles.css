@@ -314,6 +314,10 @@ h1 { font-size: 34px; letter-spacing: -0.03em; margin: 0; font-weight: 700; line
 .tbl td { padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .tbl td.on { font-weight: 650; color: var(--acc-ink); }
 .tbl tbody tr:last-child td { border-bottom: 0; }
+/* Lo que dice el Duende de una partida (P10), debajo de su fila. */
+.tbl tr.con-coment td { border-bottom: 0; padding-bottom: 4px; }
+.tbl tr.coment td { padding: 0 12px 10px; white-space: normal; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.tbl tr.coment app-marca-duende { vertical-align: -3px; margin-right: 6px; }
 .tbl tbody tr { transition: background 0.1s; }
 .tbl tbody tr:hover, .tbl tbody tr.hl { background: var(--surface2); }
 .tbl .r { text-align: right; }

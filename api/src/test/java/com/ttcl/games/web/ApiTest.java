@@ -11,12 +11,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ttcl.games.config.TtclProperties;
+import com.ttcl.games.discord.AvisosDiscord;
+import com.ttcl.games.discord.DiscordWebhook;
 import com.ttcl.games.dominio.ConsejoDado;
 import com.ttcl.games.dominio.Repositorios.ConsejoDadoRepo;
 import com.ttcl.games.dominio.Repositorios.ValoracionRepo;
 import com.ttcl.games.dominio.Valoracion;
 import com.ttcl.games.duende.DuendeCliente;
 import com.ttcl.games.duende.DuendeModelos.Insight;
+import com.ttcl.games.duende.DuendeModelos.ItemInforme;
 import com.ttcl.games.duende.DuendeModelos.ItemLote;
 import com.ttcl.games.duende.DuendeModelos.JuegoContexto;
 import com.ttcl.games.duende.DuendeModelos.JugadorContexto;
@@ -24,13 +27,16 @@ import com.ttcl.games.duende.DuendeModelos.PeticionChat;
 import com.ttcl.games.duende.DuendeModelos.PeticionInsights;
 import com.ttcl.games.duende.DuendeModelos.RespuestaChat;
 import com.ttcl.games.duende.DuendeModelos.Salud;
+import com.ttcl.games.duende.DuendeModelos.TextoInforme;
 import com.ttcl.games.duende.DuendeNoDisponibleException;
 import com.ttcl.games.juego.Juego;
 import com.ttcl.games.stats.Modelos.ComparativaNivel;
 import com.ttcl.games.stats.Modelos.FilaMomento;
 import com.ttcl.games.stats.Modelos.FilaSinergia;
+import com.ttcl.games.stats.Modelos.Hecho;
 import com.ttcl.games.stats.Modelos.MetricaNivel;
 import com.ttcl.games.stats.Modelos.ResumenPeriodo;
+import com.ttcl.games.stats.Modelos.SemanaJuego;
 import com.ttcl.games.stats.Periodo;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -73,6 +79,12 @@ class ApiTest {
     @Autowired
     ValoracionRepo valoraciones;
 
+    @Autowired
+    DiscordFalso discord;
+
+    @Autowired
+    AvisosDiscord avisos;
+
     MockMvc mvc;
 
     /**
@@ -87,6 +99,8 @@ class ApiTest {
         PeticionChat ultimaChat;
         PeticionInsights ultimaInsights;
         List<PeticionInsights> ultimoLote;
+        List<ItemInforme> ultimosInformes;
+        List<SemanaJuego> ultimaSemana;
 
         DuendeFalso(TtclProperties props) {
             super(props);
@@ -119,9 +133,49 @@ class ApiTest {
             return respuesta;
         }
 
+        /** Cada informe, "Comentario de" y el tipo de su primer hecho. */
+        @Override
+        public List<TextoInforme> informes(String lang, List<ItemInforme> items) {
+            ultimosInformes = items;
+            if (fallo != null) {
+                throw fallo;
+            }
+            return items.stream()
+                    .map(i -> new TextoInforme(i.id(), "Comentario de " + i.hechos().getFirst().tipo()))
+                    .toList();
+        }
+
+        @Override
+        public String semana(String lang, List<SemanaJuego> juegos) {
+            ultimaSemana = juegos;
+            if (fallo != null) {
+                throw fallo;
+            }
+            return "Semana de " + juegos.size() + " juegos.";
+        }
+
         @Override
         public Optional<Salud> salud() {
             return Optional.empty();
+        }
+    }
+
+    /** Sustituye al webhook de Discord: apunta los mensajes en vez de mandarlos. */
+    static class DiscordFalso extends DiscordWebhook {
+        final List<String> mensajes = new ArrayList<>();
+
+        DiscordFalso(TtclProperties props) {
+            super(props);
+        }
+
+        @Override
+        public boolean configurado() {
+            return true;
+        }
+
+        @Override
+        public void enviar(String contenido) {
+            mensajes.add(contenido);
         }
     }
 
@@ -131,6 +185,12 @@ class ApiTest {
         @Primary
         DuendeFalso duendeFalso(TtclProperties props) {
             return new DuendeFalso(props);
+        }
+
+        @Bean
+        @Primary
+        DiscordFalso discordFalso(TtclProperties props) {
+            return new DiscordFalso(props);
         }
     }
 
@@ -144,6 +204,9 @@ class ApiTest {
         duende.ultimaChat = null;
         duende.ultimaInsights = null;
         duende.ultimoLote = null;
+        duende.ultimosInformes = null;
+        duende.ultimaSemana = null;
+        discord.mensajes.clear();
         valoraciones.deleteAll();
     }
 
@@ -743,6 +806,106 @@ class ApiTest {
                         .content("{\"mensajes\": [{\"rol\": \"usuario\", \"texto\": \"¿Cómo voy en Mirage?\"}]}"))
                 .andExpect(status().isOk());
         assertThat(duende.ultimaChat.hoy()).isEqualTo(LocalDate.now(ZoneId.of("Europe/Madrid")).toString());
+    }
+
+    // ─── Informe de cada partida (P10) y novedades (P11) ────────────────────
+
+    @Test
+    void elHistorialTraeLoQueDiceElDuendeDeCadaPartida() throws Exception {
+        // La última de Jugador 4 en los datos de ejemplo: su tercera derrota seguida.
+        JsonNode pagina = json("/api/jugadores/j4/partidas?juego=smite2&limite=5&lang=en");
+        assertThat(pagina.get("items").get(0).get("comentario").asString()).isEqualTo("Comentario de racha_derrotas");
+        assertThat(duende.ultimosInformes).isNotEmpty().allSatisfy(i -> assertThat(i.hechos()).isNotEmpty());
+        ItemInforme ultima = duende.ultimosInformes.getFirst();
+        assertThat(ultima.id()).isEqualTo(pagina.get("items").get(0).get("partidaId").asString());
+        assertThat(ultima.hechos()).contains(new Hecho("racha_derrotas", null, null, null, 3, null));
+
+        // Sin Duende, el historial sale igual, sin comentarios.
+        duende.fallo = new DuendeNoDisponibleException("caído", null);
+        mvc.perform(get("/api/jugadores/j4/partidas?juego=smite2&limite=5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items", hasSize(5)))
+                .andExpect(jsonPath("$.items[0].comentario").doesNotExist());
+    }
+
+    @Test
+    void novedadesDesdeUnMomentoEnTandasDeComoMucho100() throws Exception {
+        // Los datos de ejemplo se guardan al acabar cada partida: en los últimos 3 días están las rachas del final.
+        Instant haceTresDias = Instant.now().minus(Duration.ofDays(3));
+        JsonNode recientes = json("/api/novedades?desde=" + haceTresDias);
+        JsonNode partidas = recientes.get("partidas");
+        assertThat(partidas.size()).isPositive();
+        List<String> quien = new ArrayList<>();
+        partidas.forEach(n -> quien.add(n.get("jugador").get("slug").asString()));
+        assertThat(quien).contains("j1", "j4");
+        JsonNode deJ4 = null;
+        for (JsonNode n : partidas) {
+            if (n.get("jugador").get("slug").asString().equals("j4")) {
+                deJ4 = n;
+            }
+        }
+        assertThat(deJ4.get("partida").get("comentario").asString()).isEqualTo("Comentario de racha_derrotas");
+        assertThat(duende.ultimosInformes).extracting(ItemInforme::id).allMatch(id -> id.matches("\\d+-j\\d"));
+
+        // Desde el principio: como mucho 100 (sin partir un mismo instante) y "hasta" para seguir sin repetir.
+        JsonNode primera = json("/api/novedades?desde=2020-01-01T00:00:00Z");
+        int enLaPrimera = primera.get("partidas").size();
+        assertThat(enLaPrimera).isBetween(100, 110);
+        String hasta = primera.get("hasta").asString();
+        assertThat(Instant.parse(hasta)).isBefore(Instant.now());
+        JsonNode segunda = json("/api/novedades?desde=" + hasta);
+        assertThat(segunda.get("desde").asString()).isEqualTo(hasta);
+        assertThat(Instant.parse(segunda.get("partidas").get(0).get("partida").get("jugadaEn").asString()))
+                .isAfterOrEqualTo(Instant.parse(primera.get("partidas").get(enLaPrimera - 1).get("partida")
+                        .get("jugadaEn").asString()));
+
+        // Sin "desde", el último día; en el futuro, nada; una fecha mal escrita, 400.
+        JsonNode porDefecto = json("/api/novedades");
+        assertThat(Duration.between(Instant.parse(porDefecto.get("desde").asString()), Instant.now()).toHours())
+                .isEqualTo(24);
+        assertThat(json("/api/novedades?desde=2099-01-01T00:00:00Z").get("partidas")).isEmpty();
+        mvc.perform(get("/api/novedades?desde=ayer")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void resumenDeLaSemanaConElMejorYElPeor() throws Exception {
+        JsonNode semana = json("/api/novedades/semana?lang=es");
+        assertThat(semana.get("texto").asString()).isEqualTo("Semana de 2 juegos.");
+        JsonNode cs2 = semana.get("juegos").get(0);
+        assertThat(cs2.get("juego").asString()).isEqualTo("cs2");
+        assertThat(cs2.get("partidas").asInt()).isPositive();
+        assertThat(cs2.get("mejor").get("winrate").asDouble()).isGreaterThanOrEqualTo(cs2.get("peor").get("winrate").asDouble());
+        assertThat(duende.ultimaSemana).hasSize(2);
+
+        // Sin Duende, los números igual.
+        duende.fallo = new DuendeNoDisponibleException("caído", null);
+        mvc.perform(get("/api/novedades/semana"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.texto").doesNotExist())
+                .andExpect(jsonPath("$.juegos", hasSize(2)));
+    }
+
+    @Test
+    void conWebhookPublicaLasNovedadesYLaSemanaEnDiscord() {
+        int publicadas = avisos.publicarNovedades(Instant.now().minus(Duration.ofDays(3)));
+        assertThat(publicadas).isPositive();
+        assertThat(discord.mensajes).isNotEmpty().allSatisfy(m -> assertThat(m.length()).isLessThanOrEqualTo(2000));
+        assertThat(discord.mensajes.getFirst()).startsWith("🎮 **Partidas nuevas**\n");
+        String todo = String.join("\n", discord.mensajes);
+        assertThat(todo).contains("**Jugador 4** · SMITE 2 · ").contains("❌ Derrota").contains("> Comentario de racha_derrotas");
+
+        discord.mensajes.clear();
+        avisos.publicarSemana();
+        assertThat(discord.mensajes).containsExactly("📅 **Resumen de la semana**\nSemana de 2 juegos.");
+
+        // Sin Duende, la semana sale con los números; y si no hay nada nuevo, no se publica nada.
+        discord.mensajes.clear();
+        duende.fallo = new DuendeNoDisponibleException("caído", null);
+        avisos.publicarSemana();
+        assertThat(discord.mensajes.getFirst()).contains("**Counter-Strike 2**: ").contains("mejor: ");
+        discord.mensajes.clear();
+        assertThat(avisos.publicarNovedades(Instant.parse("2099-01-01T00:00:00Z"))).isZero();
+        assertThat(discord.mensajes).isEmpty();
     }
 
     @Test

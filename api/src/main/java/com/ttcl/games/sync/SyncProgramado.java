@@ -1,7 +1,9 @@
 package com.ttcl.games.sync;
 
 import com.ttcl.games.config.TtclProperties;
+import com.ttcl.games.discord.AvisosDiscord;
 import com.ttcl.games.juego.Juego;
+import java.time.Instant;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -12,7 +14,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Sincroniza cada {@code ttcl.sync.intervalo-min} minutos (el primer intento, un minuto después de arrancar). Solo
- * con los juegos que tienen credenciales: sin FACEIT_API_KEY no se toca CS2, y lo mismo con SMITE 2.
+ * con los juegos que tienen credenciales: sin FACEIT_API_KEY no se toca CS2, y lo mismo con SMITE 2. Si hay partidas
+ * nuevas y webhook de Discord, se publican (P11).
  */
 @Component
 public class SyncProgramado {
@@ -20,11 +23,13 @@ public class SyncProgramado {
     private static final Logger log = LoggerFactory.getLogger(SyncProgramado.class);
 
     private final Sincronizador sincronizador;
+    private final AvisosDiscord avisos;
     private final TtclProperties props;
     private final Map<Juego, FuenteJuego> fuentes = new EnumMap<>(Juego.class);
 
-    public SyncProgramado(Sincronizador sincronizador, TtclProperties props) {
+    public SyncProgramado(Sincronizador sincronizador, AvisosDiscord avisos, TtclProperties props) {
         this.sincronizador = sincronizador;
+        this.avisos = avisos;
         this.props = props;
         if (props.faceit().configurada()) {
             fuentes.put(Juego.CS2, new FaceitFuente(props.faceit().apiKey(), props.faceit().base()));
@@ -44,8 +49,19 @@ public class SyncProgramado {
             log.debug("Sin fuentes configuradas: no se sincroniza nada");
             return;
         }
+        Instant inicio = Instant.now();
         var resultados = sincronizador.sincronizarTodo(fuentes, props.sync().limite());
         long ok = resultados.stream().filter(Sincronizador.ResultadoCuenta::ok).count();
         log.info("Sincronización terminada: {} cuentas bien, {} con error", ok, resultados.size() - ok);
+        if (resultados.stream().anyMatch(r -> r.partidasNuevas() > 0)) {
+            try {
+                int publicadas = avisos.publicarNovedades(inicio);
+                if (publicadas > 0) {
+                    log.info("{} partidas nuevas publicadas en Discord", publicadas);
+                }
+            } catch (RuntimeException e) {
+                log.warn("No se pudieron publicar las novedades en Discord: {}", e.getMessage());
+            }
+        }
     }
 }

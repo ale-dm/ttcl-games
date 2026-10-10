@@ -172,6 +172,28 @@ public final class Modelos {
      */
     public record ComparativaNivel(int nivel, Integer elo, int partidas, List<MetricaNivel> metricas) {}
 
+    /**
+     * Algo especial de una partida frente al historial del jugador (P10). El Duende lo convierte en una frase.
+     *
+     * @param tipo racha_victorias, racha_derrotas, fin_racha_victorias, fin_racha_derrotas, racha_victorias_clave,
+     *     racha_derrotas_clave, estreno_clave, mejor_mes, peor_mes, sobre_media o bajo_media
+     * @param metrica de qué métrica habla (kills_media, adr, hs_pct, kd, kda, dano), si habla de una
+     * @param valor el de esta partida
+     * @param referencia con qué se compara: el mejor o el peor de los 30 días anteriores, o su media
+     * @param n partidas de la racha (o de la racha que se acaba), o partidas con las que se compara
+     * @param clave mapa o dios, en las rachas y estrenos de un mapa o dios
+     */
+    public record Hecho(String tipo, String metrica, Double valor, Double referencia, Integer n, String clave) {}
+
+    /** Cómo le ha ido a un jugador en un juego en los últimos 7 días (P11: resumen semanal). */
+    public record FilaSemana(String slug, String nombre, int partidas, int victorias, Double winrate, Double kd) {}
+
+    /**
+     * La semana de un juego: cuántas partidas jugó el equipo, cada jugador y el mejor y el peor (con un mínimo de
+     * partidas; el peor es null si solo llega uno).
+     */
+    public record SemanaJuego(Juego juego, int partidas, List<FilaSemana> jugadores, FilaSemana mejor, FilaSemana peor) {}
+
     /** Un punto de la gráfica de partidas. */
     public record PuntoSerie(
             long partidaId, Instant fecha, Boolean gano, Integer kills, Integer muertes, Integer asistencias,

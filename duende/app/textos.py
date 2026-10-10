@@ -561,6 +561,125 @@ FRASES: dict[Idioma, dict[str, str]] = {
     },
 }
 
+# ─── Informe de cada partida (P10) ───────────────────────────────────────────
+# Una frase por tipo de hecho, con variantes (se elige siempre la misma para la misma partida). Huecos: {ordinal}
+# (Tercera, Cuarta...), {n}, {clave} (mapa o dios), {que} (la métrica en una frase), {metrica}, {valor}, {referencia}.
+
+INFORMES: dict[str, dict[Idioma, list[str]]] = {
+    "racha_derrotas": {
+        "es": ["{ordinal} derrota seguida.", "Van {n} derrotas seguidas: igual toca parar."],
+        "en": ["{ordinal} loss in a row.", "That's {n} losses in a row: maybe time for a break."],
+    },
+    "racha_victorias": {
+        "es": ["{ordinal} victoria seguida.", "Van {n} seguidas ganando. Que no pare."],
+        "en": ["{ordinal} win in a row.", "That's {n} wins in a row. Keep it going."],
+    },
+    "fin_racha_derrotas": {
+        "es": ["Por fin: se acabó la racha de {n} derrotas.", "Se rompe la racha de {n} derrotas. Ya era hora."],
+        "en": ["Finally: the {n}-loss streak is over.", "The {n}-loss streak is broken. About time."],
+    },
+    "fin_racha_victorias": {
+        "es": ["Se acabó la racha de {n} victorias. Tenía que pasar.", "Adiós a la racha de {n} victorias."],
+        "en": ["The {n}-win streak is over. It had to happen.", "Goodbye to the {n}-win streak."],
+    },
+    "racha_derrotas_clave": {
+        "es": ["{ordinal} derrota seguida en {clave}.", "{clave} ya va por {n} derrotas seguidas: se te atraganta."],
+        "en": ["{ordinal} loss in a row on {clave}.", "{clave}: {n} losses in a row. It's got your number."],
+    },
+    "racha_victorias_clave": {
+        "es": ["{ordinal} victoria seguida en {clave}: ya es tu terreno.", "{n} seguidas ganando en {clave}."],
+        "en": ["{ordinal} win in a row on {clave}: your turf now.", "{n} straight wins on {clave}."],
+    },
+    "estreno_clave": {
+        "es": ["Estreno en {clave}.", "Primera vez en {clave}."],
+        "en": ["First time on {clave}.", "{clave} debut."],
+    },
+    "mejor_mes": {
+        "es": ["{Que_mejor} del mes: {valor} (lo mejor de antes, {referencia})."],
+        "en": ["{Que_mejor} of the month: {valor} (the previous best, {referencia})."],
+    },
+    "peor_mes": {
+        "es": ["{Que_peor} del mes: {valor} (lo peor de antes, {referencia})."],
+        "en": ["{Que_peor} of the month: {valor} (the previous worst, {referencia})."],
+    },
+    "sobre_media": {
+        "es": ["{Metrica} muy por encima de lo tuyo: {valor} (sueles andar por {referencia})."],
+        "en": ["{Metrica} way above your usual: {valor} (you usually sit around {referencia})."],
+    },
+    "bajo_media": {
+        "es": ["{Metrica} muy por debajo de lo tuyo: {valor} (sueles andar por {referencia})."],
+        "en": ["{Metrica} way below your usual: {valor} (you usually sit around {referencia})."],
+    },
+}
+
+# Cómo se dice cada métrica en "tu mejor ... del mes" y en "... muy por encima de lo tuyo".
+METRICAS_INFORME: dict[str, dict[Idioma, dict[str, str]]] = {
+    "kills_media": {
+        "es": {"mejor": "tu partida con más kills", "peor": "tu partida con menos kills", "nombre": "kills"},
+        "en": {"mejor": "your highest-kill game", "peor": "your lowest-kill game", "nombre": "kills"},
+    },
+    "adr": {
+        "es": {"mejor": "tu mejor ADR", "peor": "tu peor ADR", "nombre": "ADR"},
+        "en": {"mejor": "your best ADR", "peor": "your worst ADR", "nombre": "ADR"},
+    },
+    "hs_pct": {
+        "es": {"mejor": "tu mejor % de headshot", "peor": "tu peor % de headshot", "nombre": "% de headshot"},
+        "en": {"mejor": "your best headshot %", "peor": "your worst headshot %", "nombre": "headshot %"},
+    },
+    "kd": {
+        "es": {"mejor": "tu mejor K/D", "peor": "tu peor K/D", "nombre": "K/D"},
+        "en": {"mejor": "your best K/D", "peor": "your worst K/D", "nombre": "K/D"},
+    },
+    "kda": {
+        "es": {"mejor": "tu mejor KDA", "peor": "tu peor KDA", "nombre": "KDA"},
+        "en": {"mejor": "your best KDA", "peor": "your worst KDA", "nombre": "KDA"},
+    },
+    "dano": {
+        "es": {"mejor": "tu partida con más daño", "peor": "tu partida con menos daño", "nombre": "daño"},
+        "en": {"mejor": "your highest-damage game", "peor": "your lowest-damage game", "nombre": "damage"},
+    },
+}
+
+# Cómo se une la segunda frase según lo que dice la primera: lo mismo (las dos buenas o las dos malas) o lo contrario.
+CONECTORES: dict[Idioma, dict[str, str]] = {
+    "es": {"y_encima": "Y encima, ", "al_menos": "Al menos, ", "eso_si": "Eso sí, ", "ademas": "Además, "},
+    "en": {"y_encima": "And on top of that, ", "al_menos": "At least ", "eso_si": "Mind you, ", "ademas": "Also, "},
+}
+
+ORDINALES: dict[Idioma, dict[int, str]] = {
+    "es": {2: "Segunda", 3: "Tercera", 4: "Cuarta", 5: "Quinta", 6: "Sexta", 7: "Séptima", 8: "Octava", 9: "Novena",
+           10: "Décima"},
+    "en": {2: "Second", 3: "Third", 4: "Fourth", 5: "Fifth", 6: "Sixth", 7: "Seventh", 8: "Eighth", 9: "Ninth",
+           10: "Tenth"},
+}
+
+# ─── Resumen de la semana (P11) ──────────────────────────────────────────────
+
+SEMANA: dict[Idioma, dict[str, str]] = {
+    "es": {
+        "juego": "**{juego}**: {partidas} {palabra_partidas} del equipo en los últimos 7 días.",
+        "mejor": "El mejor, {nombre}: {victorias} de {partidas} ganadas ({winrate}).",
+        "peor": "El peor, {nombre}: {victorias} de {partidas} ({winrate}).",
+        "nadie": "Nadie llegó a 3 partidas: no hay mejor ni peor.",
+        "solo": "Solo {nombre} llegó a 3 partidas: {victorias} de {partidas} ganadas ({winrate}).",
+        "pleno": "Que alguien le pida el secreto a {nombre}.",
+        "hundido": "A {nombre} le toca descanso o entrenamiento, lo que prefiera.",
+        "partida": "partida",
+        "partidas": "partidas",
+    },
+    "en": {
+        "juego": "**{juego}**: {partidas} team {palabra_partidas} in the last 7 days.",
+        "mejor": "Best: {nombre}, {victorias} of {partidas} won ({winrate}).",
+        "peor": "Worst: {nombre}, {victorias} of {partidas} ({winrate}).",
+        "nadie": "Nobody reached 3 matches: no best or worst this time.",
+        "solo": "Only {nombre} reached 3 matches: {victorias} of {partidas} won ({winrate}).",
+        "pleno": "Someone ask {nombre} for the secret.",
+        "hundido": "{nombre} needs a rest or some practice, their pick.",
+        "partida": "match",
+        "partidas": "matches",
+    },
+}
+
 # Nombre de cada rol para meterlo en una frase ("tu rol de {rol}" / "your {rol} role").
 NOMBRES_ROL: dict[str, dict[Idioma, str]] = {
     "entry": {"es": "entry", "en": "entry"},

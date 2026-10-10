@@ -44,3 +44,10 @@ ttcl:
   sync:
     intervalo-min: ${SYNC_INTERVAL_MIN:60}
     limite: ${SYNC_LIMITE:20}
+  # Webhook de un canal de Discord (P11): si está, la API publica ahí las partidas nuevas tras cada sincronización, con
+  # lo que dice el Duende, y el resumen de la semana. Vacío: no publica nada (el bot del grupo puede leer /api/novedades).
+  discord:
+    webhook-url: ${DISCORD_WEBHOOK_URL:}
+    lang: ${DISCORD_LANG:es}
+    # Cuándo se publica el resumen de la semana, en la zona del equipo (cron de Spring: segundo minuto hora día mes día-semana).
+    resumen-semanal: ${DISCORD_RESUMEN_SEMANAL:0 0 10 * * MON}

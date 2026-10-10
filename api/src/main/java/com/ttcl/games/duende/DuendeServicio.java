@@ -1,19 +1,31 @@
 package com.ttcl.games.duende;
 
 import com.ttcl.games.duende.DuendeModelos.Insight;
+import com.ttcl.games.duende.DuendeModelos.ItemInforme;
 import com.ttcl.games.duende.DuendeModelos.ItemLote;
 import com.ttcl.games.duende.DuendeModelos.Mensaje;
 import com.ttcl.games.duende.DuendeModelos.PeticionChat;
 import com.ttcl.games.duende.DuendeModelos.RespuestaChat;
 import com.ttcl.games.juego.Juego;
 import com.ttcl.games.servicio.EquipoServicio;
+import com.ttcl.games.servicio.EquipoServicio.LoteNovedades;
+import com.ttcl.games.servicio.EquipoServicio.NovedadConHechos;
 import com.ttcl.games.servicio.MemoriaConsejos;
 import com.ttcl.games.servicio.Vistas.ConsejoBreve;
 import com.ttcl.games.servicio.Vistas.ConsejosVista;
 import com.ttcl.games.servicio.Vistas.JugadorVista;
+import com.ttcl.games.servicio.Vistas.Novedad;
+import com.ttcl.games.servicio.Vistas.Novedades;
+import com.ttcl.games.servicio.Vistas.PaginaPartidas;
+import com.ttcl.games.servicio.Vistas.PartidaVista;
+import com.ttcl.games.servicio.Vistas.ResumenSemanal;
 import com.ttcl.games.servicio.Vistas.TarjetaJugador;
+import com.ttcl.games.stats.Modelos.Hecho;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
+import com.ttcl.games.stats.Modelos.SemanaJuego;
 import com.ttcl.games.stats.Periodo;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -103,6 +115,73 @@ public class DuendeServicio {
             }
         }
         return new ConsejosVista(true, insights);
+    }
+
+    /** Historial de partidas con lo que dice el Duende de cada una (P10). Si el Duende no responde, sin comentarios. */
+    public PaginaPartidas partidas(String slug, Juego juego, int limite, int offset, Periodo periodo, String lang) {
+        PaginaPartidas pagina = equipo.partidas(slug, juego, limite, offset, periodo);
+        Map<Long, List<Hecho>> hechos = equipo.hechos(slug, pagina.items().stream().map(PartidaVista::partidaId).toList());
+        Map<String, String> textos = comentarios(lang, pagina.items().stream()
+                .map(p -> new ItemInforme(
+                        String.valueOf(p.partidaId()), p.juego(), hechos.getOrDefault(p.partidaId(), List.of())))
+                .toList());
+        return new PaginaPartidas(
+                pagina.items().stream().map(p -> p.conComentario(textos.get(String.valueOf(p.partidaId())))).toList(),
+                pagina.total());
+    }
+
+    /**
+     * Lo guardado desde {@code desde} (por defecto, el último día), con lo que dice el Duende de cada partida (P11).
+     * Para la siguiente vez, pedir desde el {@code hasta} de la respuesta.
+     */
+    public Novedades novedades(Instant desde, String lang) {
+        Instant ahora = Instant.now();
+        LoteNovedades lote = equipo.novedades(desde == null ? ahora.minus(Duration.ofDays(1)) : desde, ahora);
+        Map<String, String> textos = comentarios(lang, lote.items().stream()
+                .map(n -> new ItemInforme(id(n.novedad()), n.novedad().partida().juego(), n.hechos()))
+                .toList());
+        return new Novedades(lote.desde(), lote.hasta(), lote.items().stream()
+                .map(NovedadConHechos::novedad)
+                .map(n -> new Novedad(n.jugador(), n.partida().conComentario(textos.get(id(n)))))
+                .toList());
+    }
+
+    /** Los últimos 7 días de cada juego, con el mejor y el peor, y lo que dice el Duende (null si no responde). */
+    public ResumenSemanal semana(String lang) {
+        Instant ahora = Instant.now();
+        List<SemanaJuego> juegos = equipo.semana(ahora);
+        String texto = null;
+        if (!juegos.isEmpty()) {
+            try {
+                texto = cliente.semana(idioma(lang), juegos);
+            } catch (DuendeNoDisponibleException e) {
+                log.warn("Resumen semanal sin Duende: {}", e.getMessage());
+            }
+        }
+        return new ResumenSemanal(ahora.minus(Duration.ofDays(7)), ahora, juegos, texto);
+    }
+
+    /** Una partida con dos del equipo son dos informes: el id lleva la partida y el jugador. */
+    private static String id(Novedad n) {
+        return n.partida().partidaId() + "-" + n.jugador().slug();
+    }
+
+    /** Lo que dice el Duende de cada informe con algo que contar, por id. Si no responde, nada. */
+    private Map<String, String> comentarios(String lang, List<ItemInforme> items) {
+        List<ItemInforme> conAlgo = items.stream().filter(i -> !i.hechos().isEmpty()).toList();
+        if (conAlgo.isEmpty()) {
+            return Map.of();
+        }
+        try {
+            Map<String, String> textos = new HashMap<>();
+            cliente.informes(idioma(lang), conAlgo).stream()
+                    .filter(t -> t.id() != null && t.texto() != null)
+                    .forEach(t -> textos.put(t.id(), t.texto()));
+            return textos;
+        } catch (DuendeNoDisponibleException e) {
+            log.warn("Partidas sin comentario del Duende: {}", e.getMessage());
+            return Map.of();
+        }
     }
 
     /**

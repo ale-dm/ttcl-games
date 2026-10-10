@@ -81,8 +81,13 @@ export class JugadorPagina {
     },
     (p) => this.api.consejos(p.slug, p.juego, p.lang, p.periodo),
   );
-  protected readonly paginaPartidas = cargaReactiva(this.clave, (p) =>
-    this.api.partidas(p.slug, p.juego, POR_PAGINA, 0, p.periodo),
+  /** Con el idioma: los comentarios del Duende de cada partida vienen traducidos. */
+  protected readonly paginaPartidas = cargaReactiva(
+    () => {
+      const c = this.clave();
+      return c ? { ...c, lang: this.i18n.idioma() } : null;
+    },
+    (p) => this.api.partidas(p.slug, p.juego, POR_PAGINA, 0, p.periodo, p.lang),
   );
   protected readonly sinergias = cargaReactiva(this.clave, (p) => this.api.sinergias(p.slug, p.juego, p.periodo));
   /** Filas de "Con quién": cada compañero (el que más partidas juntos primero) y, al final, solo. */
@@ -176,7 +181,7 @@ export class JugadorPagina {
     const c = this.clave();
     if (!c || this.cargandoMas()) return;
     this.cargandoMas.set(true);
-    this.api.partidas(c.slug, c.juego, POR_PAGINA, this.partidas().length, c.periodo).subscribe({
+    this.api.partidas(c.slug, c.juego, POR_PAGINA, this.partidas().length, c.periodo, this.i18n.idioma()).subscribe({
       next: (r) => {
         this.masPartidas.update((m) => [...m, ...r.items]);
         this.cargandoMas.set(false);

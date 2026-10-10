@@ -10,7 +10,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "ttcl")
 public record TtclProperties(
-        boolean demo, String equipoJson, String zonaHoraria, Duende duende, Faceit faceit, Smite2 smite2, Sync sync) {
+        boolean demo, String equipoJson, String zonaHoraria, Duende duende, Faceit faceit, Smite2 smite2, Sync sync,
+        Discord discord) {
 
     public ZoneId zona() {
         return zonaHoraria == null || zonaHoraria.isBlank() ? ZoneId.of("Europe/Madrid") : ZoneId.of(zonaHoraria);
@@ -36,4 +37,16 @@ public record TtclProperties(
 
     /** Cada cuántos minutos se sincroniza y cuántas partidas recientes se miran por cuenta. */
     public record Sync(int intervaloMin, int limite) {}
+
+    /**
+     * Webhook de un canal de Discord (P11). Sin URL, no se publica nada.
+     *
+     * @param lang idioma de lo que se publica ("es" o "en")
+     * @param resumenSemanal cuándo se publica el resumen de la semana (cron de Spring, en la zona del equipo)
+     */
+    public record Discord(String webhookUrl, String lang, String resumenSemanal) {
+        public boolean configurado() {
+            return webhookUrl != null && !webhookUrl.isBlank();
+        }
+    }
 }

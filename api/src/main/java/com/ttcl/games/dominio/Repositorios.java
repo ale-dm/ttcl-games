@@ -42,6 +42,11 @@ public final class Repositorios {
         List<Participacion> findAllCompletas();
 
         Optional<Participacion> findByPartidaAndJugador(Partida partida, Jugador jugador);
+
+        /** Las de las partidas guardadas en (desde, hasta], la primera guardada primero (P11: novedades). */
+        @Query("select p from Participacion p join fetch p.partida pa join fetch p.jugador "
+                + "where pa.guardadaEn > ?1 and pa.guardadaEn <= ?2 order by pa.guardadaEn, pa.jugadaEn, p.id")
+        List<Participacion> findGuardadasEntre(Instant desde, Instant hasta);
     }
 
     public interface SyncRepo extends JpaRepository<Sync, Long> {}

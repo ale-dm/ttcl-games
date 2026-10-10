@@ -9,6 +9,7 @@ import com.ttcl.games.stats.Modelos.Grupo;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
 import com.ttcl.games.stats.Modelos.PuntoSerie;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
+import com.ttcl.games.stats.Modelos.SemanaJuego;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -55,6 +56,7 @@ public final class Vistas {
             List<FilaDesglose> desglose,
             List<PuntoSerie> serie) {}
 
+    /** @param comentario lo que dice el Duende de la partida (P10), o null si no hay nada especial o no responde */
     public record PartidaVista(
             long partidaId,
             Juego juego,
@@ -65,7 +67,14 @@ public final class Vistas {
             Integer muertes,
             Integer asistencias,
             Map<String, Object> datos,
-            List<String> companeros) {}
+            List<String> companeros,
+            String comentario) {
+
+        public PartidaVista conComentario(String texto) {
+            return new PartidaVista(
+                    partidaId, juego, jugadaEn, modo, gano, kills, muertes, asistencias, datos, companeros, texto);
+        }
+    }
 
     public record PaginaPartidas(List<PartidaVista> items, int total) {}
 
@@ -96,6 +105,19 @@ public final class Vistas {
     public record Estado(Instant ultimaSync, boolean demo, Map<String, Boolean> fuentes, EstadoDuende duende) {}
 
     public record ConsejosVista(boolean disponible, List<Insight> insights) {}
+
+    /** Una partida guardada de un jugador del equipo, con lo que dice el Duende (P11). */
+    public record Novedad(JugadorRef jugador, PartidaVista partida) {}
+
+    /**
+     * Lo guardado entre {@code desde} y {@code hasta} (P11). Para la siguiente vez, pedir desde {@code hasta}.
+     *
+     * @param partidas una por jugador y partida, la primera guardada primero
+     */
+    public record Novedades(Instant desde, Instant hasta, List<Novedad> partidas) {}
+
+    /** Los últimos 7 días de cada juego con partidas y lo que dice el Duende (P11). */
+    public record ResumenSemanal(Instant desde, Instant hasta, List<SemanaJuego> juegos, String texto) {}
 
     /**
      * Votos de una recomendación (por su id, de todos los jugadores) o de las respuestas del chat a un tipo de pregunta.

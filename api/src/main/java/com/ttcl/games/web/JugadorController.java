@@ -47,14 +47,16 @@ public class JugadorController {
         return equipo.detalle(slug, juego, periodo);
     }
 
+    /** Historial, la más reciente primero, con lo que dice el Duende de cada partida (P10). */
     @GetMapping("/partidas")
     public PaginaPartidas partidas(
             @PathVariable String slug,
             @RequestParam(required = false) Juego juego,
             @RequestParam(defaultValue = "20") int limite,
             @RequestParam(defaultValue = "0") int offset,
-            @RequestParam(defaultValue = "todo") Periodo periodo) {
-        return equipo.partidas(slug, juego, limite, offset, periodo);
+            @RequestParam(defaultValue = "todo") Periodo periodo,
+            @RequestParam(defaultValue = "es") String lang) {
+        return duende.partidas(slug, juego, limite, offset, periodo, lang);
     }
 
     /**

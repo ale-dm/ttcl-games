@@ -4,10 +4,12 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.ttcl.games.juego.Juego;
 import com.ttcl.games.stats.Modelos.ComparativaNivel;
 import com.ttcl.games.stats.Modelos.FilaDesglose;
+import com.ttcl.games.stats.Modelos.Hecho;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
 import com.ttcl.games.stats.Modelos.ResumenJuego;
 import com.ttcl.games.stats.Modelos.ResumenPeriodo;
 import com.ttcl.games.stats.Modelos.SeguimientoConsejo;
+import com.ttcl.games.stats.Modelos.SemanaJuego;
 import com.ttcl.games.stats.Modelos.Sesiones;
 import com.ttcl.games.stats.Modelos.Sinergias;
 import com.ttcl.games.stats.Periodo;
@@ -109,4 +111,26 @@ public final class DuendeModelos {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Salud(boolean ok, boolean gemini, String modelo) {}
+
+    /**
+     * Lo especial de una partida de un jugador, para que el Duende lo cuente (P10).
+     *
+     * @param id lo elige la API para casar la respuesta (una partida con dos del equipo son dos informes)
+     */
+    public record ItemInforme(String id, Juego juego, List<Hecho> hechos) {}
+
+    public record PeticionInformes(String lang, List<ItemInforme> items) {}
+
+    /** @param texto la frase del Duende, o null si no hay nada que contar */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record TextoInforme(String id, String texto) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record RespuestaInformes(List<TextoInforme> items) {}
+
+    /** La semana de cada juego, para que el Duende la cuente (P11). */
+    public record PeticionSemana(String lang, List<SemanaJuego> juegos) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record RespuestaSemana(String texto) {}
 }

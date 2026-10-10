@@ -1,10 +1,15 @@
 import { Component, inject, input } from '@angular/core';
+import { MarcaDuende } from '../../compartido/marca-duende';
 import { I18n } from '../../core/i18n';
 import { Juego, PartidaVista } from '../../core/modelos';
 
-/** Historial de partidas. Las columnas dependen del juego (mapa y ADR en CS2; dios y daño en SMITE 2). */
+/**
+ * Historial de partidas. Las columnas dependen del juego (mapa y ADR en CS2; dios y daño en SMITE 2). Debajo de cada
+ * partida con algo especial, lo que dice el Duende.
+ */
 @Component({
   selector: 'app-tabla-partidas',
+  imports: [MarcaDuende],
   template: `
     <div class="tbl-wrap">
       <table class="tbl">
@@ -22,7 +27,7 @@ import { Juego, PartidaVista } from '../../core/modelos';
         </thead>
         <tbody>
           @for (p of partidas(); track p.partidaId) {
-            <tr>
+            <tr [class.con-coment]="p.comentario">
               <td>
                 @if (p.gano === null) {
                   <span class="muted">—</span>
@@ -42,6 +47,15 @@ import { Juego, PartidaVista } from '../../core/modelos';
               <td class="hide-md muted">{{ p.companeros.length ? p.companeros.join(', ') : t('comun.solo') }}</td>
               <td class="r muted" [attr.title]="i18n.fechaHora(p.jugadaEn)">{{ i18n.relativo(p.jugadaEn) }}</td>
             </tr>
+            @if (p.comentario) {
+              <tr class="coment">
+                <td colspan="8">
+                  <app-marca-duende [tam]="16" />
+                  <span class="sr-only">{{ t('tabla.duende') }}:</span>
+                  {{ p.comentario }}
+                </td>
+              </tr>
+            }
           }
         </tbody>
       </table>

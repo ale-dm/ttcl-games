@@ -484,6 +484,9 @@ public final class Estadisticas {
             case "kd" -> f.kills() == null || f.muertes() == null
                     ? null
                     : (double) f.kills() / Math.max(1, f.muertes());
+            case "kda" -> f.kills() == null || f.muertes() == null || f.asistencias() == null
+                    ? null
+                    : (double) (f.kills() + f.asistencias()) / Math.max(1, f.muertes());
             default -> numero(f.datos().get(metrica));
         };
     }

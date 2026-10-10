@@ -2,14 +2,21 @@ package com.ttcl.games.duende;
 
 import com.ttcl.games.config.TtclProperties;
 import com.ttcl.games.duende.DuendeModelos.Insight;
+import com.ttcl.games.duende.DuendeModelos.ItemInforme;
 import com.ttcl.games.duende.DuendeModelos.ItemLote;
 import com.ttcl.games.duende.DuendeModelos.PeticionChat;
+import com.ttcl.games.duende.DuendeModelos.PeticionInformes;
 import com.ttcl.games.duende.DuendeModelos.PeticionInsights;
 import com.ttcl.games.duende.DuendeModelos.PeticionLote;
+import com.ttcl.games.duende.DuendeModelos.PeticionSemana;
 import com.ttcl.games.duende.DuendeModelos.RespuestaChat;
+import com.ttcl.games.duende.DuendeModelos.RespuestaInformes;
 import com.ttcl.games.duende.DuendeModelos.RespuestaInsights;
 import com.ttcl.games.duende.DuendeModelos.RespuestaLote;
+import com.ttcl.games.duende.DuendeModelos.RespuestaSemana;
 import com.ttcl.games.duende.DuendeModelos.Salud;
+import com.ttcl.games.duende.DuendeModelos.TextoInforme;
+import com.ttcl.games.stats.Modelos.SemanaJuego;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -53,6 +60,20 @@ public class DuendeCliente {
 
     public RespuestaChat chat(PeticionChat peticion) {
         return post("/v1/chat", peticion, RespuestaChat.class);
+    }
+
+    /** Lo que dice el Duende de cada partida (P10), por id. */
+    public List<TextoInforme> informes(String lang, List<ItemInforme> items) {
+        if (items.isEmpty()) {
+            return List.of();
+        }
+        RespuestaInformes r = post("/v1/informes", new PeticionInformes(lang, items), RespuestaInformes.class);
+        return r.items() == null ? List.of() : r.items();
+    }
+
+    /** Lo que dice el Duende de la semana (P11). */
+    public String semana(String lang, List<SemanaJuego> juegos) {
+        return post("/v1/semana", new PeticionSemana(lang, juegos), RespuestaSemana.class).texto();
     }
 
     /** Estado del servicio, o vacío si no responde en 2 s. */

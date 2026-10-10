@@ -6,15 +6,21 @@ from fastapi import FastAPI
 
 from . import chat
 from .config import get_config
+from .informes import texto_informe, texto_semana
 from .insights import generar_insights
 from .modelos import (
     ItemLote,
     PeticionChat,
+    PeticionInformes,
     PeticionInsights,
     PeticionInsightsLote,
+    PeticionSemana,
     RespuestaChat,
+    RespuestaInformes,
     RespuestaInsights,
     RespuestaInsightsLote,
+    RespuestaSemana,
+    TextoInforme,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -47,3 +53,17 @@ def insights_lote(peticion: PeticionInsightsLote) -> RespuestaInsightsLote:
 @app.post("/v1/chat", response_model=RespuestaChat)
 def responder(peticion: PeticionChat) -> RespuestaChat:
     return chat.responder(peticion)
+
+
+@app.post("/v1/informes", response_model=RespuestaInformes)
+def informes(peticion: PeticionInformes) -> RespuestaInformes:
+    """Lo que dice el Duende de cada partida (P10), a partir de lo que la API ha visto de especial en ella."""
+    return RespuestaInformes(
+        items=[TextoInforme(id=i.id, texto=texto_informe(i, peticion.lang)) for i in peticion.items]
+    )
+
+
+@app.post("/v1/semana", response_model=RespuestaSemana)
+def semana(peticion: PeticionSemana) -> RespuestaSemana:
+    """Lo que dice el Duende de la semana (P11): el mejor y el peor de cada juego."""
+    return RespuestaSemana(texto=texto_semana(peticion.juegos, peticion.lang))
