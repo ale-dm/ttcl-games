@@ -1,27 +1,30 @@
 # TTCL Games
 
 Web de estadísticas del equipo TTCL (CS2 y SMITE 2) al estilo de csstats.gg, con el Duende: recomendaciones y chatbot.
-Tres servicios; el navegador solo habla con la API Java y la API pasa resúmenes ya calculados al Duende. Con Gemini, el
-Duende también consulta a la API (solo lectura, `duende/app/api_ttcl.py`) lo que no está en los resúmenes (P9).
+Cuatro servicios; el navegador solo habla con la API Java y la API pasa resúmenes ya calculados al Duende. Con Gemini, el
+Duende también consulta a la API (solo lectura, `duende/app/api_ttcl.py`) lo que no está en los resúmenes (P9). La API
+manda las demos de CS2 al trabajador de análisis y guarda lo que devuelve (P12).
 
 - `frontend/` — Angular 21 (standalone, signals, sin zone.js). Textos en `src/app/core/textos.ts` (ES y EN).
 - `api/` — Java 21, Spring Boot 4.1, JPA, Flyway. H2 en local con datos de ejemplo; Postgres con el perfil `postgres`.
 - `duende/` — Python, FastAPI. Recomendaciones por reglas (`app/insights.py`) y chat con Gemini o, sin clave, con reglas.
+- `analisis/` — Python, FastAPI, demoparser2. Lee una demo de CS2 y devuelve cada ronda de los del equipo; no guarda nada.
 
 **Hoja de ruta**: `docs/propuestas.md` (P1–P12) — lo siguiente que hay que construir para dar mejores datos al Duende.
-Al terminar una propuesta, marcarla allí (con lo aprendido) y anotar la entrega en `CHANGELOG.md`. Quedan P5 y P12.
+Al terminar una propuesta, marcarla allí (con lo aprendido) y anotar la entrega en `CHANGELOG.md`. Queda P5.
 
 ## Comandos
 
 | Qué | Comando |
 |---|---|
 | Duende | `cd duende && .venv/Scripts/python -m uvicorn app.main:app --port 8000` |
+| Análisis de demos | `cd analisis && .venv/Scripts/python -m uvicorn app.main:app --port 8001` |
 | API | `cd api && ./mvnw spring-boot:run` (o `java -jar target/ttcl-api-0.1.0.jar` tras `./mvnw package -DskipTests`) |
 | Web | `cd frontend && npm start` → http://localhost:4200 |
-| Tests | `cd duende && .venv/Scripts/python -m pytest` · `cd api && ./mvnw test` · `cd frontend && npm test` |
+| Tests | `cd duende && .venv/Scripts/python -m pytest` · `cd analisis && .venv/Scripts/python -m pytest` · `cd api && ./mvnw test` · `cd frontend && npm test` |
 | Todo con Docker | `docker compose up --build` |
 
-En la app de Claude, `.claude/launch.json` tiene las tres configuraciones (`duende`, `api`, `web`). Parar la API antes
+En la app de Claude, `.claude/launch.json` tiene las cuatro configuraciones (`duende`, `analisis`, `api`, `web`). Parar la API antes
 de `./mvnw package`: el jar en uso no se puede sobrescribir (ni `./mvnw clean` lo puede borrar; `./mvnw test` sí
 funciona con la API arrancada).
 
@@ -50,9 +53,15 @@ funciona con la API arrancada).
   `PRIORIDAD` en `informes.py` (hay test que lo vigila). Solo mira partidas de antes, por eso no se guarda.
 - Discord (P11): el bot del grupo es otro repositorio (`../ElDuende/bot-discord`) y aquí no se toca; la API da
   `/api/novedades` y, con `DISCORD_WEBHOOK_URL`, publica ella misma (sin menciones).
+- Demos (P12): contrato con el trabajador `api/.../analisis/AnalisisModelos.java` ↔ `analisis/app/modelos.py`. Las
+  cuentas de cada ronda están en `analisis/app/rondas.py` (puras); lo que depende de demoparser2, solo en `demo.py`
+  (sin probar con una demo real: si una columna se llama de otra forma, se arregla ahí). La API calcula lo demás
+  (`stats/Rondas.java`). `muertes_mapa` guarda dónde murió la gente sin decir quién ni en qué partida; que siga así. El
+  Duende solo juzga de las demos lo que FACEIT no da (`METRICAS_DEMO`); el ADR, la utilidad y las entradas, no.
 - `DemoSeeder` es determinista (semilla fija, horas en la zona del equipo): tocarlo cambia todos los números de ejemplo
   y lo que dice el Duende. `ApiTest` comprueba que sigan saliendo los patrones (tilt, hora buena, rachas, compañeros).
-  Las muestras de otros jugadores (P8) van al final y con su propio generador, para no mover lo demás.
+  Las muestras de otros jugadores (P8) y las rondas de las demos (P12, `RondasDemo`) van al final y con su propio
+  generador, para no mover lo demás.
 - Todo texto visible, en los dos idiomas (web y `duende/app/textos.py`).
 - El Duende no inventa números: todo dato sale de la API.
 - Migraciones nuevas como `V{n}__*.sql`, válidas en PostgreSQL y en H2 (modo PostgreSQL).

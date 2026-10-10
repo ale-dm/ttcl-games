@@ -11,6 +11,8 @@ un entrenador que mira los números de cada uno, dice en qué mejorar y contesta
 - **Ranking**: el equipo ordenado por la métrica que elijas.
 - **Buscador** de jugadores y nicks en la barra superior.
 - **Chat del Duende** en toda la web; sabe de quién estás hablando según la página.
+- **Demos de CS2**: con la demo de cada partida, ronda a ronda: rating, KAST, trades, duelos de apertura, CT y T,
+  economía y un **mapa de calor** de dónde muere cada uno, con las rondas de cada partida en el historial.
 - **Comentario de cada partida** en el historial ("Tercera derrota seguida en Nuke", "tu mejor ADR del mes") y, si se
   quiere, en **Discord**: las partidas nuevas y el resumen de la semana.
 - **Valoraciones**: 👍/👎 en cada recomendación y cada respuesta del Duende, para saber qué hay que mejorar de él.
@@ -22,7 +24,8 @@ un entrenador que mira los números de cada uno, dice en qué mejorar y contesta
  Navegador ──► Angular (web) ──/api──► Java · Spring Boot (API) ◄─► Python · FastAPI (Duende) ──► Gemini (opcional)
                                           │
                                           ├─► PostgreSQL (H2 en memoria para desarrollar)
-                                          └─► FACEIT (CS2) · Hi-Rez (SMITE 2)   ← sincronización programada
+                                          ├─► FACEIT (CS2) · Hi-Rez (SMITE 2)   ← sincronización programada
+                                          └─► Python · FastAPI (análisis de demos) ◄── demos de FACEIT o de demos/
 ```
 
 | Parte | Carpeta | Tecnología | Qué hace |
@@ -30,16 +33,18 @@ un entrenador que mira los números de cada uno, dice en qué mejorar y contesta
 | Web | `frontend/` | Angular 21 (standalone, signals, sin zone.js) | Páginas, i18n ES/EN, tema claro/oscuro, chat |
 | API | `api/` | Java 21 · Spring Boot 4.1 · JPA · Flyway | Datos, estadísticas, comparación, ranking, sincronización, pasarela al Duende |
 | Duende | `duende/` | Python 3.12+ · FastAPI · google-genai | Motor de recomendaciones y chatbot |
+| Análisis | `analisis/` | Python 3.12+ · FastAPI · demoparser2 | Lee las demos de CS2 y devuelve cada ronda |
 | Base de datos | — | PostgreSQL 17 (H2 en local) | Jugadores, cuentas, partidas compartidas, participaciones |
 
-El navegador solo habla con la API Java; el Duende no se expone fuera. La API calcula los resúmenes y se los pasa al
+El navegador solo habla con la API Java; ni el Duende ni el análisis de demos se exponen fuera. La API calcula los resúmenes y se los pasa al
 Duende: **el Duende nunca ve partidas en bruto**, así no se inventa números. Con Gemini, el Duende también puede
 consultar a la API (solo lectura) lo que no está en los resúmenes, y la API le da los números ya calculados.
 
 ## Puesta en marcha en local (sin Docker)
 
-Hace falta JDK 21 o superior, Python 3.12+ y Node 24. Sin claves de nada: la API genera **datos de ejemplo** y el
-Duende contesta **con reglas** (sin IA). Tres terminales:
+Hace falta JDK 21 o superior, Python 3.12+ y Node 24. Sin claves de nada: la API genera **datos de ejemplo** (con todas
+las demos de CS2 ya analizadas) y el Duende contesta **con reglas** (sin IA). Tres terminales, y una cuarta para
+analizar demos de verdad:
 
 **1. Duende (Python)** — puerto 8000
 
@@ -67,6 +72,15 @@ npm install
 npm start
 ```
 
+**4. Análisis de demos (Python)** — puerto 8001. Solo hace falta para analizar demos de verdad.
+
+```bash
+cd analisis
+python -m venv .venv
+.venv/Scripts/pip install -r requirements-dev.txt     # en Linux/macOS: .venv/bin/pip
+.venv/Scripts/python -m uvicorn app.main:app --port 8001
+```
+
 ## Con Docker
 
 ```bash
@@ -75,6 +89,7 @@ docker compose up --build
 ```
 
 Web en http://localhost:4200, con Postgres y datos de ejemplo (`TTCL_DEMO=true`; ponlo a `false` con el equipo real).
+Las demos que se dejen a mano van en `./demos`, que se monta en la API y en el análisis.
 
 ## Equipo real y claves
 
@@ -85,6 +100,12 @@ Web en http://localhost:4200, con Postgres y datos de ejemplo (`TTCL_DEMO=true`;
   lo que pide el rol (a un soporte no le pide kills) y la web lo enseña junto al nick.
 - **Discord** (opcional): con `DISCORD_WEBHOOK_URL` (el webhook de un canal), la API publica ahí las partidas nuevas
   tras cada sincronización y el resumen de la semana (`DISCORD_RESUMEN_SEMANAL`, por defecto los lunes a las 10).
+- **Demos de CS2** (opcional): el análisis va en `ANALISIS_URL` (por defecto `http://localhost:8001`; con Docker ya
+  va puesta) y mira las demos pendientes cada `ANALISIS_INTERVALO_MIN` minutos. Para bajarlas de FACEIT hace falta el
+  token de su **API de descargas** (`FACEIT_DOWNLOADS_TOKEN`), que es aparte de la clave de la Data API y se pide en
+  https://fce.gg/downloads-api-application. Sin él, se analizan las que se dejen en `demos/` (o en `TTCL_DEMOS_DIR`)
+  con el id de la partida al principio del nombre: las que se bajan de la sala de la partida en FACEIT ya vienen así
+  (`1-cb03…-1-1.dem.zst`). `GET /api/estado` dice cuántas hay analizadas, pendientes y fallidas.
 - **Consultas del chat**: con Gemini, el Duende consulta a la API en `API_URL` (por defecto `http://localhost:8080`;
   con Docker ya va puesta). Vacía o con `DUENDE_MAX_CONSULTAS=0`, Gemini contesta solo con los resúmenes.
 - **Claves**: copia `.env.example` a `.env`. `GOOGLE_API_KEY` activa Gemini en el chat; `FACEIT_API_KEY` y las de
@@ -96,9 +117,10 @@ Web en http://localhost:4200, con Postgres y datos de ejemplo (`TTCL_DEMO=true`;
 
 | Parte | Comando | Qué cubre |
 |---|---|---|
-| Duende | `cd duende && .venv/Scripts/python -m pytest` | Reglas de recomendación (también por rol, por compañero, tilt, hora del día, seguimiento de consejos y frente a su nivel de FACEIT), chat por reglas (también "esta semana", "este mes" y "para mi nivel") y de qué iba cada pregunta, uso y caché de Gemini, consultas a la API (herramientas, tope y caché), comentario de cada partida y de la semana, API |
-| API | `cd api && ./mvnw test` | Estadísticas (también sinergias, dúos y tríos, sesiones y franjas horarias, seguimiento de consejos, comparación con su nivel, filtro de partidas, lo especial de cada partida, la semana), periodos, memoria de consejos, valoraciones, novedades y Discord, mapeo de FACEIT (también niveles) y Hi-Rez, sincronización con muestras sin identificar, carga del equipo con roles, API completa contra H2 con datos de ejemplo |
-| Web | `cd frontend && npm test` | Texto del Duende, i18n y formatos, estado del chat, rol, nivel y ELO, "Con quién", "Cuándo juegas mejor" y el periodo en el perfil, el periodo en el ranking, dúos y tríos en el equipo, valorar recomendaciones y respuestas, comentario de cada partida |
+| Duende | `cd duende && .venv/Scripts/python -m pytest` | Reglas de recomendación (también por rol, por compañero, tilt, hora del día, seguimiento de consejos, frente a su nivel de FACEIT y lo de las demos), chat por reglas (también "esta semana", "este mes", "para mi nivel" y "¿dónde muero más?") y de qué iba cada pregunta, uso y caché de Gemini, consultas a la API (herramientas, tope y caché), comentario de cada partida y de la semana, API |
+| Análisis | `cd analisis && .venv/Scripts/python -m pytest` | Rondas de una partida (aperturas, trades, kills de salida, fuego amigo, daño, compras, KAST), lectura de la demo con un demoparser2 de mentira, descarga con tope de tamaño, descompresión, carpeta de demos, endpoint |
+| API | `cd api && ./mvnw test` | Estadísticas (también sinergias, dúos y tríos, sesiones y franjas horarias, seguimiento de consejos, comparación con su nivel, filtro de partidas, lo especial de cada partida, la semana, las rondas de las demos y el rating), periodos, memoria de consejos, valoraciones, novedades y Discord, mapeo de FACEIT (también niveles, steamid y URL de la demo) y Hi-Rez, sincronización con muestras sin identificar, análisis de demos pendientes, carga del equipo con roles, API completa contra H2 con datos de ejemplo |
+| Web | `cd frontend && npm test` | Texto del Duende, i18n y formatos, estado del chat, rol, nivel y ELO, "Con quién", "Cuándo juegas mejor" y el periodo en el perfil, el periodo en el ranking, dúos y tríos en el equipo, valorar recomendaciones y respuestas, comentario de cada partida, pestaña Demos con el mapa de calor, rondas de cada partida |
 
 ## El Duende
 
@@ -119,11 +141,11 @@ avisa antes, lo reconoce antes como fortaleza y lo pone primero. La recomendaci�
 | CS2 | No se le juzga | Se le tolera | Pesa más |
 |---|---|---|---|
 | `entry` | — | Muertes / partida, K/D, clutches | Éxito de entrada |
-| `awp` | % headshot | Asistencias / partida, daño de utilidad | Kills / ronda, éxito de entrada |
-| `soporte` | Kills / partida | K/D, ADR, kills / ronda, éxito de entrada | Asistencias / partida, daño de utilidad |
-| `lurker` | Asistencias / partida, éxito de entrada | Daño de utilidad | Clutches, kills / ronda |
-| `igl` | — | Kills / partida, K/D, ADR, kills / ronda, % headshot | Winrate, daño de utilidad |
-| `rifler` | — | — | ADR, kills / ronda |
+| `awp` | % headshot | Asistencias / partida, daño de utilidad | Kills / ronda, éxito de entrada, rating |
+| `soporte` | Kills / partida | K/D, ADR, kills / ronda, éxito de entrada, rating | Asistencias / partida, daño de utilidad, asistencias de flash / partida, trades / partida |
+| `lurker` | Asistencias / partida, éxito de entrada, muertes tradeadas | Daño de utilidad, trades / partida | Clutches, kills / ronda |
+| `igl` | — | Kills / partida, K/D, ADR, kills / ronda, % headshot, rating | Winrate, daño de utilidad, asistencias de flash / partida |
+| `rifler` | — | — | ADR, kills / ronda, rating |
 
 | SMITE 2 | No se le juzga | Se le tolera | Pesa más |
 |---|---|---|---|
@@ -161,6 +183,19 @@ nivel (la mediana; en entradas y clutches, el total) en vez de con la referencia
 las partidas de ese nivel"). Si en su nivel va en lo normal, lo que le separe del equipo se queda en *a vigilar*. En el
 chat, "¿Cómo voy para mi nivel?" y "¿Quién tiene más nivel?". La web enseña el nivel y el ELO junto al nick de CS2.
 
+**Demos** (P12, CS2): un trabajador aparte (`analisis/`, con `demoparser2`) lee la demo de cada partida y la API guarda
+lo que hizo cada uno del equipo en cada ronda (tabla `rondas`) y dónde murió la gente, sin decir quién (`muertes_mapa`).
+La demo sale del token de la API de descargas de FACEIT o de la carpeta `demos/`, y se borra al acabar. Con eso, la API
+calcula un rating propio (la aproximación que circula del Rating 2.0 de HLTV), KAST, trades (en menos de 5 s),
+aperturas, asistencias de flash, utilidad por ronda, CT y T, rondas ganadas según la compra y dónde muere por mapa y
+zona. Con 5 partidas analizadas o más, el Duende compara rating, KAST, muertes con trade, trades y asistencias de flash
+(estas, solo para reconocerlas) con el equipo y con una referencia, según el rol, y avisa de la zona de un mapa donde
+muere sin que le tradeen ("En Nuke, el 57,7 % de tus muertes son en Outside y sin que nadie te tradee (60 de 104)"), del
+lado en el que se apaga ("De T tu rating es 0,87; de CT, 1,70") y de las forzadas que no salen. El ADR, la utilidad y
+las entradas siguen saliendo de FACEIT. En el chat, "¿Dónde muero más?" o "¿Cómo voy de T?". La web lo enseña en la
+pestaña *Demos* del perfil (con un mapa de calor dibujado con las muertes de todos, sin imagen del mapa) y en las rondas
+de cada partida del historial.
+
 **Periodo**: el perfil, el cara a cara y el ranking tienen un selector de *7 días · 30 días · Todo* (en la URL,
 `?periodo=7d`). Todo lo de la página cuenta solo esas partidas, también la media del equipo con la que se compara y las
 recomendaciones del Duende. En la API, `?periodo=7d|30d|todo` en el perfil, el detalle, el historial, con quién,
@@ -168,21 +203,21 @@ cuándo, los consejos, el cara a cara y el ranking (por defecto, todo). Sin part
 vacíos; el 404 es solo para quien nunca ha jugado a ese juego.
 
 **Chat** (`chat.py`): con `GOOGLE_API_KEY` contesta Gemini, que recibe los resúmenes del equipo (con el rol de cada uno),
-las sinergias, las sesiones, los últimos 7 y 30 días, el seguimiento de sus consejos, su nivel de FACEIT y las
-recomendaciones ya calculadas. Caché por petición, límite diario (`DUENDE_DAILY_LIMIT`) y modelos de respaldo si el
+las sinergias, las sesiones, los últimos 7 y 30 días, el seguimiento de sus consejos, su nivel de FACEIT, sus demos y
+las recomendaciones ya calculadas. Caché por petición, límite diario (`DUENDE_DAILY_LIMIT`) y modelos de respaldo si el
 principal ya no existe. Sin clave, sin cuota o si Gemini falla, contestan las reglas (`reglas_chat.py`): en qué
 mejorar, qué haces bien, cómo vas últimamente, peor mapa o dios, con quién juegas mejor, cuándo juegas mejor (tilt y
-hora), si ha funcionado lo que te dijo, cómo vas para tu nivel de FACEIT, el mejor dúo, comparar a dos, quién es el
-mejor del equipo.
+hora), si ha funcionado lo que te dijo, cómo vas para tu nivel de FACEIT, qué dicen tus demos (dónde mueres, CT y T,
+KAST, el rating de cada uno), el mejor dúo, comparar a dos, quién es el mejor del equipo.
 Si la pregunta dice "esta semana" o "este mes" (o la página tiene un periodo elegido), los números son los de esos
 días, y "¿cómo voy esta semana?" los compara con los de siempre. La web indica bajo cada respuesta si la escribió
 Gemini o las reglas.
 
 **Consultas** (P9): para lo que no está en los resúmenes ("¿cómo voy en Mirage este mes?", "¿qué pasó en mis dos
-últimas derrotas?", "¿con quién juego mejor esta semana?"), Gemini puede consultar a la API con cuatro herramientas
+últimas derrotas?", "¿con quién juego mejor esta semana?"), Gemini puede consultar a la API con cinco herramientas
 (`herramientas.py`): partidas filtradas por mapa o dios, resultado, días o las últimas n (`GET
-/api/jugadores/{slug}/consulta`, con su resumen y el del resto del equipo ya calculados), desglose, cara a cara y
-sinergias por periodo. Hasta `DUENDE_MAX_CONSULTAS` consultas por respuesta (4) y caché de un minuto; las herramientas
+/api/jugadores/{slug}/consulta`, con su resumen y el del resto del equipo ya calculados), desglose, cara a cara,
+sinergias y lo de las demos por periodo. Hasta `DUENDE_MAX_CONSULTAS` consultas por respuesta (4) y caché de un minuto; las herramientas
 devuelven datos, nunca texto. Se configura con `API_URL` (vacía: sin consultas). Sin Gemini, las reglas no consultan.
 
 **Cada partida** (P10): la API mira qué tiene de especial cada partida frente a las de antes del mismo jugador (rachas
@@ -228,8 +263,8 @@ Parte del prototipo `TTCL Stats.html` y lo lleva a una web de estadísticas comp
 - **Accesibilidad**: foco visible, etiquetas para lectores de pantalla, `prefers-reduced-motion` y textos del Duende
   pintados como texto (nunca como HTML).
 
-Siguientes pasos: la hoja de ruta está en [docs/propuestas.md](docs/propuestas.md) (objetivos personales y análisis de
-demos, y lo que ha quedado pendiente de cada propuesta). Lo ya entregado, con lo que cambia en cada servicio y cómo
+Siguientes pasos: la hoja de ruta está en [docs/propuestas.md](docs/propuestas.md) (objetivos personales, y lo que ha
+quedado pendiente de cada propuesta). Lo ya entregado, con lo que cambia en cada servicio y cómo
 actualizar, está en [CHANGELOG.md](CHANGELOG.md).
 
 ## Fuentes de datos: estado
@@ -238,6 +273,7 @@ actualizar, está en [CHANGELOG.md](CHANGELOG.md).
 |---|---|---|
 | CS2 | FACEIT Data API (`api/.../sync/FaceitFuente.java`) | Implementada. Solo para jugadores con cuenta de FACEIT (la API de Steam no da partidas de CS2). Los campos (ADR, HS %, Entry, 1vX, Utility Damage…) siguen la documentación: **hay que validarlos con una partida real**. Los del nivel (`skill_level`, `faceit_elo`, `game_skill_level`) están comprobados con el swagger oficial, aún no con una respuesta real. |
 | SMITE 2 | Hi-Rez API (`HirezFuente.java`) | Implementada **sin verificar**: confirmar la URL base de SMITE 2 (`SMITE2_API_BASE`), los métodos y los campos de `getmatchhistory`. La firma sí está probada. |
+| Demos de CS2 | FACEIT (`demo_url` y su API de descargas) o la carpeta `demos/`, leídas con demoparser2 (`analisis/`) | Implementado **sin probar con una demo real**: la API de descargas pide un token aparte (comprobado en su documentación) y lo que se lee de la demo sigue los nombres que documenta demoparser2, probado con tablas escritas a mano. |
 
 La sincronización va en dos pasadas: primero resuelve los IDs de todas las cuentas y después pide partidas, así una
 partida jugada por dos del equipo se guarda una vez con dos participaciones.
@@ -266,9 +302,11 @@ api/src/main/java/com/ttcl/games/
   stats/       cálculos puros (resumen, medias del equipo, desglose, comparación)
   servicio/    consultas para la web
   duende/      cliente HTTP del Duende y casos de uso
+  analisis/    demos pendientes, cliente del análisis y API de descargas de FACEIT
   sync/        FACEIT, Hi-Rez y sincronizador
   carga/       equipo desde config/equipo.json y datos de ejemplo
   web/         controladores REST
 duende/app/    insights (reglas), chat, reglas del chat, Gemini, textos y métricas
+analisis/app/  lectura de demos (demoparser2), rondas (cuentas puras), descarga y carpeta de demos
 config/        equipo.example.json
 ```

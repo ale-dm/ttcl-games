@@ -19,7 +19,7 @@ lo que se aprendió en su apartado y apuntar la entrega en [CHANGELOG.md](../CHA
 | P9 | Chat que consulta la API (function calling) | 3 | Medio | Ya guardados | Hecho |
 | P10 | Informe de cada partida | 3 | Bajo | Ya guardados | Hecho |
 | P11 | El Duende en Discord | 4 | Medio | — | Hecho |
-| P12 | Análisis de demos de CS2 | 5 | Alto | Nuevos (demos) | Pendiente |
+| P12 | Análisis de demos de CS2 | 5 | Alto | Nuevos (demos) | Hecho |
 
 **Orden recomendado**: P1 → P2 → P3 (corrigen lo que el Duende dice mal hoy y usan lo que ya hay), luego P8 (cambia
 referencias inventadas por datos reales), luego P5/P6 y P11 (seguimiento y que la gente vuelva). P12 es el gran salto
@@ -43,7 +43,7 @@ y conviene hacerlo cuando lo demás esté estable.
 2. Las referencias de "jugador medio" son números fijos, no gente de tu nivel. (Resuelto en P8 para CS2.)
 3. No sabe con quién juegas, cuándo ni cuántas seguidas, aunque esos datos ya están en la base. (Resuelto en P2 y P3.)
 4. No recuerda qué te dijo ni si sirvió. (Resuelto en P6.)
-5. Solo ve medias por partida: nada de rondas, posiciones, trades o economía.
+5. Solo ve medias por partida: nada de rondas, posiciones, trades o economía. (Resuelto en P12 para CS2.)
 
 ---
 
@@ -472,6 +472,80 @@ rendimiento de CT frente a T, economía y mapa de calor de dónde mueres por map
 - API: tablas por ronda y nuevas métricas en el resumen; el desglose CT/T y por zona.
 - Duende: reglas nuevas ("mueres el 40 % de las veces en A main sin que te tradeen").
 - Web: mapa de calor por mapa y la parte por ronda en el detalle de cada partida.
+
+**Hecho** (11 de octubre de 2026). Con los datos de ejemplo, a Jugador 3: "En Outside te quedas solo. En Nuke, el 57,7 %
+de tus muertes son en Outside y sin que nadie te tradee (60 de 104)"; a Jugador 1: "De T te apagas. De T tu rating es
+0,87; de CT, 1,70"; y a Jugador 2, soporte: "Flashes que matan" (3,18 asistencias de flash por partida; el resto del
+equipo, 0,37). Lo que quedó y lo que se aprendió:
+- **Comprobado: la descarga necesita permiso aparte.** Las demos de FACEIT están en un almacén privado; `demo_url` (una
+  lista, en los detalles de la partida) no se puede bajar tal cual. Hace falta pedir una URL firmada a su API de
+  descargas (`POST https://open.faceit.com/download/v2/demos/download` con `resource_url`; responde
+  `payload.download_url`), con un token propio con permiso de descargas que FACEIT da tras rellenar un formulario
+  (https://fce.gg/downloads-api-application, contestan en unos 30 días). La clave de la Data API no vale. El tamaño no se
+  ha podido ver: el trabajador corta en `ANALISIS_MAX_MB` (800 MB, comprimida o no).
+- **Sin ese token, la carpeta de demos.** Cada uno puede bajar la demo desde la sala de la partida en FACEIT y dejarla en
+  `demos/` (el nombre ya empieza por el id de la partida: `1-cb03…-1-1.dem.zst`). La API la encuentra por el id, sin
+  permiso de nadie. Se leen `.dem` y comprimidas en `.gz`, `.zst` o `.bz2` (se mira por los primeros bytes).
+- **Cambio sobre lo previsto: el trabajador no guarda nada.** `analisis/` es un servicio más (FastAPI y `demoparser2`, en
+  el 8001) al que llama la API, como al Duende: le pasa la demo (la URL firmada o el nombre del fichero) y a quién
+  buscar, y guarda ella lo que devuelve. Así la base tiene un solo dueño (en local es H2 en memoria, y el trabajador no
+  podría verla) y no hace falta exponer endpoints de escritura. La demo descargada se borra al acabar.
+- **A quién busca**: por steamid (lo da FACEIT en el perfil: `games.cs2.game_player_id` o `steam_id_64`; columna
+  `steam_id` en `cuentas`) y, si no, por su nick de FACEIT, que es el nombre en las demos de FACEIT. Si se le encuentra
+  por el nick, la API apunta su steamid para la próxima.
+- **Por turnos**: cada partida nueva de CS2 apunta su demo como pendiente (tabla `demos`; las que ya estaban, también,
+  por si aparece su demo en la carpeta). Cada 15 minutos (`ANALISIS_INTERVALO_MIN`) se miran 3 (`ANALISIS_LOTE`), la que
+  hace más que no se revisa primero, así una sin acceso no tapa a las demás. Si el trabajador dice que la demo no vale
+  (caducada, rota, sin rondas, sin nadie del equipo), queda como fallida; si no responde, tres intentos; si aún no hay
+  forma de conseguirla, sigue pendiente sin gastar intentos.
+- **Qué se guarda** (migración `V7__demos.sql`): por jugador del equipo y ronda (tabla `rondas`), lado, si su equipo la
+  ganó, kills, asistencias (y cuántas de flash), daño (como mucho 100 por rival, sin el daño a compañeros), daño de
+  utilidad, si murió (dónde: coordenadas y la zona que da el juego, "BombsiteA", "TopofMid"...), si le tradearon, los
+  trades que dio, el duelo de apertura, lo que llevaba encima y la compra, y si la ronda cuenta para el KAST. Y en
+  `muertes_mapa`, dónde murió cada uno de los diez, **sin decir quién ni en qué partida**, como las muestras de P8.
+- **Definiciones**: un trade es matar al que acaba de matar a un compañero en menos de 5 segundos (320 ticks a 64 por
+  segundo). La apertura es la primera muerte de la ronda a manos de un rival. Las kills de salida son de la ronda que
+  acaba. Compra: pistola en las rondas 1 y 13 (MR12, lo que juega FACEIT), eco por debajo de 1500 de equipo, forzada
+  por debajo de 3500, completa desde 3500. **Rating propio** con la aproximación que circula del Rating 2.0 de HLTV (no
+  la publica): `0,0073·KAST + 0,3591·KPR − 0,5329·DPR + 0,2372·Impacto + 0,0032·ADR + 0,1587`, con
+  `Impacto = 2,13·KPR + 0,42·APR − 0,41`. Un jugador normal anda por 1,00–1,06.
+- **El mapa de calor no lleva imagen del mapa** (los radares son de Valve): lo dibujan, en gris, las muertes de todos en
+  ese mapa, y encima van las suyas (en rojo las que nadie vengó) y el calor por casillas. Los nombres de cada zona van
+  en la mediana de sus muertes. Con pocas partidas analizadas el dibujo queda pobre; con demos de verdad sale la forma
+  del mapa.
+- **Lo que juzga el Duende de las demos**: solo lo que FACEIT no da (el ADR, la utilidad y las entradas ya se juzgan con
+  lo de FACEIT, y avisar dos veces de lo mismo sobra). Rating, KAST, muertes tradeadas y trades por partida, frente al
+  equipo y una referencia fija (1,00, 70 % y 25 %), según el rol: al lurker no se le juzga que le tradeen (juega solo a
+  propósito), al soporte se le tolera el rating y le pesan más los trades y las flashes. Las asistencias de flash solo
+  se reconocen, nunca se reprochan: son trabajo del soporte, y la media del equipo la sube él. Hacen falta 5 partidas
+  analizadas.
+- **Reglas con más miga**: `zona_sin_trade` (en un mapa con 15 muertes o más, la zona donde muere sin trade al menos 6
+  veces y que es al menos el 25 % de sus muertes en ese mapa; desde el 40 %, *mejorar ya*; sustituye al aviso genérico
+  de muertes sin trade), `lado_debil` (60 rondas o más a cada lado y 0,25 de rating de diferencia; desde 0,4, *mejorar
+  ya*; el consejo cambia si el lado flojo es CT o T) y `forzadas_malas` (30 forzadas o más y el 30 % o menos ganadas).
+  Las tres se apuntan en la memoria de consejos (P6), pero sin seguimiento: su métrica no está en el resumen.
+- **Chat**: "¿Dónde muero más?", "¿Cómo voy de T?", "¿Qué tal mi KAST?", "¿Gano las forzadas?" (todo lo de sus demos
+  y lo más grave) y, sin nadie en el foco o con "quién", el rating de cada uno. Está entre las preguntas sugeridas si
+  tiene demos. Con un periodo avisa de que es con todas las partidas. Gemini recibe las demos de los del foco y el
+  rating y el KAST del resto, y tiene una quinta herramienta, `demos`, para pedirlas por periodo.
+- **Web**: pestaña *Demos* en el perfil de CS2 (las cifras frente al equipo, el mapa de calor con su selector de mapa y
+  las zonas donde más muere sin trade, CT y T y las rondas según la compra), un resumen en la pestaña principal y, en
+  el historial, las partidas analizadas se despliegan con sus rondas (una casilla por ronda: lado, kills, si murió y si
+  se ganó; al pasar por encima, todo lo de esa ronda).
+- **Datos de ejemplo**: todas las partidas de CS2 tienen la demo analizada, con su propio generador
+  (`carga/RondasDemo.java`): cuadran con cada partida (kills, muertes, asistencias, ADR, utilidad y marcador) y no
+  cambian ningún otro número. Las zonas y coordenadas de cada mapa son inventadas.
+- **Sin probar con una demo real** (aquí no hay ninguna, ni token de descargas): lo que se lee de `demoparser2` está
+  escrito con sus nombres documentados (`is_warmup_period`, `team_num`, `last_place_name`, `current_equip_value`) y
+  probado con tablas escritas a mano; las rondas, los trades y el resto, con eventos escritos a mano.
+- Endpoints nuevos: `GET /api/jugadores/{slug}/demos` y `/demos/calor?mapa=` (con `periodo`) y
+  `GET /api/jugadores/{slug}/partidas/{id}/rondas`. `analizada` en cada partida del historial y `analisis` en
+  `/api/estado` (cuántas demos analizadas, pendientes y fallidas).
+- **Queda pendiente**: probarlo con una demo y un token de verdad (y ajustar `demo.py` si alguna columna se llama de
+  otra forma); el aviso de FACEIT de demo lista (webhook "Match Demo Ready") para no esperar al turno; descartar
+  muertes de `muertes_mapa` viejas; comparar las métricas de las demos con su nivel (P8: las muestras no tienen rondas);
+  que el informe de cada partida (P10) use su rating; y quien no juega en FACEIT (los códigos para compartir partidas
+  de Valve necesitan un cliente de Steam).
 
 ---
 

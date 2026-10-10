@@ -3,6 +3,76 @@
 Lo que se ha entregado, de lo más reciente a lo más antiguo. Lo que falta por hacer está en
 [docs/propuestas.md](docs/propuestas.md) (P1–P12); al terminar una propuesta se marca allí y se anota aquí.
 
+## 2026-10-11 · P12: análisis de demos de CS2
+
+Commit `2be9bbc`. Con la demo de cada partida, el Duende ya no se queda en las medias: sabe qué pasó ronda a ronda,
+dónde muere cada uno y si alguien le vengó.
+
+**Qué se nota**
+- En el perfil de CS2, la pestaña **Demos**: rating propio (al estilo del de HLTV), KAST, duelos de apertura, trades,
+  muertes con trade, asistencias de flash, utilidad por ronda y rondas ganadas, cada una con la media del resto del
+  equipo; CT y T; las rondas ganadas según la compra (pistola, eco, forzada, completa) y el **mapa de calor** de dónde
+  muere en cada mapa, con las zonas donde más muere sin que le tradeen. En la pestaña principal, un resumen.
+- En el historial, las partidas con la demo analizada se despliegan con sus rondas: una casilla por ronda con el lado,
+  sus kills, si murió y si se ganó; al pasar por encima, todo lo de esa ronda (dónde murió, si le vengaron, la
+  apertura, la compra).
+- El Duende avisa de lo que solo dicen las demos. Con los datos de ejemplo, a Jugador 3: "En Outside te quedas solo. En
+  Nuke, el 57,7 % de tus muertes son en Outside y sin que nadie te tradee (60 de 104)"; a Jugador 1: "De T te apagas. De
+  T tu rating es 0,87; de CT, 1,70". También compara rating, KAST, muertes con trade, trades y asistencias de flash con
+  el equipo, según el rol, y avisa si las forzadas no salen.
+- En el chat: "¿Dónde muero más?", "¿Cómo voy de T?", "¿Qué tal mi KAST?" o "¿Quién tiene mejor rating?".
+
+**Cómo funciona**
+- Un servicio nuevo, `analisis/` (Python, FastAPI y `demoparser2`, en el 8001), lee cada demo y devuelve lo que hizo
+  cada jugador del equipo en cada ronda y dónde murió la gente (sin decir quién). No guarda nada: la demo se borra al
+  acabar y los datos los guarda la API.
+- La API apunta la demo de cada partida nueva de CS2 y, cada 15 minutos, manda unas pocas pendientes al trabajador, por
+  turnos. La demo sale de una de dos: con el token de la **API de descargas de FACEIT** (aparte de la clave de la Data
+  API: se pide a FACEIT), una URL firmada; sin él, el fichero que se deje en la carpeta `demos/` (las que se bajan de la
+  sala de la partida en FACEIT ya traen el id de la partida en el nombre).
+- A cada uno se le busca por su steamid (lo da FACEIT en el perfil) o, si no, por su nick.
+- La API calcula todo lo demás: KAST, trades (en menos de 5 s), aperturas, rating, CT y T, compras y zonas.
+
+**Cambios por servicio**
+- **Análisis (nuevo)**: `analisis/` con `rondas.py` (las cuentas, sin demoparser2), `demo.py` (lectura de la demo),
+  `descarga.py` (URL o carpeta, descomprimir y borrar) y `POST /v1/analizar`. Configuración: `TTCL_DEMOS_DIR`,
+  `ANALISIS_MAX_MB` y `ANALISIS_TIMEOUT_S`.
+- **Base de datos**: migración `V7__demos.sql` (`steam_id` en `cuentas`; tablas `demos`, `rondas` y `muertes_mapa`; las
+  partidas de CS2 que ya estaban quedan pendientes). Flyway la aplica sola.
+- **API**: el steamid y la URL de la demo al sincronizar con FACEIT (`FaceitFuente`, `Sincronizador`); paquete
+  `analisis` (`AnalisisDemos`, `AnalisisProgramado`, `AnalisisCliente`, `DescargasFaceit`); `stats/Rondas` (funciones
+  puras); `GET /api/jugadores/{slug}/demos`, `/demos/calor` y `/partidas/{id}/rondas`; `analizada` en el historial y
+  `analisis` en `/api/estado`. `DemoSeeder` analiza todas las partidas de CS2 de ejemplo con su propio generador
+  (`RondasDemo`: no cambia ningún otro número). Configuración nueva: `ANALISIS_URL`, `ANALISIS_INTERVALO_MIN`,
+  `ANALISIS_LOTE`, `TTCL_DEMOS_DIR` y `FACEIT_DOWNLOADS_TOKEN`.
+- **Contrato compartido**: `ResumenDemos` (y `MetricasRondas`, `FilaLado`, `FilaCompra`, `MapaMuertes`, `ZonaMuerte`)
+  en `PeticionInsights` y `JuegoContexto` (API → Duende); `analizada` en `PartidaVista` y las vistas de las demos (API →
+  web). Con el trabajador: `AnalisisModelos.java` ↔ `analisis/app/modelos.py`.
+- **Duende**: `METRICAS_DEMO` en `metricas.py` (y sus ajustes por rol), reglas `zona_sin_trade`, `lado_debil` y
+  `forzadas_malas` en `insights.py`, la intención `demos` en el chat, el prompt de Gemini y la herramienta `demos`.
+- **Web**: pestaña Demos (`panel-demos.ts`), mapa de calor (`compartido/mapa-calor.ts`), las rondas en el historial
+  (`rondas-partida.ts`) y sus textos en los dos idiomas.
+- **Docker**: el servicio `analisis` y la carpeta `./demos`, montada en el trabajador y en la API.
+
+**Tests**: análisis 21 (nuevo), Duende 117 → 136, API 75 → 93, web 31 → 35, todos en verde.
+- Análisis: las rondas con eventos escritos a mano (aperturas, trades, kills de salida, fuego amigo, tope de daño,
+  utilidad, compras, KAST), la lectura de la demo con un demoparser2 de mentira (calentamiento, reinicios, steamids,
+  lados), la descarga con tope de tamaño, la descompresión y la carpeta (sin salirse de ella) y el endpoint.
+- API: las cuentas de las rondas y el rating, el mapa de calor y los nombres de zona; el steamid y la URL de la demo de
+  FACEIT; el análisis de pendientes (carpeta, URL firmada, sin acceso, demo que no vale, trabajador caído, sin nadie del
+  equipo); con los datos de ejemplo, las demos de cada uno, que las rondas cuadren con cada partida, el mapa de calor y
+  lo que recibe el Duende.
+- Duende: cada regla de las demos (también por rol y en inglés), el chat por reglas, el contrato en camelCase y la
+  herramienta.
+- Web: la pestaña Demos, el resumen, el mapa de calor y las rondas en el historial.
+- A mano, en el navegador, con los cuatro servicios y los datos de ejemplo. Con una demo y un token de verdad no se ha
+  podido probar: aquí no hay ninguno de los dos.
+
+**Para actualizar una instalación**: parar la API, `./mvnw package -DskipTests` y arrancar (Flyway añade las tablas);
+crear el entorno de `analisis/` (`python -m venv .venv` y `pip install -r requirements-dev.txt`) y arrancarlo en el 8001;
+reiniciar el Duende y la web. Con Docker, `docker compose up --build` levanta el servicio nuevo. Para analizar demos:
+`FACEIT_DOWNLOADS_TOKEN` o dejarlas en `demos/`.
+
 ## 2026-10-10 · P10 y P11: informe de cada partida y el Duende en Discord
 
 Commit `15f5b85`. Cada partida del historial lleva lo que dice el Duende de ella, y lo mismo puede llegar a Discord con
