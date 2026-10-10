@@ -87,8 +87,8 @@ Web en http://localhost:4200, con Postgres y datos de ejemplo (`TTCL_DEMO=true`;
 
 | Parte | Comando | Qué cubre |
 |---|---|---|
-| Duende | `cd duende && .venv/Scripts/python -m pytest` | Reglas de recomendación (también por rol, por compañero, tilt y hora del día), chat por reglas (también "esta semana" o "este mes"), uso y caché de Gemini, API |
-| API | `cd api && ./mvnw test` | Estadísticas (también sinergias, dúos y tríos, sesiones y franjas horarias), periodos, mapeo de FACEIT y Hi-Rez, carga del equipo con roles, API completa contra H2 con datos de ejemplo |
+| Duende | `cd duende && .venv/Scripts/python -m pytest` | Reglas de recomendación (también por rol, por compañero, tilt, hora del día y seguimiento de consejos), chat por reglas (también "esta semana" o "este mes"), uso y caché de Gemini, API |
+| API | `cd api && ./mvnw test` | Estadísticas (también sinergias, dúos y tríos, sesiones y franjas horarias, seguimiento de consejos), periodos, memoria de consejos, mapeo de FACEIT y Hi-Rez, carga del equipo con roles, API completa contra H2 con datos de ejemplo |
 | Web | `cd frontend && npm test` | Texto del Duende, i18n y formatos, estado del chat, rol, "Con quién", "Cuándo juegas mejor" y el periodo en el perfil, el periodo en el ranking, dúos y tríos en el equipo |
 
 ## El Duende
@@ -137,6 +137,12 @@ Duende avisa de tilt si desde la 3ª seguida (o tras perder) gana 15 puntos meno
 ganas el 37,5 % (16 partidas); en las dos primeras, el 63,9 %"), y dice su mejor hora si en ella gana 20 puntos más
 que el resto del día. La web lo enseña en la tarjeta "Cuándo juegas mejor" del perfil.
 
+**Memoria** (P6): la API apunta los avisos de *mejorar ya* y *a vigilar* que el Duende da en el perfil (tabla
+`consejos_dados`: recomendación, métrica y su valor ese día; no la misma en 7 días). Después le pasa al Duende cómo ha
+ido cada uno: el valor de entonces y el de las partidas jugadas desde entonces. Con 7 días y 5 partidas o más, el
+Duende dice si ha funcionado ("Mejora en ADR. Hace 12 días te avisé: «Poco daño por ronda». Entonces tenías 78; en las
+11 partidas desde entonces, 103") o si sigue sin mejorar (y repite el consejo).
+
 **Periodo**: el perfil, el cara a cara y el ranking tienen un selector de *7 días · 30 días · Todo* (en la URL,
 `?periodo=7d`). Todo lo de la página cuenta solo esas partidas, también la media del equipo con la que se compara y las
 recomendaciones del Duende. En la API, `?periodo=7d|30d|todo` en el perfil, el detalle, el historial, con quién,
@@ -144,10 +150,11 @@ cuándo, los consejos, el cara a cara y el ranking (por defecto, todo). Sin part
 vacíos; el 404 es solo para quien nunca ha jugado a ese juego.
 
 **Chat** (`chat.py`): con `GOOGLE_API_KEY` contesta Gemini, que recibe los resúmenes del equipo (con el rol de cada uno),
-las sinergias, las sesiones, los últimos 7 y 30 días y las recomendaciones ya calculadas. Caché por petición, límite
-diario (`DUENDE_DAILY_LIMIT`) y modelos de respaldo si el principal ya no existe. Sin clave, sin cuota o si Gemini
-falla, contestan las reglas (`reglas_chat.py`): en qué mejorar, qué haces bien, cómo vas últimamente, peor mapa o dios,
-con quién juegas mejor, cuándo juegas mejor (tilt y hora), el mejor dúo, comparar a dos, quién es el mejor del equipo.
+las sinergias, las sesiones, los últimos 7 y 30 días, el seguimiento de sus consejos y las recomendaciones ya
+calculadas. Caché por petición, límite diario (`DUENDE_DAILY_LIMIT`) y modelos de respaldo si el principal ya no
+existe. Sin clave, sin cuota o si Gemini falla, contestan las reglas (`reglas_chat.py`): en qué mejorar, qué haces bien,
+cómo vas últimamente, peor mapa o dios, con quién juegas mejor, cuándo juegas mejor (tilt y hora), si ha funcionado lo
+que te dijo, el mejor dúo, comparar a dos, quién es el mejor del equipo.
 Si la pregunta dice "esta semana" o "este mes" (o la página tiene un periodo elegido), los números son los de esos
 días, y "¿cómo voy esta semana?" los compara con los de siempre. La web indica bajo cada respuesta si la escribió
 Gemini o las reglas.
@@ -174,8 +181,8 @@ Parte del prototipo `TTCL Stats.html` y lo lleva a una web de estadísticas comp
 - **Accesibilidad**: foco visible, etiquetas para lectores de pantalla, `prefers-reduced-motion` y textos del Duende
   pintados como texto (nunca como HTML).
 
-Siguientes pasos: la hoja de ruta está en [docs/propuestas.md](docs/propuestas.md) (objetivos, memoria de consejos,
-percentiles por nivel de FACEIT, Duende en Discord, análisis de demos…). Lo ya entregado, con lo que cambia en cada
+Siguientes pasos: la hoja de ruta está en [docs/propuestas.md](docs/propuestas.md) (objetivos, valoración de las
+respuestas, percentiles por nivel de FACEIT, Duende en Discord, análisis de demos…). Lo ya entregado, con lo que cambia en cada
 servicio y cómo actualizar, está en [CHANGELOG.md](CHANGELOG.md).
 
 ## Fuentes de datos: estado

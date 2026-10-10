@@ -3,6 +3,48 @@
 Lo que se ha entregado, de lo más reciente a lo más antiguo. Lo que falta por hacer está en
 [docs/propuestas.md](docs/propuestas.md) (P1–P12); al terminar una propuesta se marca allí y se anota aquí.
 
+## 2026-10-09 · P6: memoria de consejos
+
+Commit `7c91ccb`. El Duende ya se acuerda de lo que le dijo a cada uno y comprueba si ha servido.
+
+**Qué se nota**
+- Si un consejo ha funcionado, el Duende lo celebra. Con los datos de ejemplo, a Jugador 3: "Mejora en ADR. Hace 12
+  días te avisé: «Poco daño por ronda». Entonces tenías 78; en las 11 partidas desde entonces, 103".
+- Si no, lo dice y repite el consejo: a Jugador 4, "Muertes / partida sigue sin mejorar" (de 6,63 a 9,22) con "Toca
+  insistir: pon wards…". Ese aviso sustituye al de siempre de esa métrica.
+- En el chat: "¿Ha funcionado lo que me dijiste?" repasa cada consejo (funciona, sigue sin mejorar, aún es pronto o
+  aún no has jugado). Sale entre las preguntas sugeridas cuando hay algo que revisar.
+
+**Cómo funciona**
+- Al abrir el perfil (con todas las partidas), la API apunta los avisos de *mejorar ya* y *a vigilar*: recomendación,
+  métrica y su valor ese día. No apunta la misma en 7 días ni los avisos del propio seguimiento.
+- Después le pasa al Duende, de cada aviso con métrica de los últimos 60 días (la primera vez que se dio), el valor de
+  entonces y el de las partidas jugadas desde entonces.
+- El Duende juzga con 7 días y 5 partidas o más desde el consejo: funciona si mejora 5 puntos (porcentajes) o un 10 %
+  (lo demás); no funciona si no mejora o empeora. Solo el que más ha mejorado y el peor.
+
+**Cambios por servicio**
+- **Base de datos**: migración `V3__consejos_dados.sql` (tabla `consejos_dados`). Flyway la aplica sola.
+- **API**: entidad `ConsejoDado` y su repositorio; servicio `MemoriaConsejos` (apunta al pedir los consejos del
+  perfil); `Estadisticas.seguimiento` (función pura). `DemoSeeder` apunta dos consejos antiguos y hace que Jugador 4
+  muera más desde el suyo.
+- **Contrato compartido**: `SeguimientoConsejo` y `seguimiento` en `PeticionInsights` y `JuegoContexto`.
+- **Duende**: reglas `consejo_funciona` y `consejo_no_funciona` en `insights.py`; textos en `textos.py`; intención
+  `seguimiento` en `reglas_chat.py`; el seguimiento explicado en el prompt de Gemini.
+- **Web**: sin cambios (los avisos nuevos salen en el panel de siempre).
+
+**Tests**: Duende 76 → 86, API 46 → 49, web 24 (sin cambios), todos en verde.
+- API: seguimiento (la primera vez de cada aviso, sin métrica fuera, más de 60 días fuera, sin partidas desde
+  entonces); apuntar consejos (solo nuevos, solo *mejorar ya* y *a vigilar*, con el valor de ese día, sin repetir, no
+  con un periodo) y el seguimiento que recibe el Duende, también el de los datos de ejemplo.
+- Duende: funciona y no funciona (con su nivel y su consejo, sustituyendo al aviso de siempre), aún es pronto, solo el
+  mejor y el peor, inglés y avisos de reglas especiales, chat (repaso, sin consejos, sin foco, sugerencias), prompt de
+  Gemini y la API HTTP.
+
+**Para actualizar una instalación**: parar la API, `./mvnw package -DskipTests` y arrancar (Flyway crea la tabla);
+reiniciar el Duende. En Postgres con datos de ejemplo viejos no habrá consejos de ejemplo: aparecen en cuanto se abran
+los perfiles y pase una semana.
+
 ## 2026-10-09 · P4: filtros por periodo
 
 Commit `3522cdd`. Ya se puede ver cómo va cada uno en los últimos 7 o 30 días, no solo con todas sus partidas.

@@ -13,7 +13,7 @@ lo que se aprendió en su apartado y apuntar la entrega en [CHANGELOG.md](../CHA
 | P3 | Sesiones y tilt | 1 | Bajo | Ya guardados | Hecho |
 | P4 | Filtros por periodo | 1 | Bajo | Ya guardados | Hecho |
 | P5 | Objetivos personales | 2 | Medio | Nuevos (los da el jugador) | Pendiente |
-| P6 | Memoria de consejos | 2 | Medio | Se generan | Pendiente |
+| P6 | Memoria de consejos | 2 | Medio | Se generan | Hecho |
 | P7 | Valoración de las respuestas | 2 | Bajo | Se generan | Pendiente |
 | P8 | Comparar con jugadores de tu nivel (FACEIT) | 3 | Medio | Ya llegan, se tiran | Pendiente |
 | P9 | Chat que consulta la API (function calling) | 3 | Medio | Ya guardados | Pendiente |
@@ -42,7 +42,7 @@ y conviene hacerlo cuando lo demás esté estable.
 1. No sabe el rol de cada uno: puede regañar a un soporte por hacer pocas kills. (Resuelto en P1.)
 2. Las referencias de "jugador medio" son números fijos, no gente de tu nivel.
 3. No sabe con quién juegas, cuándo ni cuántas seguidas, aunque esos datos ya están en la base. (Resuelto en P2 y P3.)
-4. No recuerda qué te dijo ni si sirvió.
+4. No recuerda qué te dijo ni si sirvió. (Resuelto en P6.)
 5. Solo ve medias por partida: nada de rondas, posiciones, trades o economía.
 
 ---
@@ -214,6 +214,31 @@ SMITE 2, solo ha jugado Jugador 4. Lo que quedó y lo que se aprendió:
 - Duende: regla `consejo_funciona` / `consejo_no_funciona` comparando el valor de entonces con el actual ("hace dos
   semanas te dije que usaras más utilidad: has pasado de 85 a 120"). El historial va al prompt del chat.
 - Sirve además para medir qué consejos funcionan y ajustar `textos.py`.
+
+**Hecho** (9 de octubre de 2026). Con los datos de ejemplo, a Jugador 3: "Mejora en ADR. Hace 12 días te avisé: «Poco
+daño por ronda». Entonces tenías 78; en las 11 partidas desde entonces, 103"; y a Jugador 4: "Muertes / partida sigue
+sin mejorar" (de 6,63 a 9,22), con el consejo de entonces otra vez. Lo que quedó y lo que se aprendió:
+- **Se compara el valor de entonces con el de las partidas jugadas desde entonces**, no con el de ahora con todas: el
+  de todas cambia muy despacio y la mejora no se vería. La API calcula los dos (`Estadisticas.seguimiento`); el Duende
+  no inventa números.
+- **Qué se apunta**: las recomendaciones de *mejorar ya* y *a vigilar* que se ven en el perfil con todas las partidas
+  (con un periodo no: el valor sería el de esos días). Cada una con su métrica y su valor ese día; las que no hablan
+  de una métrica (tilt, compañeros...) se apuntan igual, para medir más adelante, pero no tienen seguimiento. No se
+  repite la misma en 7 días. Las del propio seguimiento no se apuntan. Las tarjetas del equipo no apuntan nada.
+- **Cuándo se juzga**: con 7 días o más y 5 partidas o más desde el consejo. Para cada recomendación cuenta la primera
+  vez que se dio en los últimos 60 días. Funciona si la métrica mejora como en el resto de reglas (5 puntos en
+  porcentajes, un 10 % en lo demás); no funciona si no mejora nada o empeora (*mejorar ya* si empeora un 10 % o más).
+  Solo se habla del que más ha mejorado y del peor.
+- "Sigue sin mejorar" sustituye al aviso de siempre de esa métrica (decir las dos cosas sobra) y repite el consejo de
+  entonces con un "toca insistir". Los dos van por delante en su nivel: es lo más personal que dice el Duende.
+- En el chat: "¿Ha funcionado lo que me dijiste?" repasa cada consejo (funciona, sigue sin mejorar, aún es pronto o
+  aún no has jugado) y está entre las preguntas sugeridas cuando hay algo que revisar. Gemini recibe el seguimiento.
+- Datos de ejemplo: a Jugador 3 se le avisó del ADR hace 12 días (y viene mejorando); a Jugador 4, de las muertes hace
+  25 días, y desde entonces muere más (`DemoSeeder` lo genera así).
+- Migración `V3__consejos_dados.sql`.
+- **Queda pendiente**: un informe de qué consejos funcionan más (los datos ya están en `consejos_dados`) para ajustar
+  los textos; y que la memoria distinga a quién se le enseñó el consejo (hoy cuenta como dado cuando cualquiera abre el
+  perfil; con P5 habrá usuarios).
 
 ### P7 · Valoración de las respuestas
 
