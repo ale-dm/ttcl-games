@@ -90,9 +90,13 @@ public final class DuendeModelos {
             String lang, List<Mensaje> mensajes, List<String> foco, List<JugadorContexto> equipo, Juego juego,
             Periodo periodo) {}
 
-    /** @param origen "gemini" o "reglas" (sin clave, sin cuota o si Gemini falla) */
+    /**
+     * @param origen "gemini" o "reglas" (sin clave, sin cuota o si Gemini falla)
+     * @param intencion de qué iba la pregunta según las reglas, conteste quien conteste (la web la devuelve al valorar)
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record RespuestaChat(String respuesta, String origen, String modelo, List<String> sugerencias) {}
+    public record RespuestaChat(
+            String respuesta, String origen, String modelo, String intencion, List<String> sugerencias) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Salud(boolean ok, boolean gemini, String modelo) {}

@@ -54,4 +54,17 @@ public final class Repositorios {
         boolean existsByJugadorAndJuegoAndInsightAndDadoEnAfter(
                 Jugador jugador, Juego juego, String insight, Instant desde);
     }
+
+    public interface ValoracionRepo extends JpaRepository<Valoracion, Long> {
+        /** Todas, con su jugador si lo hay, la más reciente primero (para el resumen, en memoria). */
+        @Query("select v from Valoracion v left join fetch v.jugador order by v.votadaEn desc, v.id desc")
+        List<Valoracion> findAllRecientes();
+
+        /** El voto de un navegador a una recomendación de un jugador en un juego. */
+        Optional<Valoracion> findFirstByVotanteAndTipoAndClaveAndJugadorAndJuego(
+                String votante, String tipo, String clave, Jugador jugador, Juego juego);
+
+        /** El voto de un navegador a una respuesta del chat (la clave ya dice cuál). */
+        Optional<Valoracion> findFirstByVotanteAndTipoAndClave(String votante, String tipo, String clave);
+    }
 }

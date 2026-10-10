@@ -68,4 +68,50 @@ describe('DuendeEstado', () => {
     expect(duende.mensajes().at(-1)).toMatchObject({ rol: 'duende', error: true });
     expect(duende.mensajes().at(-1)!.texto).toContain('no está disponible');
   });
+
+  /** Pregunta algo y deja contestada la respuesta del Duende (el segundo mensaje). */
+  function contestar(): void {
+    duende.enviar('¿Qué tal el tiempo?');
+    http
+      .expectOne('/api/duende/chat')
+      .flush({ respuesta: 'De eso no sé.', origen: 'reglas', modelo: null, intencion: 'ayuda', sugerencias: [] });
+  }
+
+  it('valora una respuesta con la pregunta que la provocó; pulsar otra vez quita el voto', () => {
+    contestar();
+    duende.valorar(1, -1);
+    expect(duende.mensajes()[1].voto).toBe(-1);
+
+    const voto = http.expectOne('/api/duende/valoraciones/respuesta');
+    expect(voto.request.method).toBe('PUT');
+    expect(voto.request.body).toMatchObject({
+      voto: -1,
+      pregunta: '¿Qué tal el tiempo?',
+      respuesta: 'De eso no sé.',
+      origen: 'reglas',
+      modelo: null,
+      intencion: 'ayuda',
+      foco: ['j1'],
+      juego: 'cs2',
+      lang: 'es',
+    });
+    expect(voto.request.body.votante).toMatch(/^[A-Za-z0-9-]{8,40}$/);
+    voto.flush(null);
+
+    duende.valorar(1, 0);
+    expect(duende.mensajes()[1].voto).toBeNull();
+    expect(http.expectOne('/api/duende/valoraciones/respuesta').request.body.voto).toBe(0);
+  });
+
+  it('si el voto no se guarda, vuelve a como estaba; los mensajes sin origen no se valoran', () => {
+    contestar();
+    duende.valorar(1, 1);
+    http
+      .expectOne('/api/duende/valoraciones/respuesta')
+      .flush({ error: 'Petición no válida.' }, { status: 400, statusText: 'Bad Request' });
+    expect(duende.mensajes()[1].voto).toBeNull();
+
+    duende.valorar(0, 1); // la pregunta
+    http.expectNone('/api/duende/valoraciones/respuesta');
+  });
 });

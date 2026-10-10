@@ -259,5 +259,39 @@ export interface RespuestaChat {
   respuesta: string;
   origen: 'gemini' | 'reglas';
   modelo: string | null;
+  /** De qué iba la pregunta según las reglas (mejorar, companeros... o ayuda si no la entienden). */
+  intencion: string | null;
   sugerencias: string[];
+}
+
+// ─── Valoraciones (P7) ─────────────────────────────────────────────────────
+
+/** 1 me sirve, -1 no me sirve, 0 quita el voto. */
+export type Voto = 1 | -1 | 0;
+
+/** Voto a una recomendación del panel. `votante` es el id al azar de este navegador. */
+export interface ValoracionConsejo {
+  votante: string;
+  voto: Voto;
+  jugador: string;
+  juego: Juego;
+  insight: string;
+  nivel: NivelInsight;
+  lang: string;
+  /** Lo que se vio: título, texto y consejo. */
+  texto: string;
+}
+
+/** Voto a una respuesta del chat, con la pregunta y de dónde salió la respuesta. */
+export interface ValoracionRespuesta {
+  votante: string;
+  voto: Voto;
+  lang: string;
+  foco: string[];
+  juego: Juego | null;
+  pregunta: string;
+  respuesta: string;
+  origen: 'gemini' | 'reglas';
+  modelo: string | null;
+  intencion: string | null;
 }

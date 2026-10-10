@@ -147,6 +147,10 @@ export const ES = {
   'duende.sugConQuien': '¿Con quién juego mejor?',
   'duende.sugMejorDuo': '¿Cuál es nuestro mejor dúo?',
   'duende.sugCuando': '¿Cuándo juego mejor?',
+  'duende.votoPregunta': '¿Te sirve?',
+  'duende.votoGracias': '¡Gracias!',
+  'duende.votoSi': 'Me sirve',
+  'duende.votoNo': 'No me sirve',
 
   // Comparar
   'comparar.titulo': 'Comparar',
@@ -374,6 +378,10 @@ export const EN: Record<Clave, string> = {
   'duende.sugConQuien': 'Who do I play best with?',
   'duende.sugMejorDuo': "What's our best duo?",
   'duende.sugCuando': 'When do I play best?',
+  'duende.votoPregunta': 'Helpful?',
+  'duende.votoGracias': 'Thanks!',
+  'duende.votoSi': 'Helpful',
+  'duende.votoNo': 'Not helpful',
 
   'comparar.titulo': 'Compare',
   'comparar.sub': 'Two teammates, face to face, metric by metric.',

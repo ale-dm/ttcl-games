@@ -6,12 +6,15 @@ import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ttcl.games.config.TtclProperties;
 import com.ttcl.games.dominio.ConsejoDado;
 import com.ttcl.games.dominio.Repositorios.ConsejoDadoRepo;
+import com.ttcl.games.dominio.Repositorios.ValoracionRepo;
+import com.ttcl.games.dominio.Valoracion;
 import com.ttcl.games.duende.DuendeCliente;
 import com.ttcl.games.duende.DuendeModelos.Insight;
 import com.ttcl.games.duende.DuendeModelos.ItemLote;
@@ -62,6 +65,9 @@ class ApiTest {
 
     @Autowired
     ConsejoDadoRepo consejosDados;
+
+    @Autowired
+    ValoracionRepo valoraciones;
 
     MockMvc mvc;
 
@@ -134,6 +140,7 @@ class ApiTest {
         duende.ultimaChat = null;
         duende.ultimaInsights = null;
         duende.ultimoLote = null;
+        valoraciones.deleteAll();
     }
 
     private static Insight insight(String nivel, String titulo) {
@@ -209,7 +216,7 @@ class ApiTest {
                 .extracting(p -> p.jugador().slug() + ":" + p.rol())
                 .containsExactly("j1:rifler", "j2:soporte", "j3:entry");
 
-        duende.respuesta = new RespuestaChat("Hola", "reglas", null, List.of());
+        duende.respuesta = new RespuestaChat("Hola", "reglas", null, null, List.of());
         mvc.perform(post("/api/duende/chat")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mensajes\": [{\"rol\": \"usuario\", \"texto\": \"¿Quién es el mejor?\"}]}"))
@@ -277,7 +284,7 @@ class ApiTest {
                 .extracting(FilaSinergia::slug)
                 .containsExactlyInAnyOrder("j1", "j3");
 
-        duende.respuesta = new RespuestaChat("Hola", "reglas", null, List.of());
+        duende.respuesta = new RespuestaChat("Hola", "reglas", null, null, List.of());
         mvc.perform(post("/api/duende/chat")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mensajes\": [{\"rol\": \"usuario\", \"texto\": \"¿Con quién juego mejor?\"}]}"))
@@ -337,7 +344,7 @@ class ApiTest {
         assertThat(duende.ultimaInsights.sesiones().porOrden()).extracting(FilaMomento::clave)
                 .containsExactly("1", "2", "3+");
 
-        duende.respuesta = new RespuestaChat("Hola", "reglas", null, List.of());
+        duende.respuesta = new RespuestaChat("Hola", "reglas", null, null, List.of());
         mvc.perform(post("/api/duende/chat")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mensajes\": [{\"rol\": \"usuario\", \"texto\": \"¿Cuándo juego mejor?\"}]}"))
@@ -399,7 +406,7 @@ class ApiTest {
 
     @Test
     void elChatRecibeLosUltimosDiasYElPeriodoDeLaPagina() throws Exception {
-        duende.respuesta = new RespuestaChat("Hola", "reglas", null, List.of());
+        duende.respuesta = new RespuestaChat("Hola", "reglas", null, null, List.of());
         mvc.perform(post("/api/duende/chat")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -504,13 +511,134 @@ class ApiTest {
         // Con un periodo, sin seguimiento (es con todas las partidas); en el chat, sí.
         mvc.perform(get("/api/jugadores/j3/consejos?juego=cs2&periodo=30d")).andExpect(status().isOk());
         assertThat(duende.ultimaInsights.seguimiento()).isEmpty();
-        duende.respuesta = new RespuestaChat("Hola", "reglas", null, List.of());
+        duende.respuesta = new RespuestaChat("Hola", "reglas", null, null, List.of());
         mvc.perform(post("/api/duende/chat")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mensajes\": [{\"rol\": \"usuario\", \"texto\": \"¿Ha funcionado?\"}]}"))
                 .andExpect(status().isOk());
         assertThat(juegoDe(duende.ultimaChat, "j3", Juego.CS2).seguimiento()).hasSize(1);
         assertThat(juegoDe(duende.ultimaChat, "j1", Juego.CS2).seguimiento()).isEmpty();
+    }
+
+    // ─── Valoraciones (P7) ──────────────────────────────────────────────────
+
+    private void votarConsejo(String votante, int voto, String slug, String insight, int esperado) throws Exception {
+        mvc.perform(put("/api/duende/valoraciones/consejo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"votante": "%s", "voto": %d, "jugador": "%s", "juego": "cs2", "insight": "%s",
+                                 "nivel": "alto", "lang": "es", "texto": "Poco daño por ronda"}
+                                """.formatted(votante, voto, slug, insight)))
+                .andExpect(status().is(esperado));
+    }
+
+    private void votarRespuesta(String votante, int voto, String pregunta, String respuesta, String origen)
+            throws Exception {
+        mvc.perform(put("/api/duende/valoraciones/respuesta")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"votante": "%s", "voto": %d, "lang": "en-GB", "foco": ["nadie", "j3"], "juego": "cs2",
+                                 "pregunta": "%s", "respuesta": "%s", "origen": "%s", "modelo": null,
+                                 "intencion": "ayuda"}
+                                """.formatted(votante, voto, pregunta, respuesta, origen)))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void cadaNavegadorTieneUnVotoPorRecomendacionQuePuedeCambiarOQuitar() throws Exception {
+        votarConsejo("navegador-1", 1, "j3", "debil_adr", 204);
+        votarConsejo("navegador-1", -1, "j3", "debil_adr", 204); // cambia de opinión: no suma otro
+        votarConsejo("navegador-2", -1, "j3", "debil_adr", 204);
+        votarConsejo("navegador-2", 1, "j1", "debil_adr", 204); // la misma recomendación a otro jugador es otra cosa
+
+        assertThat(valoraciones.findAll()).hasSize(3);
+        Valoracion delPrimero = valoraciones.findAllRecientes().stream()
+                .filter(v -> v.getVotante().equals("navegador-1"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(delPrimero.getVoto()).isEqualTo(-1);
+        assertThat(delPrimero.getTipo()).isEqualTo(Valoracion.CONSEJO);
+        assertThat(delPrimero.getOrigen()).isEqualTo("reglas");
+        assertThat(delPrimero.getNivel()).isEqualTo("alto");
+        assertThat(delPrimero.getJuego()).isEqualTo(Juego.CS2);
+        assertThat(delPrimero.getTexto()).isEqualTo("Poco daño por ronda");
+
+        // Por recomendación, sumando todos los jugadores; la peor valorada primero.
+        votarConsejo("navegador-1", 1, "j3", "fuerte_kd", 204);
+        mvc.perform(get("/api/duende/valoraciones"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.positivos").value(2))
+                .andExpect(jsonPath("$.negativos").value(2))
+                .andExpect(jsonPath("$.consejos", hasSize(2)))
+                .andExpect(jsonPath("$.consejos[0].clave").value("debil_adr"))
+                .andExpect(jsonPath("$.consejos[0].origen").value("reglas"))
+                .andExpect(jsonPath("$.consejos[0].positivos").value(1))
+                .andExpect(jsonPath("$.consejos[0].negativos").value(2))
+                .andExpect(jsonPath("$.consejos[1].clave").value("fuerte_kd"))
+                .andExpect(jsonPath("$.negativas", hasSize(2)))
+                .andExpect(jsonPath("$.negativas[0].jugador").value("Jugador 3"))
+                .andExpect(jsonPath("$.negativas[0].texto").value("Poco daño por ronda"));
+
+        // Con 0 se quita el voto (y si no lo había, no pasa nada).
+        votarConsejo("navegador-2", 0, "j3", "debil_adr", 204);
+        votarConsejo("navegador-2", 0, "j3", "nunca_votada", 204);
+        assertThat(valoraciones.findAll()).hasSize(3);
+    }
+
+    @Test
+    void valorarUnaRecomendacionValidaLaEntrada() throws Exception {
+        votarConsejo("navegador-1", 1, "nadie", "debil_adr", 404);
+        votarConsejo("navegador-1", 2, "j3", "debil_adr", 400);
+        votarConsejo("no vale", 1, "j3", "debil_adr", 400);
+        mvc.perform(put("/api/duende/valoraciones/consejo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"votante\": \"navegador-1\", \"voto\": 1, \"jugador\": \"j3\", \"juego\": \"cs2\"}"))
+                .andExpect(status().isBadRequest());
+        assertThat(valoraciones.findAll()).isEmpty();
+    }
+
+    @Test
+    void lasRespuestasDelChatSeValoranPorPreguntaYRespuesta() throws Exception {
+        votarRespuesta("navegador-1", 1, "¿Qué tal el tiempo?", "No sé de eso.", "reglas");
+        votarRespuesta("navegador-1", -1, "¿Qué tal el tiempo?", "No sé de eso.", "reglas"); // la misma: cambia
+        votarRespuesta("navegador-1", -1, "¿Y la economía?", "No sé de eso.", "reglas"); // otra pregunta: otra
+        votarRespuesta("navegador-2", 1, "¿Qué tal el tiempo?", "Soleado en Mirage.", "gemini");
+
+        List<Valoracion> todas = valoraciones.findAllRecientes();
+        assertThat(todas).hasSize(3);
+        Valoracion tiempo = todas.stream()
+                .filter(v -> v.getPregunta().equals("¿Qué tal el tiempo?") && v.getOrigen().equals("reglas"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(tiempo.getVoto()).isEqualTo(-1);
+        assertThat(tiempo.getClave()).hasSize(32).matches("[0-9a-f]+");
+        assertThat(tiempo.getJugador().getSlug()).isEqualTo("j3"); // el primero del foco que existe
+        assertThat(tiempo.getLang()).isEqualTo("en");
+        assertThat(tiempo.getIntencion()).isEqualTo("ayuda");
+        assertThat(tiempo.getTexto()).isEqualTo("No sé de eso.");
+
+        // Por origen y tipo de pregunta; las negativas, la más reciente primero, con la pregunta.
+        mvc.perform(get("/api/duende/valoraciones"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.consejos", hasSize(0)))
+                .andExpect(jsonPath("$.respuestas", hasSize(2)))
+                .andExpect(jsonPath("$.respuestas[0].origen").value("reglas"))
+                .andExpect(jsonPath("$.respuestas[0].clave").value("ayuda"))
+                .andExpect(jsonPath("$.respuestas[0].negativos").value(2))
+                .andExpect(jsonPath("$.respuestas[1].origen").value("gemini"))
+                .andExpect(jsonPath("$.respuestas[1].positivos").value(1))
+                .andExpect(jsonPath("$.negativas[0].tipo").value("respuesta"))
+                .andExpect(jsonPath("$.negativas[0].pregunta").value("¿Y la economía?"))
+                .andExpect(jsonPath("$.negativas[0].texto").value("No sé de eso."));
+
+        // Un origen que no es del Duende no vale.
+        mvc.perform(put("/api/duende/valoraciones/respuesta")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"votante": "navegador-1", "voto": 1, "pregunta": "a", "respuesta": "b",
+                                 "origen": "yo"}
+                                """))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -558,7 +686,7 @@ class ApiTest {
 
     @Test
     void chatMandaElContextoYFiltraLosSlugs() throws Exception {
-        duende.respuesta = new RespuestaChat("Hola", "reglas", null, List.of("¿Qué hago bien?"));
+        duende.respuesta = new RespuestaChat("Hola", "reglas", null, "mejorar", List.of("¿Qué hago bien?"));
 
         mvc.perform(post("/api/duende/chat")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -568,6 +696,7 @@ class ApiTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.respuesta").value("Hola"))
+                .andExpect(jsonPath("$.intencion").value("mejorar"))
                 .andExpect(jsonPath("$.sugerencias[0]").value("¿Qué hago bien?"));
 
         PeticionChat enviada = duende.ultimaChat;

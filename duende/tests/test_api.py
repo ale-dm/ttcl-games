@@ -127,6 +127,7 @@ def test_chat():
     assert r.status_code == 200
     cuerpo = r.json()
     assert cuerpo["origen"] == "reglas"
+    assert cuerpo["intencion"] == "mejorar"
     assert "Tus kills no se convierten en victorias" in cuerpo["respuesta"]
     assert cuerpo["sugerencias"]
 

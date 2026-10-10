@@ -555,6 +555,22 @@ def test_con_gemini_usa_gemini_y_cachea(monkeypatch):
     assert [c.role for c in contenidos] == ["user"]  # el saludo inicial del Duende no se manda
 
 
+def test_la_respuesta_dice_de_que_iba_la_pregunta(monkeypatch):
+    # Con reglas, lo que han entendido; "ayuda" si no la entienden (lo que más interesa al revisar las valoraciones).
+    assert preguntar("¿En qué tengo que mejorar?", foco=["j1"]).intencion == "mejorar"
+    assert preguntar("¿Con quién juego mejor?", foco=["j1"]).intencion == "companeros"
+    assert preguntar("¿Qué tal el tiempo?", foco=["j1"]).intencion == "ayuda"
+
+    # Con Gemini, la misma lectura de la pregunta, también si la respuesta sale de la caché.
+    monkeypatch.setenv("GOOGLE_API_KEY", "clave-de-prueba")
+    get_config.cache_clear()
+    monkeypatch.setattr(gemini, "generar", lambda *_args, **_kwargs: ("Respuesta de Gemini", "gemini-falso"))
+    r1 = preguntar("¿Cuándo juego mejor? (intención)", foco=["j1"])
+    r2 = preguntar("¿Cuándo juego mejor? (intención)", foco=["j1"])
+    assert (r1.origen, r1.intencion) == ("gemini", "sesiones")
+    assert r2.intencion == "sesiones"
+
+
 def test_si_gemini_falla_responden_las_reglas(monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "clave-de-prueba")
     get_config.cache_clear()

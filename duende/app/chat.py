@@ -127,24 +127,24 @@ def _clave(p: PeticionChat) -> str:
 
 def responder(p: PeticionChat) -> RespuestaChat:
     cfg = get_config()
-    sugerencias = reglas_chat.sugerencias(p)
+    extra = {"sugerencias": reglas_chat.sugerencias(p), "intencion": reglas_chat.intencion(p)}
 
     if cfg.gemini_configurado:
         clave = _clave(p)
         guardada = cache.get(clave)
         if guardada:
             texto, modelo = guardada
-            return RespuestaChat(respuesta=texto, origen="gemini", modelo=modelo, sugerencias=sugerencias)
+            return RespuestaChat(respuesta=texto, origen="gemini", modelo=modelo, **extra)
         contenidos = _contenidos(p)
         if contenidos and limite.disponible(cfg.daily_limit):
             try:
                 texto, modelo = gemini.generar(prompt_sistema(p.lang, _datos_para_prompt(p)), contenidos)
                 limite.registrar()
                 cache.set(clave, (texto, modelo))
-                return RespuestaChat(respuesta=texto, origen="gemini", modelo=modelo, sugerencias=sugerencias)
+                return RespuestaChat(respuesta=texto, origen="gemini", modelo=modelo, **extra)
             except gemini.GeminiError as err:
                 log.warning("Gemini no disponible (%s): %s. Respondo con reglas.", err.codigo, err)
         elif contenidos:
             log.warning("Límite diario de Gemini alcanzado (%s). Respondo con reglas.", cfg.daily_limit)
 
-    return RespuestaChat(respuesta=reglas_chat.responder(p), origen="reglas", sugerencias=sugerencias)
+    return RespuestaChat(respuesta=reglas_chat.responder(p), origen="reglas", **extra)

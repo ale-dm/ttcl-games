@@ -223,4 +223,7 @@ class RespuestaChat(Base):
     respuesta: str
     origen: Literal["gemini", "reglas"]
     modelo: str | None = None
+    # De qué iba la pregunta según las reglas (mejorar, companeros... o ayuda si no la entienden), conteste quien
+    # conteste. La web la devuelve con cada valoración: así se ve qué temas se responden peor.
+    intencion: str | None = None
     sugerencias: list[str] = Field(default_factory=list)

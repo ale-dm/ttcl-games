@@ -1,7 +1,8 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Api } from '../core/api';
 import { I18n, JUEGO_CORTO } from '../core/i18n';
-import { Juego, MensajeChat, Periodo } from '../core/modelos';
+import { Juego, MensajeChat, Periodo, Voto } from '../core/modelos';
+import { Valoraciones } from './valoraciones';
 
 /**
  * De quién va la conversación: nadie (todo el equipo), un jugador o dos (comparación). Con el juego y el periodo que
@@ -16,6 +17,9 @@ export interface ContextoDuende {
 export interface MensajeVista extends MensajeChat {
   origen?: 'gemini' | 'reglas';
   modelo?: string | null;
+  intencion?: string | null;
+  /** El 👍 (1) o 👎 (-1) que le ha dado el visitante, si se lo ha dado. */
+  voto?: 1 | -1 | null;
   error?: boolean;
 }
 
@@ -29,6 +33,7 @@ const SIN_CONTEXTO: ContextoDuende = { foco: [], juego: null };
 export class DuendeEstado {
   private readonly api = inject(Api);
   private readonly i18n = inject(I18n);
+  private readonly valoraciones = inject(Valoraciones);
 
   readonly abierto = signal(false);
   readonly contexto = signal<ContextoDuende>(SIN_CONTEXTO);
@@ -37,6 +42,8 @@ export class DuendeEstado {
   private readonly sugerenciasApi = signal<string[] | null>(null);
   /** Para descartar respuestas que llegan después de cambiar de contexto. */
   private turno = 0;
+  /** Cambia con cada conversación nueva: si un voto falla tarde, no toca los mensajes de otra. */
+  private conversacion = 0;
 
   /** Saludo inicial, traducido al vuelo (no se guarda como mensaje para que cambie con el idioma). */
   readonly saludo = computed(() => {
@@ -102,6 +109,7 @@ export class DuendeEstado {
 
   reiniciar(): void {
     this.turno++;
+    this.conversacion++;
     this.mensajes.set([]);
     this.sugerenciasApi.set(null);
     this.pensando.set(false);
@@ -134,7 +142,10 @@ export class DuendeEstado {
       .subscribe({
         next: (r) => {
           if (turno !== this.turno) return;
-          this.mensajes.update((m) => [...m, { rol: 'duende', texto: r.respuesta, origen: r.origen, modelo: r.modelo }]);
+          this.mensajes.update((m) => [
+            ...m,
+            { rol: 'duende', texto: r.respuesta, origen: r.origen, modelo: r.modelo, intencion: r.intencion },
+          ]);
           if (r.sugerencias?.length) this.sugerenciasApi.set(r.sugerencias);
           this.pensando.set(false);
         },
@@ -148,5 +159,45 @@ export class DuendeEstado {
           this.pensando.set(false);
         },
       });
+  }
+
+  /**
+   * 👍 (1), 👎 (-1) o quitar el voto (0) a una respuesta del Duende, con la pregunta que la provocó. Se marca al
+   * momento; si no se puede guardar, vuelve a como estaba.
+   */
+  valorar(indice: number, voto: Voto): void {
+    const mensajes = this.mensajes();
+    const mensaje = mensajes[indice];
+    if (!mensaje?.origen) return;
+    const pregunta = mensajes
+      .slice(0, indice)
+      .reverse()
+      .find((m) => m.rol === 'usuario');
+    const antes = mensaje.voto ?? 0;
+    const conversacion = this.conversacion;
+    this.fijarVoto(indice, voto);
+    const { foco, juego } = this.contexto();
+    this.api
+      .valorarRespuesta({
+        votante: this.valoraciones.votante,
+        voto,
+        lang: this.i18n.idioma(),
+        foco: foco.map((f) => f.slug),
+        juego,
+        pregunta: pregunta?.texto ?? '',
+        respuesta: mensaje.texto,
+        origen: mensaje.origen,
+        modelo: mensaje.modelo ?? null,
+        intencion: mensaje.intencion ?? null,
+      })
+      .subscribe({
+        error: () => {
+          if (conversacion === this.conversacion) this.fijarVoto(indice, antes);
+        },
+      });
+  }
+
+  private fijarVoto(indice: number, voto: Voto): void {
+    this.mensajes.update((m) => m.map((x, i) => (i === indice ? { ...x, voto: voto || null } : x)));
   }
 }

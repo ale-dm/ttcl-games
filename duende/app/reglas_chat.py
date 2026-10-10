@@ -681,7 +681,7 @@ def responder(p: PeticionChat) -> str:
     generales son los de esos días; "¿cómo voy?" los compara con los de siempre.
     """
     lang = p.lang
-    pregunta = next((m.texto for m in reversed(p.mensajes) if m.rol == "usuario"), "")
+    pregunta = _ultima_pregunta(p)
     periodo = detectar_periodo(pregunta, p.periodo)
     if periodo not in ETIQUETA_PERIODO:
         return _responder(p, pregunta)
@@ -709,6 +709,15 @@ def responder(p: PeticionChat) -> str:
             return etiqueta + _t(lang, "Nadie del equipo ha jugado en estos días.", "Nobody on the team has played in that time.")
         return etiqueta + _ranking(recortado.equipo, juego_r, pregunta, lang)
     return etiqueta + _responder(recortado, pregunta)
+
+
+def _ultima_pregunta(p: PeticionChat) -> str:
+    return next((m.texto for m in reversed(p.mensajes) if m.rol == "usuario"), "")
+
+
+def intencion(p: PeticionChat) -> Intencion:
+    """De qué va la última pregunta según las reglas, conteste quien conteste (va con las valoraciones de la web)."""
+    return _foco_e_intencion(p, _ultima_pregunta(p))[1]
 
 
 def _foco_e_intencion(p: PeticionChat, pregunta: str) -> tuple[list[JugadorContexto], Intencion]:
@@ -823,5 +832,6 @@ def sugerencias(p: PeticionChat) -> list[str]:
 
 
 __all__ = [
-    "responder", "sugerencias", "detectar_intencion", "detectar_juego", "detectar_periodo", "insights_de", "METRICAS"
+    "responder", "sugerencias", "intencion", "detectar_intencion", "detectar_juego", "detectar_periodo", "insights_de",
+    "METRICAS",
 ]

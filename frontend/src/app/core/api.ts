@@ -18,6 +18,8 @@ import {
   Sesiones,
   Sinergias,
   TarjetaJugador,
+  ValoracionConsejo,
+  ValoracionRespuesta,
 } from './modelos';
 import { Idioma } from './i18n';
 
@@ -112,5 +114,15 @@ export class Api {
     periodo: Periodo | null;
   }): Observable<RespuestaChat> {
     return this.http.post<RespuestaChat>('/api/duende/chat', peticion);
+  }
+
+  /** 👍, 👎 o quitar el voto a una recomendación (un voto por navegador y recomendación). */
+  valorarConsejo(valoracion: ValoracionConsejo): Observable<void> {
+    return this.http.put<void>('/api/duende/valoraciones/consejo', valoracion);
+  }
+
+  /** 👍, 👎 o quitar el voto a una respuesta del chat. */
+  valorarRespuesta(valoracion: ValoracionRespuesta): Observable<void> {
+    return this.http.put<void>('/api/duende/valoraciones/respuesta', valoracion);
   }
 }

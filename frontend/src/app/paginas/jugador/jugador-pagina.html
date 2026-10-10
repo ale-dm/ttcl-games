@@ -118,6 +118,8 @@
 
               <aside class="pl-aside">
                 <app-panel-consejos
+                  [slug]="slug()"
+                  [juego]="juegoActivo()"
                   [insights]="consejos.estado().datos?.insights ?? []"
                   [cargando]="consejos.estado().cargando && !consejos.estado().datos"
                   [disponible]="consejos.estado().error === null && (consejos.estado().datos?.disponible ?? true)"

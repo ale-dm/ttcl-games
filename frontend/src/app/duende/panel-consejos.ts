@@ -1,9 +1,11 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
 import { MarcaDuende } from '../compartido/marca-duende';
 import { I18n } from '../core/i18n';
-import { Insight, NivelInsight } from '../core/modelos';
+import { Insight, Juego, NivelInsight } from '../core/modelos';
 import { Clave } from '../core/textos';
+import { BotonesVoto } from './botones-voto';
 import { DuendeEstado } from './duende-estado';
+import { Valoraciones } from './valoraciones';
 
 const NIVEL: Record<NivelInsight, Clave> = {
   alto: 'duende.nivelAlto',
@@ -12,10 +14,13 @@ const NIVEL: Record<NivelInsight, Clave> = {
   info: 'duende.nivelInfo',
 };
 
-/** Recomendaciones del Duende para un jugador: en qué mejorar, qué hace bien y una caja para preguntarle. */
+/**
+ * Recomendaciones del Duende para un jugador: en qué mejorar, qué hace bien y una caja para preguntarle. Con el jugador
+ * y el juego, cada recomendación se puede valorar (👍/👎).
+ */
 @Component({
   selector: 'app-panel-consejos',
-  imports: [MarcaDuende],
+  imports: [BotonesVoto, MarcaDuende],
   template: `
     <section class="card dp" [class.wide]="ancho()">
       <div class="dp-h">
@@ -55,6 +60,16 @@ const NIVEL: Record<NivelInsight, Clave> = {
               @if (i.consejo) {
                 <div class="ins-tip"><b>{{ t('duende.consejo') }}</b> {{ i.consejo }}</div>
               }
+              @if (slug(); as s) {
+                @if (juego(); as j) {
+                  <app-botones-voto
+                    class="ins-voto"
+                    [etiqueta]="true"
+                    [voto]="valoraciones.votoConsejo(s, j, i.id)"
+                    (votar)="valoraciones.votarConsejo(s, j, i, $event)"
+                  />
+                }
+              }
             </article>
           }
         </div>
@@ -85,6 +100,7 @@ export class PanelConsejos {
   protected readonly i18n = inject(I18n);
   protected readonly t = this.i18n.t;
   protected readonly duende = inject(DuendeEstado);
+  protected readonly valoraciones = inject(Valoraciones);
   protected readonly nivel = NIVEL;
 
   readonly insights = input<Insight[]>([]);
@@ -92,6 +108,9 @@ export class PanelConsejos {
   readonly disponible = input(true);
   /** En ancho completo, las recomendaciones van en varias columnas. */
   readonly ancho = input(false);
+  /** De quién y de qué juego son: hacen falta para valorarlas. */
+  readonly slug = input<string | null>(null);
+  readonly juego = input<Juego | null>(null);
 
   protected readonly pregunta = signal('');
 

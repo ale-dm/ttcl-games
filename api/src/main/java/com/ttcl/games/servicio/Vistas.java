@@ -82,4 +82,24 @@ public final class Vistas {
     public record Estado(Instant ultimaSync, boolean demo, Map<String, Boolean> fuentes, EstadoDuende duende) {}
 
     public record ConsejosVista(boolean disponible, List<Insight> insights) {}
+
+    /**
+     * Votos de una recomendación (por su id, de todos los jugadores) o de las respuestas del chat a un tipo de pregunta.
+     *
+     * @param clave id de la recomendación, o intención de la pregunta según las reglas (null si no se sabe)
+     */
+    public record GrupoValoraciones(String origen, String clave, int positivos, int negativos) {}
+
+    /** Una valoración con lo que se vio, para leerla al revisar. */
+    public record ValoracionVista(
+            String tipo, String clave, String origen, String modelo, String intencion, String nivel, String jugador,
+            Juego juego, String lang, String pregunta, String texto, Instant votadaEn) {}
+
+    /**
+     * Para revisar las valoraciones (P7): totales, las recomendaciones y los tipos de pregunta peor valorados primero y
+     * las últimas negativas con lo que se vio.
+     */
+    public record ResumenValoraciones(
+            int positivos, int negativos, List<GrupoValoraciones> consejos, List<GrupoValoraciones> respuestas,
+            List<ValoracionVista> negativas) {}
 }

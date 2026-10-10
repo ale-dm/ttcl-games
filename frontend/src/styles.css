@@ -417,7 +417,19 @@ select {
 .msg.u { align-self: flex-end; background: var(--acc); color: var(--on-acc); border-bottom-right-radius: 5px; }
 .msg.a { align-self: flex-start; background: var(--surface2); border-bottom-left-radius: 5px; }
 .msg.err { background: color-mix(in oklch, var(--loss) 14%, var(--surface2)); }
-.msg-meta { align-self: flex-start; margin: -4px 0 0 4px; font: 500 10.5px 'Geist Mono', monospace; color: var(--faint); letter-spacing: 0.02em; }
+.msg-meta { align-self: flex-start; display: flex; align-items: center; gap: 6px; margin: -6px 0 0 4px; font: 500 10.5px 'Geist Mono', monospace; color: var(--faint); letter-spacing: 0.02em; }
+
+/* ─── Valoraciones (👍/👎) ────────────────────────────────────────────────── */
+.voto { display: inline-flex; align-items: center; gap: 2px; }
+.voto-l { font: 500 12px 'Geist', system-ui, sans-serif; color: var(--faint); margin-right: 4px; letter-spacing: 0; }
+.voto button { width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 7px; background: none; color: var(--faint); cursor: pointer; transition: 0.15s; }
+.voto button:hover { color: var(--text); background: var(--surface2); }
+.voto svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.voto .no svg { transform: rotate(180deg); }
+.voto .si.on { color: var(--win); }
+.voto .no.on { color: var(--loss); }
+.voto .on svg { fill: currentColor; fill-opacity: 0.2; }
+.ins-voto { display: flex; justify-content: flex-end; margin: 8px -6px -8px 0; }
 .typing { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 13px; }
 .typing span { margin-right: 4px; }
 .typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite; }

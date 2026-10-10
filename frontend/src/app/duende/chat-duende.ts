@@ -1,13 +1,14 @@
 import { Component, ElementRef, afterRenderEffect, effect, inject, signal, viewChild } from '@angular/core';
 import { MarcaDuende } from '../compartido/marca-duende';
 import { I18n } from '../core/i18n';
+import { BotonesVoto } from './botones-voto';
 import { DuendeEstado } from './duende-estado';
 import { TextoRico } from './texto-rico';
 
 /** Panel lateral del chat y botón flotante "Pregunta al Duende". */
 @Component({
   selector: 'app-chat-duende',
-  imports: [MarcaDuende, TextoRico],
+  imports: [BotonesVoto, MarcaDuende, TextoRico],
   host: { '(document:keydown.escape)': 'duende.cerrar()' },
   template: `
     @if (!duende.abierto()) {
@@ -46,7 +47,10 @@ import { TextoRico } from './texto-rico';
           </div>
           @if (m.origen) {
             <div class="msg-meta">
-              {{ m.origen === 'gemini' ? t('duende.origenGemini', { modelo: m.modelo ?? '' }) : t('duende.origenReglas') }}
+              <span>
+                {{ m.origen === 'gemini' ? t('duende.origenGemini', { modelo: m.modelo ?? '' }) : t('duende.origenReglas') }}
+              </span>
+              <app-botones-voto [voto]="m.voto ?? null" (votar)="duende.valorar($index, $event)" />
             </div>
           }
         }
