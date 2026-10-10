@@ -3,6 +3,51 @@
 Lo que se ha entregado, de lo más reciente a lo más antiguo. Lo que falta por hacer está en
 [docs/propuestas.md](docs/propuestas.md) (P1–P12); al terminar una propuesta se marca allí y se anota aquí.
 
+## 2026-10-10 · P9: chat que consulta la API
+
+Commit `071ff31`. Con Gemini, el Duende ya no se queda en los resúmenes: si la pregunta va de un mapa, unas fechas o
+unas partidas concretas, se lo pregunta a la API antes de contestar.
+
+**Qué se nota**
+- Con `GOOGLE_API_KEY`, el chat puede responder "¿cómo voy en Mirage este mes?", "¿qué pasó en mis dos últimas
+  derrotas?", "¿cómo me fue ayer?" o "¿con quién juego mejor esta semana?" con los números de esas partidas, y
+  comparar con lo que hizo el resto del equipo en las mismas.
+- Sin Gemini no cambia nada: contestan las reglas, como antes.
+
+**Cómo funciona**
+- Gemini tiene cuatro herramientas que consultan a la API Java: partidas filtradas (mapa o dios, resultado, días o las
+  últimas n), desglose por mapa o dios, cara a cara y sinergias, estas tres por periodo (7 días, 30 días o todo).
+- La API hace las cuentas: de las partidas filtradas devuelve el resumen y la media del resto del equipo ya
+  calculados, y las más recientes. Gemini no suma ni promedia nada.
+- Hasta 4 consultas por respuesta, en dos vueltas como mucho; luego tiene que contestar con lo que tiene. Si una
+  consulta falla, se le dice y sigue. Cada consulta se guarda un minuto.
+- La API le pasa al chat la fecha de hoy en la zona del equipo, para que "ayer" o "septiembre" sean los días buenos.
+
+**Cambios por servicio**
+- **API**: `GET /api/jugadores/{slug}/consulta?juego=&clave=&resultado=&desde=&hasta=&ultimas=&limite=`
+  (`FiltroPartidas`, función pura; `EquipoServicio.consulta`). `hoy` en la petición del chat. La API espera al Duende
+  hasta 60 s (`DUENDE_TIMEOUT_MS`, antes 30): con consultas, una respuesta puede llevar tres llamadas a Gemini.
+- **Contrato compartido**: `hoy` en `PeticionChat` (API → Duende).
+- **Duende**: `api_ttcl.py` (cliente de la API con caché), `herramientas.py` (declaraciones y ejecución), el bucle de
+  consultas en `gemini.py`, cuándo usarlas en el prompt (`personalidad.py`). Configuración nueva: `API_URL`,
+  `API_TIMEOUT_MS` y `DUENDE_MAX_CONSULTAS`. `httpx` pasa a ser dependencia directa.
+- **Docker**: el Duende recibe `API_URL=http://api:8080`.
+- **Web**: sin cambios.
+
+**Tests**: Duende 99 → 110, API 57 → 64, web 30 (sin cambios), todos en verde.
+- API: el filtro (mapa sin "de_" ni mayúsculas, resultado, días en la zona del equipo, las últimas después de los demás
+  filtros, validación) y la consulta con los datos de ejemplo (resumen igual que el desglose, media del equipo, las
+  dos últimas derrotas, días sin partidas, 400 y 404); `hoy` en el chat.
+- Duende: las herramientas contra una API de mentira (parámetros, recorte, nombres a slugs, errores, sin API, caché),
+  el bucle de Gemini (consulta y respuesta con su id, consultas a la vez con tope, vueltas máximas, sin herramientas) y
+  el chat con y sin `API_URL`.
+- A mano, las cuatro herramientas contra la API de verdad con los datos de ejemplo. Con Gemini de verdad no se ha
+  podido probar: aquí no hay clave.
+
+**Para actualizar una instalación**: parar la API, `./mvnw package -DskipTests` y arrancar; en el Duende,
+`pip install -r requirements.txt` (por `httpx`, que ya venía con google-genai) y reiniciar. Fuera de Docker, si la API
+no está en `http://localhost:8080`, poner `API_URL`.
+
 ## 2026-10-10 · P8: comparar con jugadores de tu nivel (FACEIT)
 
 Commit `e401cf9`. En CS2, el Duende ya no compara con números inventados: compara con lo que hacen los jugadores de tu

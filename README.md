@@ -17,7 +17,7 @@ un entrenador que mira los números de cada uno, dice en qué mejorar y contesta
 ## Arquitectura
 
 ```
- Navegador ──► Angular (web) ──/api──► Java · Spring Boot (API) ──► Python · FastAPI (Duende) ──► Gemini (opcional)
+ Navegador ──► Angular (web) ──/api──► Java · Spring Boot (API) ◄─► Python · FastAPI (Duende) ──► Gemini (opcional)
                                           │
                                           ├─► PostgreSQL (H2 en memoria para desarrollar)
                                           └─► FACEIT (CS2) · Hi-Rez (SMITE 2)   ← sincronización programada
@@ -31,7 +31,8 @@ un entrenador que mira los números de cada uno, dice en qué mejorar y contesta
 | Base de datos | — | PostgreSQL 17 (H2 en local) | Jugadores, cuentas, partidas compartidas, participaciones |
 
 El navegador solo habla con la API Java; el Duende no se expone fuera. La API calcula los resúmenes y se los pasa al
-Duende: **el Duende nunca ve partidas en bruto**, así no se inventa números.
+Duende: **el Duende nunca ve partidas en bruto**, así no se inventa números. Con Gemini, el Duende también puede
+consultar a la API (solo lectura) lo que no está en los resúmenes, y la API le da los números ya calculados.
 
 ## Puesta en marcha en local (sin Docker)
 
@@ -80,6 +81,8 @@ Web en http://localhost:4200, con Postgres y datos de ejemplo (`TTCL_DEMO=true`;
 - **Rol** (opcional, por juego): `"cs2": { "nick": "...", "rol": "soporte" }`. CS2: `entry`, `awp`, `soporte`,
   `lurker`, `igl`, `rifler`. SMITE 2: `solo`, `jungla`, `mid`, `guardian`, `carry`. El Duende juzga cada métrica según
   lo que pide el rol (a un soporte no le pide kills) y la web lo enseña junto al nick.
+- **Consultas del chat**: con Gemini, el Duende consulta a la API en `API_URL` (por defecto `http://localhost:8080`;
+  con Docker ya va puesta). Vacía o con `DUENDE_MAX_CONSULTAS=0`, Gemini contesta solo con los resúmenes.
 - **Claves**: copia `.env.example` a `.env`. `GOOGLE_API_KEY` activa Gemini en el chat; `FACEIT_API_KEY` y las de
   Hi-Rez activan la sincronización (cada `SYNC_INTERVAL_MIN` minutos). Sin clave, ese juego simplemente no se toca.
 - **Zona horaria**: `TTCL_ZONA_HORARIA` (por defecto `Europe/Madrid`). Con ella se sabe a qué hora del día se jugó cada
@@ -89,8 +92,8 @@ Web en http://localhost:4200, con Postgres y datos de ejemplo (`TTCL_DEMO=true`;
 
 | Parte | Comando | Qué cubre |
 |---|---|---|
-| Duende | `cd duende && .venv/Scripts/python -m pytest` | Reglas de recomendación (también por rol, por compañero, tilt, hora del día, seguimiento de consejos y frente a su nivel de FACEIT), chat por reglas (también "esta semana", "este mes" y "para mi nivel") y de qué iba cada pregunta, uso y caché de Gemini, API |
-| API | `cd api && ./mvnw test` | Estadísticas (también sinergias, dúos y tríos, sesiones y franjas horarias, seguimiento de consejos, comparación con su nivel), periodos, memoria de consejos, valoraciones, mapeo de FACEIT (también niveles) y Hi-Rez, sincronización con muestras sin identificar, carga del equipo con roles, API completa contra H2 con datos de ejemplo |
+| Duende | `cd duende && .venv/Scripts/python -m pytest` | Reglas de recomendación (también por rol, por compañero, tilt, hora del día, seguimiento de consejos y frente a su nivel de FACEIT), chat por reglas (también "esta semana", "este mes" y "para mi nivel") y de qué iba cada pregunta, uso y caché de Gemini, consultas a la API (herramientas, tope y caché), API |
+| API | `cd api && ./mvnw test` | Estadísticas (también sinergias, dúos y tríos, sesiones y franjas horarias, seguimiento de consejos, comparación con su nivel, filtro de partidas), periodos, memoria de consejos, valoraciones, mapeo de FACEIT (también niveles) y Hi-Rez, sincronización con muestras sin identificar, carga del equipo con roles, API completa contra H2 con datos de ejemplo |
 | Web | `cd frontend && npm test` | Texto del Duende, i18n y formatos, estado del chat, rol, nivel y ELO, "Con quién", "Cuándo juegas mejor" y el periodo en el perfil, el periodo en el ranking, dúos y tríos en el equipo, valorar recomendaciones y respuestas |
 
 ## El Duende
@@ -163,13 +166,20 @@ vacíos; el 404 es solo para quien nunca ha jugado a ese juego.
 **Chat** (`chat.py`): con `GOOGLE_API_KEY` contesta Gemini, que recibe los resúmenes del equipo (con el rol de cada uno),
 las sinergias, las sesiones, los últimos 7 y 30 días, el seguimiento de sus consejos, su nivel de FACEIT y las
 recomendaciones ya calculadas. Caché por petición, límite diario (`DUENDE_DAILY_LIMIT`) y modelos de respaldo si el
-principal ya no
-existe. Sin clave, sin cuota o si Gemini falla, contestan las reglas (`reglas_chat.py`): en qué mejorar, qué haces bien,
-cómo vas últimamente, peor mapa o dios, con quién juegas mejor, cuándo juegas mejor (tilt y hora), si ha funcionado lo
-que te dijo, cómo vas para tu nivel de FACEIT, el mejor dúo, comparar a dos, quién es el mejor del equipo.
+principal ya no existe. Sin clave, sin cuota o si Gemini falla, contestan las reglas (`reglas_chat.py`): en qué
+mejorar, qué haces bien, cómo vas últimamente, peor mapa o dios, con quién juegas mejor, cuándo juegas mejor (tilt y
+hora), si ha funcionado lo que te dijo, cómo vas para tu nivel de FACEIT, el mejor dúo, comparar a dos, quién es el
+mejor del equipo.
 Si la pregunta dice "esta semana" o "este mes" (o la página tiene un periodo elegido), los números son los de esos
 días, y "¿cómo voy esta semana?" los compara con los de siempre. La web indica bajo cada respuesta si la escribió
 Gemini o las reglas.
+
+**Consultas** (P9): para lo que no está en los resúmenes ("¿cómo voy en Mirage este mes?", "¿qué pasó en mis dos
+últimas derrotas?", "¿con quién juego mejor esta semana?"), Gemini puede consultar a la API con cuatro herramientas
+(`herramientas.py`): partidas filtradas por mapa o dios, resultado, días o las últimas n (`GET
+/api/jugadores/{slug}/consulta`, con su resumen y el del resto del equipo ya calculados), desglose, cara a cara y
+sinergias por periodo. Hasta `DUENDE_MAX_CONSULTAS` consultas por respuesta (4) y caché de un minuto; las herramientas
+devuelven datos, nunca texto. Se configura con `API_URL` (vacía: sin consultas). Sin Gemini, las reglas no consultan.
 
 **Valoraciones** (P7): bajo cada recomendación del perfil y cada respuesta del chat hay un 👍 y un 👎 (pulsar el marcado
 quita el voto). Cada navegador vota con un id al azar, sin datos personales: un voto por cosa valorada, que se puede
@@ -202,9 +212,9 @@ Parte del prototipo `TTCL Stats.html` y lo lleva a una web de estadísticas comp
 - **Accesibilidad**: foco visible, etiquetas para lectores de pantalla, `prefers-reduced-motion` y textos del Duende
   pintados como texto (nunca como HTML).
 
-Siguientes pasos: la hoja de ruta está en [docs/propuestas.md](docs/propuestas.md) (objetivos, chat que consulta la API,
-informe de cada partida, Duende en Discord, análisis de demos…). Lo ya entregado, con lo que cambia en cada servicio y
-cómo actualizar, está en [CHANGELOG.md](CHANGELOG.md).
+Siguientes pasos: la hoja de ruta está en [docs/propuestas.md](docs/propuestas.md) (objetivos, informe de cada partida,
+Duende en Discord, análisis de demos…). Lo ya entregado, con lo que cambia en cada servicio y cómo actualizar, está en
+[CHANGELOG.md](CHANGELOG.md).
 
 ## Fuentes de datos: estado
 

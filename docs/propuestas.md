@@ -16,7 +16,7 @@ lo que se aprendió en su apartado y apuntar la entrega en [CHANGELOG.md](../CHA
 | P6 | Memoria de consejos | 2 | Medio | Se generan | Hecho |
 | P7 | Valoración de las respuestas | 2 | Bajo | Se generan | Hecho |
 | P8 | Comparar con jugadores de tu nivel (FACEIT) | 3 | Medio | Ya llegan, se tiran | Hecho |
-| P9 | Chat que consulta la API (function calling) | 3 | Medio | Ya guardados | Pendiente |
+| P9 | Chat que consulta la API (function calling) | 3 | Medio | Ya guardados | Hecho |
 | P10 | Informe de cada partida | 3 | Bajo | Ya guardados | Pendiente |
 | P11 | El Duende en Discord | 4 | Medio | — | Pendiente |
 | P12 | Análisis de demos de CS2 | 5 | Alto | Nuevos (demos) | Pendiente |
@@ -350,6 +350,40 @@ las partidas de ese nivel", con la barra "Nivel 5" en vez de "Referencia". Lo qu
   comparación; sinergias) que llamen a la API Java. Necesita `API_URL` en la configuración del Duende.
 - Mantener el principio: **todo número sale de la API**; las herramientas devuelven datos, nunca texto inventado.
 - Límite de llamadas a herramientas por pregunta y caché. Sin Gemini, las reglas siguen como hoy.
+
+**Hecho** (10 de octubre de 2026). Con los datos de ejemplo, las herramientas contra la API de verdad: Jugador 1 en
+Nuke (11 partidas, 45,5 % de winrate, con la media del resto del equipo en Nuke), sus dos últimas derrotas (las dos
+en Dust2), Jugador 3 del 5 al 10 de octubre (5 de 5) o el desglose de Jugador 4 en los últimos 30 días. Lo que quedó y
+lo que se aprendió:
+- **Un endpoint nuevo en vez de dar filtros a `/partidas`**: `GET /api/jugadores/{slug}/consulta` devuelve, de las
+  partidas que pasan el filtro, el resumen ya calculado, la media del resto del equipo con el mismo filtro y las más
+  recientes. Así Gemini nunca tiene que sumar ni promediar: con una lista de partidas lo haría, y mal. Filtros: mapa o
+  dios (sin distinguir mayúsculas, tildes ni el "de_": "Mirage" vale por "de_mirage"), resultado, días (`desde` y
+  `hasta`, incluidos, en la zona del equipo) y las `ultimas` n (después de los demás filtros: "mis dos últimas
+  derrotas"). Hasta 20 partidas listadas; el Duende pide 10.
+- **Cuatro herramientas** (`duende/app/herramientas.py`): `buscar_partidas` (la consulta), `desglose`, `comparar` y
+  `sinergias` (las tres de antes, con `periodo` 7d, 30d o todo). El jugador va como lista cerrada de los nombres del
+  equipo: Gemini no conoce los slugs, y el Duende traduce el nombre. Devuelven `{"resultado": ...}` con los datos de
+  la API (sin lo que no le sirve, como la serie de la gráfica) o `{"error": ...}`; un error nunca tumba la respuesta.
+  Los números llegan como decimales (`ultimas: 2.0`) y se pasan a enteros.
+- **El bucle**: hasta `DUENDE_MAX_CONSULTAS` consultas (4) en dos vueltas como mucho (en cada vuelta puede pedir
+  varias a la vez); luego se le obliga a contestar (`mode: NONE`). Si aun así no contesta, responden las reglas. Su
+  propio mensaje se le devuelve tal cual, que lleva las firmas de su razonamiento.
+- **Hoy**: la API manda la fecha de hoy en la zona del equipo (`hoy` en la petición del chat), para que "ayer", "esta
+  semana" o "septiembre" sean los días buenos. El Duende en Docker va en UTC y se equivocaría de día de madrugada.
+- **Caché**: cada consulta, un minuto en el Duende (la misma pregunta se repite y Gemini a veces pide dos veces lo
+  mismo). La caché de respuestas del chat ya contaba la petición entera; ahora también el día.
+- **Tiempos**: con consultas, una respuesta puede llevar tres llamadas a Gemini, así que la API espera al Duende hasta
+  60 s (`DUENDE_TIMEOUT_MS`, antes 30). El límite diario sigue contando respuestas, no llamadas.
+- **Configuración**: `API_URL` (en local `http://localhost:8080`; en Docker `http://api:8080`), `API_TIMEOUT_MS` y
+  `DUENDE_MAX_CONSULTAS`. Sin `API_URL` (o con 0 consultas), Gemini contesta solo con los resúmenes, como antes.
+- **Sin probar con Gemini de verdad**: aquí no hay clave. El bucle se prueba con un Gemini de mentira (consultas,
+  consultas a la vez, el tope, las vueltas) y las herramientas, contra la API de verdad con los datos de ejemplo.
+- Sin Gemini, las reglas siguen como antes: "¿Cómo voy en Mirage?" sale como *ayuda* (y así aparecerá en las
+  valoraciones de P7).
+- **Queda pendiente**: que las reglas usen las mismas consultas para un mapa o dios concreto; que la web diga cuándo
+  una respuesta ha consultado la API; comprobar con Gemini de verdad qué tal elige las herramientas y ajustar sus
+  descripciones.
 
 ### P10 · Informe de cada partida
 
