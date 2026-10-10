@@ -481,13 +481,15 @@ equipo, 0,37). Lo que quedó y lo que se aprendió:
   lista, en los detalles de la partida) no se puede bajar tal cual. Hace falta pedir una URL firmada a su API de
   descargas (`POST https://open.faceit.com/download/v2/demos/download` con `resource_url`; responde
   `payload.download_url`), con un token propio con permiso de descargas que FACEIT da tras rellenar un formulario
-  (https://fce.gg/downloads-api-application, contestan en unos 30 días). La clave de la Data API no vale. El tamaño no se
-  ha podido ver: el trabajador corta en `ANALISIS_MAX_MB` (800 MB, comprimida o no).
-- **Sin ese token, la carpeta de demos.** Cada uno puede bajar la demo desde la sala de la partida en FACEIT y dejarla en
+  (https://fce.gg/downloads-api-application, contestan en unos 30 días). La clave de la Data API no vale. **Y es de
+  pago** (desde febrero de 2024, "a coste según el uso"), así que **no se usa**: se quitó del código el 11 de octubre.
+  La Data API, la que sincroniza las partidas, sigue siendo gratis. El tamaño de cada demo no se ha podido ver: el
+  trabajador corta en `ANALISIS_MAX_MB` (800 MB, comprimida o no).
+- **La carpeta de demos, gratis.** Cada uno puede bajar la demo desde la sala de la partida en FACEIT y dejarla en
   `demos/` (el nombre ya empieza por el id de la partida: `1-cb03…-1-1.dem.zst`). La API la encuentra por el id, sin
   permiso de nadie. Se leen `.dem` y comprimidas en `.gz`, `.zst` o `.bz2` (se mira por los primeros bytes).
 - **Cambio sobre lo previsto: el trabajador no guarda nada.** `analisis/` es un servicio más (FastAPI y `demoparser2`, en
-  el 8001) al que llama la API, como al Duende: le pasa la demo (la URL firmada o el nombre del fichero) y a quién
+  el 8001) al que llama la API, como al Duende: le pasa la demo (el nombre del fichero de la carpeta) y a quién
   buscar, y guarda ella lo que devuelve. Así la base tiene un solo dueño (en local es H2 en memoria, y el trabajador no
   podría verla) y no hace falta exponer endpoints de escritura. La demo descargada se borra al acabar.
 - **A quién busca**: por steamid (lo da FACEIT en el perfil: `games.cs2.game_player_id` o `steam_id_64`; columna
@@ -535,7 +537,7 @@ equipo, 0,37). Lo que quedó y lo que se aprendió:
 - **Datos de ejemplo**: todas las partidas de CS2 tienen la demo analizada, con su propio generador
   (`carga/RondasDemo.java`): cuadran con cada partida (kills, muertes, asistencias, ADR, utilidad y marcador) y no
   cambian ningún otro número. Las zonas y coordenadas de cada mapa son inventadas.
-- **Sin probar con una demo real** (aquí no hay ninguna, ni token de descargas): lo que se lee de `demoparser2` está
+- **Sin probar con una demo real** (aquí no hay ninguna): lo que se lee de `demoparser2` está
   escrito con sus nombres documentados (`is_warmup_period`, `team_num`, `last_place_name`, `current_equip_value`) y
   probado con tablas escritas a mano; las rondas, los trades y el resto, con eventos escritos a mano.
 - Endpoints nuevos: `GET /api/jugadores/{slug}/demos` y `/demos/calor?mapa=` (con `periodo`) y

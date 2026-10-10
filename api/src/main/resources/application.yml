@@ -37,10 +37,6 @@ ttcl:
   faceit:
     api-key: ${FACEIT_API_KEY:}
     base: ${FACEIT_API_BASE:https://open.faceit.com/data/v4}
-    # API de descargas de FACEIT (P12): un token aparte, con permiso de descargas (se pide a FACEIT). Sin él, las demos
-    # solo se analizan si se dejan en la carpeta de demos.
-    downloads-token: ${FACEIT_DOWNLOADS_TOKEN:}
-    downloads-base: ${FACEIT_DOWNLOADS_BASE:https://open.faceit.com/download/v2}
   smite2:
     base: ${SMITE2_API_BASE:}
     dev-id: ${SMITE2_DEV_ID:}

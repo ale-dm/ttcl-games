@@ -228,8 +228,8 @@ export interface Estado {
   demo: boolean;
   fuentes: Record<Juego, boolean>;
   duende: { disponible: boolean; gemini: boolean; modelo: string | null };
-  /** Análisis de demos (P12): si hay trabajador, si hay token de descargas de FACEIT y cuántas demos en cada estado. */
-  analisis: { activo: boolean; descargas: boolean; analizadas: number; pendientes: number; fallidas: number };
+  /** Análisis de demos (P12): si hay trabajador y cuántas demos hay en cada estado. */
+  analisis: { activo: boolean; analizadas: number; pendientes: number; fallidas: number };
 }
 
 // ─── Demos de CS2 (P12) ────────────────────────────────────────────────────

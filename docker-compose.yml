@@ -64,10 +64,9 @@ services:
       DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
       DISCORD_LANG: ${DISCORD_LANG:-es}
       DISCORD_RESUMEN_SEMANAL: ${DISCORD_RESUMEN_SEMANAL:-0 0 10 * * MON}
-      # Demos de CS2 (P12): el trabajador de análisis, el token de descargas de FACEIT y la carpeta de demos.
+      # Demos de CS2 (P12): el trabajador de análisis y la carpeta de demos.
       ANALISIS_URL: http://analisis:8001
       ANALISIS_INTERVALO_MIN: ${ANALISIS_INTERVALO_MIN:-15}
-      FACEIT_DOWNLOADS_TOKEN: ${FACEIT_DOWNLOADS_TOKEN:-}
       TTCL_DEMOS_DIR: /demos
     volumes:
       - ./config:/config:ro

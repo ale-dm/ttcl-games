@@ -21,19 +21,10 @@ public record TtclProperties(
     /** Servicio Python del Duende. */
     public record Duende(String url, int timeoutMs) {}
 
-    /**
-     * CS2 vía FACEIT Data API. Sin clave, CS2 no se sincroniza.
-     *
-     * @param downloadsToken token de la API de descargas de FACEIT (P12), aparte de la clave: lo da FACEIT tras pedirlo.
-     *     Sin él, las demos solo se analizan si se dejan en la carpeta de demos
-     */
-    public record Faceit(String apiKey, String base, String downloadsToken, String downloadsBase) {
+    /** CS2 vía FACEIT Data API (gratis). Sin clave, CS2 no se sincroniza. */
+    public record Faceit(String apiKey, String base) {
         public boolean configurada() {
             return apiKey != null && !apiKey.isBlank();
-        }
-
-        public boolean descargas() {
-            return downloadsToken != null && !downloadsToken.isBlank();
         }
     }
 

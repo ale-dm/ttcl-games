@@ -73,7 +73,6 @@ public class EquipoController {
                 estadoDuende,
                 new EstadoAnalisis(
                         analisis.configurado(),
-                        props.faceit().descargas(),
                         demos.countByEstado(Demo.ANALIZADA),
                         demos.countByEstado(Demo.PENDIENTE),
                         demos.countByEstado(Demo.FALLIDA)));

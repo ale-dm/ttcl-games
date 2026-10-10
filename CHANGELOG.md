@@ -3,6 +3,23 @@
 Lo que se ha entregado, de lo más reciente a lo más antiguo. Lo que falta por hacer está en
 [docs/propuestas.md](docs/propuestas.md) (P1–P12); al terminar una propuesta se marca allí y se anota aquí.
 
+## 2026-10-11 · Sin la API de descargas de FACEIT (de pago)
+
+La descarga automática de demos por la API de descargas de FACEIT es de pago (desde febrero de 2024), así que se quita:
+todo lo que usa la app es gratis. Las demos se analizan si se dejan en la carpeta `demos/` (las de la sala de la
+partida en FACEIT ya traen el id de la partida en el nombre). La sincronización de partidas sigue con la Data API de
+FACEIT, que es gratis.
+
+- **API**: fuera `DescargasFaceit` y la configuración `FACEIT_DOWNLOADS_TOKEN` y `FACEIT_DOWNLOADS_BASE`;
+  `AnalisisDemos` solo busca en la carpeta. `/api/estado` ya no trae `analisis.descargas`. La URL de cada demo de FACEIT
+  se sigue guardando, solo para saberla.
+- **Duende y web**: el aviso de "sin demos" ya no habla del token.
+- **Docker** y `.env.example`: sin `FACEIT_DOWNLOADS_TOKEN`.
+- **Tests**: API 93 → 92 (fuera el de la URL firmada); los demás, igual y en verde.
+
+**Para actualizar una instalación**: quitar `FACEIT_DOWNLOADS_TOKEN` del `.env` si estaba, `./mvnw package -DskipTests`
+y arrancar.
+
 ## 2026-10-11 · P12: análisis de demos de CS2
 
 Commit `2be9bbc`. Con la demo de cada partida, el Duende ya no se queda en las medias: sabe qué pasó ronda a ronda,

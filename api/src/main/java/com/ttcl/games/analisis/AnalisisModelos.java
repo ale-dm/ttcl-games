@@ -15,7 +15,7 @@ public final class AnalisisModelos {
      */
     public record JugadorBuscado(String id, String steamId, String nick) {}
 
-    /** La URL de la demo (firmada) o el nombre de un fichero de la carpeta de demos: una de las dos. */
+    /** La URL de la demo o el nombre de un fichero de la carpeta de demos: una de las dos. */
     public record PeticionAnalisis(String url, String archivo, List<JugadorBuscado> jugadores) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)

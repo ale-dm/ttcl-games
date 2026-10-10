@@ -37,8 +37,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Analiza las demos pendientes (P12): consigue la demo (un fichero de la carpeta de demos o, con el token de la API de
- * descargas de FACEIT, una URL firmada), se la pasa al trabajador de análisis con los del equipo que estaban y guarda
+ * Analiza las demos pendientes (P12): busca la demo en la carpeta de demos (la API de descargas de FACEIT es de pago y
+ * no se usa), se la pasa al trabajador de análisis con los del equipo que estaban y guarda
  * lo que hizo cada uno en cada ronda, y dónde murió la gente (sin decir quién). Se miran por turnos, unas pocas cada
  * vez: la que hace más que no se revisa, primero.
  */
@@ -50,8 +50,8 @@ public class AnalisisDemos {
     public static final int MAX_INTENTOS = 3;
     /** Extensiones de las demos de la carpeta: sin comprimir o comprimidas como las da FACEIT. */
     private static final List<String> EXTENSIONES = List.of(".dem", ".gz", ".zst", ".bz2");
-    static final String SIN_ACCESO = "Sin acceso a la demo: hace falta el token de la API de descargas de FACEIT "
-            + "(FACEIT_DOWNLOADS_TOKEN) o dejarla en la carpeta de demos con el id de la partida en el nombre.";
+    static final String SIN_ACCESO = "Sin la demo: hay que dejarla en la carpeta de demos con el id de la partida al "
+            + "principio del nombre (la de la sala de la partida en FACEIT ya viene así).";
 
     private final DemoRepo demos;
     private final RondaRepo rondas;
@@ -60,7 +60,6 @@ public class AnalisisDemos {
     private final CuentaRepo cuentas;
     private final JugadorRepo jugadores;
     private final AnalisisCliente cliente;
-    private final DescargasFaceit descargas;
     private final TtclProperties props;
     private final TransactionTemplate tx;
 
@@ -72,7 +71,6 @@ public class AnalisisDemos {
             CuentaRepo cuentas,
             JugadorRepo jugadores,
             AnalisisCliente cliente,
-            DescargasFaceit descargas,
             TtclProperties props,
             TransactionTemplate tx) {
         this.demos = demos;
@@ -82,7 +80,6 @@ public class AnalisisDemos {
         this.cuentas = cuentas;
         this.jugadores = jugadores;
         this.cliente = cliente;
-        this.descargas = descargas;
         this.props = props;
         this.tx = tx;
     }
@@ -113,21 +110,17 @@ public class AnalisisDemos {
         return new Resultado(analizadas, fallidas, pendientes);
     }
 
-    /** La demo, de la carpeta o descargada: una de las dos cosas. */
-    record Origen(String url, String archivo) {}
-
     /** Analiza una demo pendiente y devuelve cómo queda: analizada, fallida o aún pendiente. */
     String analizar(Demo d) {
         Partida partida = d.getPartida();
-        Optional<Origen> origen = origen(d);
-        if (origen.isEmpty()) {
+        Optional<String> archivo = enCarpeta(partida.getExternalId());
+        if (archivo.isEmpty()) {
             d.aplazada(SIN_ACCESO, false);
             demos.save(d);
             return d.getEstado();
         }
         try {
-            RespuestaAnalisis r = cliente.analizar(
-                    new PeticionAnalisis(origen.get().url(), origen.get().archivo(), buscados(partida)));
+            RespuestaAnalisis r = cliente.analizar(new PeticionAnalisis(null, archivo.get(), buscados(partida)));
             String estado = tx.execute(t -> guardar(d, partida, r));
             log.info("Demo de la partida {}: {}", partida.getExternalId(), estado);
             return estado;
@@ -143,15 +136,6 @@ public class AnalisisDemos {
         }
         demos.save(d);
         return d.getEstado();
-    }
-
-    /** Primero la carpeta (no gasta nada); si no está, una URL firmada de FACEIT si hay token y se sabe su URL. */
-    Optional<Origen> origen(Demo d) {
-        Optional<String> archivo = enCarpeta(d.getPartida().getExternalId());
-        if (archivo.isPresent()) {
-            return Optional.of(new Origen(null, archivo.get()));
-        }
-        return descargas.urlFirmada(d.getUrl()).map(url -> new Origen(url, null));
     }
 
     /** Un fichero de la carpeta de demos cuyo nombre empiece por el id de la partida ("1-cb03...-1-1.dem.zst"). */

@@ -572,10 +572,10 @@ def _demos(f: Foco, lang: Idioma) -> str:
     if not d or not d.metricas.partidas:
         return _t(
             lang,
-            f"Aún no tengo ninguna demo analizada de {nombre}. Se analizan solas con el token de descargas de FACEIT, "
-            "o si se deja la demo en la carpeta de demos.",
-            f"I don't have any analysed demos from {nombre} yet. They're analysed automatically with the FACEIT "
-            "downloads token, or when the demo is dropped in the demos folder.",
+            f"Aún no tengo ninguna demo analizada de {nombre}. Se analizan solas si se deja la demo (la de la sala "
+            "de la partida en FACEIT) en la carpeta de demos.",
+            f"I don't have any analysed demos from {nombre} yet. They're analysed automatically when the demo "
+            "(from the FACEIT match room) is dropped in the demos folder.",
         )
     m, e = d.metricas, d.equipo
 

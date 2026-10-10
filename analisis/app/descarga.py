@@ -1,4 +1,4 @@
-"""De dónde sale la demo: una URL (la firmada de FACEIT) o un fichero de la carpeta de demos. Se descomprime si hace
+"""De dónde sale la demo: un fichero de la carpeta de demos (lo que usa la API) o una URL. Se descomprime si hace
 falta (.gz, .zst o .bz2, se mira por los primeros bytes) y todo lo temporal se borra al acabar: las demos no se
 guardan. Las de la carpeta no se tocan.
 """

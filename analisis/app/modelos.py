@@ -22,7 +22,7 @@ class JugadorBuscado(Base):
 
 
 class PeticionAnalisis(Base):
-    # La URL de la demo (la firmada de FACEIT) o el nombre de un fichero de la carpeta de demos: una de las dos.
+    # El nombre de un fichero de la carpeta de demos (lo que usa la API) o una URL: una de las dos.
     url: str | None = None
     archivo: str | None = None
     jugadores: list[JugadorBuscado] = Field(default_factory=list, max_length=10)

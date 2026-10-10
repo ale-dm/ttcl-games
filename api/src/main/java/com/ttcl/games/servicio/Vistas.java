@@ -116,9 +116,8 @@ public final class Vistas {
      * El análisis de demos (P12).
      *
      * @param activo si hay trabajador de análisis configurado
-     * @param descargas si hay token de la API de descargas de FACEIT (sin él, solo las demos de la carpeta)
      */
-    public record EstadoAnalisis(boolean activo, boolean descargas, long analizadas, long pendientes, long fallidas) {}
+    public record EstadoAnalisis(boolean activo, long analizadas, long pendientes, long fallidas) {}
 
     public record Estado(
             Instant ultimaSync, boolean demo, Map<String, Boolean> fuentes, EstadoDuende duende,

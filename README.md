@@ -101,11 +101,10 @@ Las demos que se dejen a mano van en `./demos`, que se monta en la API y en el a
 - **Discord** (opcional): con `DISCORD_WEBHOOK_URL` (el webhook de un canal), la API publica ahí las partidas nuevas
   tras cada sincronización y el resumen de la semana (`DISCORD_RESUMEN_SEMANAL`, por defecto los lunes a las 10).
 - **Demos de CS2** (opcional): el análisis va en `ANALISIS_URL` (por defecto `http://localhost:8001`; con Docker ya
-  va puesta) y mira las demos pendientes cada `ANALISIS_INTERVALO_MIN` minutos. Para bajarlas de FACEIT hace falta el
-  token de su **API de descargas** (`FACEIT_DOWNLOADS_TOKEN`), que es aparte de la clave de la Data API y se pide en
-  https://fce.gg/downloads-api-application. Sin él, se analizan las que se dejen en `demos/` (o en `TTCL_DEMOS_DIR`)
-  con el id de la partida al principio del nombre: las que se bajan de la sala de la partida en FACEIT ya vienen así
-  (`1-cb03…-1-1.dem.zst`). `GET /api/estado` dice cuántas hay analizadas, pendientes y fallidas.
+  va puesta) y mira las demos pendientes cada `ANALISIS_INTERVALO_MIN` minutos. Se analizan las que se dejen en
+  `demos/` (o en `TTCL_DEMOS_DIR`) con el id de la partida al principio del nombre: las que se bajan de la sala de la
+  partida en FACEIT ya vienen así (`1-cb03…-1-1.dem.zst`). La descarga automática por la API de descargas de FACEIT es
+  de pago y no se usa: todo lo que necesita la app es gratis (la clave de la Data API). `GET /api/estado` dice cuántas hay analizadas, pendientes y fallidas.
 - **Consultas del chat**: con Gemini, el Duende consulta a la API en `API_URL` (por defecto `http://localhost:8080`;
   con Docker ya va puesta). Vacía o con `DUENDE_MAX_CONSULTAS=0`, Gemini contesta solo con los resúmenes.
 - **Claves**: copia `.env.example` a `.env`. `GOOGLE_API_KEY` activa Gemini en el chat; `FACEIT_API_KEY` y las de
@@ -185,7 +184,8 @@ chat, "¿Cómo voy para mi nivel?" y "¿Quién tiene más nivel?". La web enseñ
 
 **Demos** (P12, CS2): un trabajador aparte (`analisis/`, con `demoparser2`) lee la demo de cada partida y la API guarda
 lo que hizo cada uno del equipo en cada ronda (tabla `rondas`) y dónde murió la gente, sin decir quién (`muertes_mapa`).
-La demo sale del token de la API de descargas de FACEIT o de la carpeta `demos/`, y se borra al acabar. Con eso, la API
+La demo sale de la carpeta `demos/` (la descarga automática de FACEIT es de pago y no se usa); la copia temporal se
+borra al acabar. Con eso, la API
 calcula un rating propio (la aproximación que circula del Rating 2.0 de HLTV), KAST, trades (en menos de 5 s),
 aperturas, asistencias de flash, utilidad por ronda, CT y T, rondas ganadas según la compra y dónde muere por mapa y
 zona. Con 5 partidas analizadas o más, el Duende compara rating, KAST, muertes con trade, trades y asistencias de flash
@@ -273,7 +273,7 @@ actualizar, está en [CHANGELOG.md](CHANGELOG.md).
 |---|---|---|
 | CS2 | FACEIT Data API (`api/.../sync/FaceitFuente.java`) | Implementada. Solo para jugadores con cuenta de FACEIT (la API de Steam no da partidas de CS2). Los campos (ADR, HS %, Entry, 1vX, Utility Damage…) siguen la documentación: **hay que validarlos con una partida real**. Los del nivel (`skill_level`, `faceit_elo`, `game_skill_level`) están comprobados con el swagger oficial, aún no con una respuesta real. |
 | SMITE 2 | Hi-Rez API (`HirezFuente.java`) | Implementada **sin verificar**: confirmar la URL base de SMITE 2 (`SMITE2_API_BASE`), los métodos y los campos de `getmatchhistory`. La firma sí está probada. |
-| Demos de CS2 | FACEIT (`demo_url` y su API de descargas) o la carpeta `demos/`, leídas con demoparser2 (`analisis/`) | Implementado **sin probar con una demo real**: la API de descargas pide un token aparte (comprobado en su documentación) y lo que se lee de la demo sigue los nombres que documenta demoparser2, probado con tablas escritas a mano. |
+| Demos de CS2 | La carpeta `demos/` (las demos se bajan a mano de la sala de la partida en FACEIT), leídas con demoparser2 (`analisis/`) | Implementado **sin probar con una demo real**: lo que se lee de la demo sigue los nombres que documenta demoparser2, probado con tablas escritas a mano. La API de descargas de FACEIT es de pago y no se usa. |
 
 La sincronización va en dos pasadas: primero resuelve los IDs de todas las cuentas y después pide partidas, así una
 partida jugada por dos del equipo se guarda una vez con dos participaciones.
@@ -302,7 +302,7 @@ api/src/main/java/com/ttcl/games/
   stats/       cálculos puros (resumen, medias del equipo, desglose, comparación)
   servicio/    consultas para la web
   duende/      cliente HTTP del Duende y casos de uso
-  analisis/    demos pendientes, cliente del análisis y API de descargas de FACEIT
+  analisis/    demos pendientes (de la carpeta de demos) y cliente del análisis
   sync/        FACEIT, Hi-Rez y sincronizador
   carga/       equipo desde config/equipo.json y datos de ejemplo
   web/         controladores REST

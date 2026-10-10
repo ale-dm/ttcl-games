@@ -30,7 +30,7 @@ public class Demo {
     @JoinColumn(name = "partida_id")
     private Partida partida;
 
-    /** La URL de la demo en FACEIT, sin firmar (para descargarla hace falta pedir una firmada). */
+    /** La URL de la demo en FACEIT, solo para saberla: bajarla por la API de descargas de FACEIT es de pago. */
     private String url;
 
     private String estado;

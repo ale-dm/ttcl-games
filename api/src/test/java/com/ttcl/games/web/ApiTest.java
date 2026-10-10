@@ -997,10 +997,10 @@ class ApiTest {
                 .andExpect(jsonPath("$.ultimaSync").isString())
                 .andExpect(jsonPath("$.fuentes.cs2").value(false))
                 .andExpect(jsonPath("$.duende.disponible").value(false))
-                // P12: todas las partidas de CS2 de ejemplo tienen la demo analizada; sin token de descargas.
+                // P12: todas las partidas de CS2 de ejemplo tienen la demo analizada.
                 .andExpect(jsonPath("$.analisis.analizadas", greaterThan(50)))
                 .andExpect(jsonPath("$.analisis.pendientes").value(0))
-                .andExpect(jsonPath("$.analisis.descargas").value(false));
+                .andExpect(jsonPath("$.analisis.descargas").doesNotExist());
     }
 
     // ─── Demos (P12) ────────────────────────────────────────────────────────

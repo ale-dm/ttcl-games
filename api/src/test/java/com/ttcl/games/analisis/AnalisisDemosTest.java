@@ -32,7 +32,6 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,7 +45,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Análisis de las demos pendientes (P12) con un trabajador de análisis y una API de descargas de mentira, sobre los
+ * Análisis de las demos pendientes (P12) con un trabajador de análisis de mentira, sobre los
  * datos de ejemplo. Usa su propia base H2: añade partidas y rondas, y los demás tests cuentan con los datos de ejemplo.
  */
 @SpringBootTest(properties = {
@@ -88,20 +87,6 @@ class AnalisisDemosTest {
         }
     }
 
-    /** Hace de API de descargas de FACEIT: firma las URL si {@code firmar}. */
-    static class DescargasFalsas extends DescargasFaceit {
-        boolean firmar;
-
-        DescargasFalsas(TtclProperties props) {
-            super(props);
-        }
-
-        @Override
-        public Optional<String> urlFirmada(String urlDemo) {
-            return firmar && urlDemo != null ? Optional.of(urlDemo + "?firma=1") : Optional.empty();
-        }
-    }
-
     @TestConfiguration
     static class Config {
         @Bean
@@ -110,11 +95,6 @@ class AnalisisDemosTest {
             return new AnalisisFalso(props);
         }
 
-        @Bean
-        @Primary
-        DescargasFalsas descargasFalsas(TtclProperties props) {
-            return new DescargasFalsas(props);
-        }
     }
 
     @Autowired
@@ -122,9 +102,6 @@ class AnalisisDemosTest {
 
     @Autowired
     AnalisisFalso trabajador;
-
-    @Autowired
-    DescargasFalsas descargas;
 
     @Autowired
     DemoRepo demos;
@@ -160,7 +137,6 @@ class AnalisisDemosTest {
         }
         trabajador.peticiones.clear();
         trabajador.responder = p -> respuesta();
-        descargas.firmar = false;
         // Solo las pendientes de cada test: las de antes se dan por analizadas.
         tx.executeWithoutResult(t -> demos.findAll().stream()
                 .filter(d -> d.getEstado().equals(Demo.PENDIENTE))
@@ -240,19 +216,6 @@ class AnalisisDemosTest {
     }
 
     @Test
-    void conElTokenDeDescargasPideLaUrlFirmada() {
-        Partida p = partidaPendiente("1-url", "https://demos.faceit.com/cs2/1-url-1-1.dem.zst");
-        descargas.firmar = true;
-
-        analisis.analizarPendientes();
-
-        assertThat(trabajador.peticiones.getFirst().url())
-                .isEqualTo("https://demos.faceit.com/cs2/1-url-1-1.dem.zst?firma=1");
-        assertThat(trabajador.peticiones.getFirst().archivo()).isNull();
-        assertThat(demoDe(p).getEstado()).isEqualTo(Demo.ANALIZADA);
-    }
-
-    @Test
     void sinAccesoALaDemoSigueEsperandoSinGastarIntentos() {
         Partida p = partidaPendiente("1-sin-acceso", "https://demos.faceit.com/cs2/1-sin-acceso.dem.zst");
 
@@ -263,7 +226,7 @@ class AnalisisDemosTest {
         Demo d = demoDe(p);
         assertThat(d.getEstado()).isEqualTo(Demo.PENDIENTE);
         assertThat(d.getIntentos()).isZero();
-        assertThat(d.getError()).contains("FACEIT_DOWNLOADS_TOKEN");
+        assertThat(d.getError()).contains("carpeta de demos");
     }
 
     @Test

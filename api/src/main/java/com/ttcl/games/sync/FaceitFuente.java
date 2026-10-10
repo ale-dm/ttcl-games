@@ -125,7 +125,7 @@ public class FaceitFuente implements FuenteJuego {
 
     /**
      * La URL de la demo en los detalles de una partida ({@code demo_url}, una lista; la primera), o null. Es la del
-     * almacén de FACEIT: para descargarla hace falta pedir una firmada a su API de descargas. Pública para los tests.
+     * almacén de FACEIT: bajarla por su API de descargas es de pago, así que solo se guarda. Pública para los tests.
      */
     public static String demoDe(Object detalles) {
         Object valor = mapa(detalles).get("demo_url");

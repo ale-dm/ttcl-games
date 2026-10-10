@@ -121,7 +121,7 @@ export const ES = {
   'demos.titulo': 'Lo que dicen tus demos',
   'demos.sub': '{partidas} partidas analizadas · {rondas} rondas',
   'demos.vacio':
-    'Aún no hay ninguna demo analizada de {nombre}{periodo}. Se analizan solas con el token de descargas de FACEIT, o si se deja la demo en la carpeta de demos.',
+    'Aún no hay ninguna demo analizada de {nombre}{periodo}. Se analizan solas si se deja la demo (la de la sala de la partida en FACEIT) en la carpeta de demos.',
   'demos.verDemos': 'Ver demos',
   'demos.equipo': 'equipo: {valor}',
   'demos.rating': 'Rating',
@@ -420,7 +420,7 @@ export const EN: Record<Clave, string> = {
   'demos.titulo': 'What your demos say',
   'demos.sub': '{partidas} analysed matches · {rondas} rounds',
   'demos.vacio':
-    'No analysed demos from {nombre}{periodo} yet. They are analysed automatically with the FACEIT downloads token, or when the demo is dropped in the demos folder.',
+    'No analysed demos from {nombre}{periodo} yet. They are analysed automatically when the demo (from the FACEIT match room) is dropped in the demos folder.',
   'demos.verDemos': 'See demos',
   'demos.equipo': 'team: {valor}',
   'demos.rating': 'Rating',
