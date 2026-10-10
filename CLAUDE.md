@@ -9,7 +9,7 @@ Duende también consulta a la API (solo lectura, `duende/app/api_ttcl.py`) lo qu
 - `duende/` — Python, FastAPI. Recomendaciones por reglas (`app/insights.py`) y chat con Gemini o, sin clave, con reglas.
 
 **Hoja de ruta**: `docs/propuestas.md` (P1–P12) — lo siguiente que hay que construir para dar mejores datos al Duende.
-Al terminar una propuesta, marcarla allí (con lo aprendido) y anotar la entrega en `CHANGELOG.md`. Hechas: P1, P2, P3, P4, P6, P7, P8, P9.
+Al terminar una propuesta, marcarla allí (con lo aprendido) y anotar la entrega en `CHANGELOG.md`. Quedan P5 y P12.
 
 ## Comandos
 
@@ -46,6 +46,10 @@ funciona con la API arrancada).
 - Consultas del chat (P9): las herramientas de `duende/app/herramientas.py` llaman a endpoints de la API y devuelven
   datos, nunca texto; si una pregunta necesita una cuenta (medias, winrate de un filtro), la hace la API
   (`/api/jugadores/{slug}/consulta`), no Gemini. Si cambia un endpoint que usan, cambian ellas y sus tests.
+- Informe de cada partida (P10): los tipos de `Hecho` (`stats/Informes.java`) ↔ `INFORMES` en `textos.py` ↔
+  `PRIORIDAD` en `informes.py` (hay test que lo vigila). Solo mira partidas de antes, por eso no se guarda.
+- Discord (P11): el bot del grupo es otro repositorio (`../ElDuende/bot-discord`) y aquí no se toca; la API da
+  `/api/novedades` y, con `DISCORD_WEBHOOK_URL`, publica ella misma (sin menciones).
 - `DemoSeeder` es determinista (semilla fija, horas en la zona del equipo): tocarlo cambia todos los números de ejemplo
   y lo que dice el Duende. `ApiTest` comprueba que sigan saliendo los patrones (tilt, hora buena, rachas, compañeros).
   Las muestras de otros jugadores (P8) van al final y con su propio generador, para no mover lo demás.

@@ -3,6 +3,56 @@
 Lo que se ha entregado, de lo más reciente a lo más antiguo. Lo que falta por hacer está en
 [docs/propuestas.md](docs/propuestas.md) (P1–P12); al terminar una propuesta se marca allí y se anota aquí.
 
+## 2026-10-10 · P10 y P11: informe de cada partida y el Duende en Discord
+
+Commit `15f5b85`. Cada partida del historial lleva lo que dice el Duende de ella, y lo mismo puede llegar a Discord con
+el resumen de la semana.
+
+**Qué se nota**
+- En el historial del perfil, debajo de cada partida con algo especial, el Duende: "Quinta victoria seguida. Y encima,
+  tu mejor ADR del mes: 122 (lo mejor de antes, 116)", "Cuarta derrota seguida en Dust2", "Se rompe la racha de 3
+  derrotas. Ya era hora", "Primera vez en Anubis". En español o inglés, según la web.
+- Para Discord: `GET /api/novedades?desde=` (las partidas guardadas desde entonces, con su comentario) y `GET
+  /api/novedades/semana` (el mejor y el peor de los últimos 7 días de cada juego, contado por el Duende), para que el
+  bot del grupo los publique.
+- Con `DISCORD_WEBHOOK_URL`, la API publica sola en un canal: las partidas nuevas tras cada sincronización y el
+  resumen de la semana los lunes a las 10.
+
+**Cómo funciona**
+- La API busca lo especial de cada partida frente a las de antes del mismo jugador: rachas de 3 o más y su final,
+  rachas en un mapa o dios, estrenos, su mejor o su peor del mes (con 10 partidas o más en esos 30 días) y si la
+  métrica principal (ADR o KDA) se va un 30 % de su media. Solo mira las de antes, así que se calcula al vuelo y no
+  cambia.
+- El Duende cuenta como mucho dos cosas (una racha y un número), unidas según lo que dicen, siempre por reglas.
+- Las novedades van por cuándo se guardó cada partida (una de ayer sincronizada hoy es de hoy), de 100 en 100 como
+  mucho, con `hasta` para seguir. El mejor y el peor de la semana, entre los que tienen 3 partidas o más; si solo
+  llega uno, se dice tal cual.
+
+**Cambios por servicio**
+- **Base de datos**: migración `V6__guardada_en.sql` (columna `guardada_en` en `partidas`; las de antes, la de cuando
+  se jugaron). Flyway la aplica sola.
+- **API**: `Informes` (hechos de cada partida y la semana, funciones puras); `comentario` en las partidas del historial
+  (con `lang`); `NovedadesController` (`/api/novedades` y `/api/novedades/semana`); `DiscordWebhook` y
+  `AvisosDiscord` (publicar tras sincronizar y el resumen semanal). `DemoSeeder` guarda cada partida al acabar (no
+  cambia ningún número). Configuración nueva: `DISCORD_WEBHOOK_URL`, `DISCORD_LANG` y `DISCORD_RESUMEN_SEMANAL`.
+- **Contrato compartido**: `Hecho`, `ItemInforme`, `TextoInforme`, `FilaSemana` y `SemanaJuego` (API → Duende);
+  `comentario` en `PartidaVista` (API → web).
+- **Duende**: `informes.py` y los endpoints `/v1/informes` y `/v1/semana`; textos en `textos.py`.
+- **Web**: el comentario bajo cada partida del historial (texto `tabla.duende`); el historial se pide con el idioma.
+- **Docker**: la API recibe las variables de Discord.
+
+**Tests**: Duende 110 → 117, API 64 → 75, web 30 → 31, todos en verde.
+- API: los hechos (rachas, final de racha, racha en un mapa, estreno, mejor y peor del mes, media, KDA en SMITE 2) y
+  la semana; trocear mensajes para Discord; con los datos de ejemplo, el historial con comentarios (y sin Duende), las
+  novedades (desde un momento, de 100 en 100 sin repetir, por defecto el último día, 400), la semana y lo que se
+  publica en Discord.
+- Duende: cada tipo de hecho en los dos idiomas, cómo se unen dos frases, entre varios récords el que más se pasa,
+  variantes fijas por partida, la semana (también con uno solo) y los endpoints.
+- Web: el comentario bajo su partida.
+
+**Para actualizar una instalación**: parar la API, `./mvnw package -DskipTests` y arrancar (Flyway añade la columna);
+reiniciar el Duende y la web. Para Discord, crear un webhook en el canal y ponerlo en `DISCORD_WEBHOOK_URL`.
+
 ## 2026-10-10 · P9: chat que consulta la API
 
 Commit `071ff31`. Con Gemini, el Duende ya no se queda en los resúmenes: si la pregunta va de un mapa, unas fechas o

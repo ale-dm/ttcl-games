@@ -17,8 +17,8 @@ lo que se aprendió en su apartado y apuntar la entrega en [CHANGELOG.md](../CHA
 | P7 | Valoración de las respuestas | 2 | Bajo | Se generan | Hecho |
 | P8 | Comparar con jugadores de tu nivel (FACEIT) | 3 | Medio | Ya llegan, se tiran | Hecho |
 | P9 | Chat que consulta la API (function calling) | 3 | Medio | Ya guardados | Hecho |
-| P10 | Informe de cada partida | 3 | Bajo | Ya guardados | Pendiente |
-| P11 | El Duende en Discord | 4 | Medio | — | Pendiente |
+| P10 | Informe de cada partida | 3 | Bajo | Ya guardados | Hecho |
+| P11 | El Duende en Discord | 4 | Medio | — | Hecho |
 | P12 | Análisis de demos de CS2 | 5 | Alto | Nuevos (demos) | Pendiente |
 
 **Orden recomendado**: P1 → P2 → P3 (corrigen lo que el Duende dice mal hoy y usan lo que ya hay), luego P8 (cambia
@@ -392,6 +392,27 @@ lo que se aprendió:
 - Duende: texto corto con la personalidad de siempre (reglas o Gemini).
 - Web: en el historial, cada partida con su comentario. Es la materia prima de P11.
 
+**Hecho** (10 de octubre de 2026). Con los datos de ejemplo, en el historial de Jugador 3: "Quinta victoria seguida. Y
+encima, tu mejor ADR del mes: 122 (lo mejor de antes, 116)"; de Jugador 1: "Cuarta derrota seguida en Dust2". Lo que
+quedó y lo que se aprendió:
+- **Cambio sobre lo previsto: se calcula al vuelo, no al sincronizar.** El informe de una partida solo mira las de
+  antes, así que no cambia aunque se jueguen más: no hace falta guardarlo, vale para todo el historial (no solo lo que
+  llegue a partir de ahora) y para los datos de ejemplo. La API calcula los hechos (`Informes.hechos`, función pura) y
+  el Duende los cuenta.
+- **Qué se busca** (`Hecho`): rachas de 3 o más; el final de una racha de 3 o más; rachas en ese mapa o dios; estrenos
+  en un mapa o dios (con 10 partidas o más de antes, si no todo es un estreno); el mejor y el peor del mes en kills,
+  ADR, % de headshot y K/D (CS2) o kills, KDA y daño (SMITE 2), con 10 partidas o más en los 30 días anteriores (con 5,
+  casi cada partida era "tu mejor algo"); y si la métrica principal (ADR o KDA) se va un 30 % de su media.
+- **Qué cuenta el Duende** (`duende/app/informes.py`): como mucho dos cosas, una racha y un número, unidas según lo
+  que dicen ("Y encima", "Al menos", "Eso sí", "Además"). Entre varios récords, el que más se pasa. Cada tipo tiene
+  variantes y para una partida sale siempre la misma (por su id), así que el historial no cambia al recargar.
+- **Siempre por reglas, sin Gemini**: un comentario por partida en cada página del historial gastaría la cuota, y
+  para una frase basta.
+- **Dónde sale**: en `GET /api/jugadores/{slug}/partidas` (ahora con `lang`), con `comentario` en cada partida, y en
+  la web bajo su fila ("El Duende dice"). Una sola llamada al Duende por página, solo con las partidas que tienen algo.
+  Si el Duende no responde, el historial sale igual, sin comentarios. La consulta del chat (P9) no los lleva: el
+  Duende acabaría llamándose a sí mismo a través de la API.
+
 ---
 
 ## Fase 4 · Llevar al Duende fuera de la web
@@ -404,6 +425,29 @@ lo que se aprendió:
 - Contenido: informe de cada partida (P10), resumen semanal con el mejor y el peor de la semana, y avisos de objetivos
   cumplidos (P5).
 - Opcional: login con Discord en la web, que además resuelve la autenticación de P5.
+
+**Hecho** (10 de octubre de 2026), sin tocar el bot. Con los datos de ejemplo, `GET /api/novedades` de los últimos dos
+días trae 12 partidas, como "Jugador 1 · Counter-Strike 2 · de_dust2 · ❌ Derrota" con "Cuarta derrota seguida en
+Dust2", y el resumen de la semana: "El mejor, Jugador 3: 5 de 5 ganadas (100,0 %). El peor, Jugador 1: 3 de 7 (42,9
+%)". Lo que quedó y lo que se aprendió:
+- **Las dos formas, y el bot sin tocar**: el bot es otro repositorio grande (Node, rama `developer`), así que aquí no
+  se ha cambiado. La API da `GET /api/novedades?desde=` y `GET /api/novedades/semana` para que el bot los lea cuando se
+  quiera, y además, con `DISCORD_WEBHOOK_URL`, publica ella misma en un canal: las partidas nuevas tras cada
+  sincronización y el resumen de la semana (los lunes a las 10, en la zona del equipo; `DISCORD_RESUMEN_SEMANAL`). Un
+  webhook no es otro bot: solo escribe, firmado como "El Duende".
+- **Novedades por cuándo se guardaron, no por cuándo se jugaron**: una partida de ayer sincronizada hoy es una novedad
+  de hoy. Columna `guardada_en` en `partidas` (migración `V6__guardada_en.sql`; las que ya estaban cuentan como
+  guardadas al jugarse). Sin `desde`, el último día. Se dan como mucho unas 100 de una vez, sin partir las guardadas
+  en el mismo instante, y la respuesta dice `hasta`: la siguiente consulta, desde ahí, sigue sin repetir.
+- **Una novedad por jugador y partida**, con su comentario (P10): una partida con dos del equipo son dos informes.
+- **Resumen semanal**: los últimos 7 días de cada juego, el mejor y el peor entre los que tienen 3 partidas o más (más
+  winrate y, a igualdad, más K/D). Si solo llega uno, no es "el mejor" de nadie: con los datos de ejemplo, en SMITE 2
+  Jugador 4 salía como el mejor con un 20 %. El texto lo escribe el Duende (reglas); sin Duende, los números.
+- **En Discord**: mensajes de hasta 1900 caracteres (Discord no admite más de 2000) y sin menciones, para que un nick
+  raro no avise a nadie. Si Discord falla, se apunta en el log y la sincronización sigue.
+- Sin avisos de objetivos (P5 no está hecha) ni login con Discord (opcional).
+- **Queda pendiente**: que el bot del grupo lea `/api/novedades` (en el otro repositorio); avisos de objetivos cuando
+  esté P5; el login con Discord, que resolvería la autenticación de P5.
 
 ---
 

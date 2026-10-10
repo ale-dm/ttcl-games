@@ -11,6 +11,8 @@ un entrenador que mira los números de cada uno, dice en qué mejorar y contesta
 - **Ranking**: el equipo ordenado por la métrica que elijas.
 - **Buscador** de jugadores y nicks en la barra superior.
 - **Chat del Duende** en toda la web; sabe de quién estás hablando según la página.
+- **Comentario de cada partida** en el historial ("Tercera derrota seguida en Nuke", "tu mejor ADR del mes") y, si se
+  quiere, en **Discord**: las partidas nuevas y el resumen de la semana.
 - **Valoraciones**: 👍/👎 en cada recomendación y cada respuesta del Duende, para saber qué hay que mejorar de él.
 - **Modo claro y oscuro**, y **español e inglés** (se recuerdan en el navegador).
 
@@ -81,6 +83,8 @@ Web en http://localhost:4200, con Postgres y datos de ejemplo (`TTCL_DEMO=true`;
 - **Rol** (opcional, por juego): `"cs2": { "nick": "...", "rol": "soporte" }`. CS2: `entry`, `awp`, `soporte`,
   `lurker`, `igl`, `rifler`. SMITE 2: `solo`, `jungla`, `mid`, `guardian`, `carry`. El Duende juzga cada métrica según
   lo que pide el rol (a un soporte no le pide kills) y la web lo enseña junto al nick.
+- **Discord** (opcional): con `DISCORD_WEBHOOK_URL` (el webhook de un canal), la API publica ahí las partidas nuevas
+  tras cada sincronización y el resumen de la semana (`DISCORD_RESUMEN_SEMANAL`, por defecto los lunes a las 10).
 - **Consultas del chat**: con Gemini, el Duende consulta a la API en `API_URL` (por defecto `http://localhost:8080`;
   con Docker ya va puesta). Vacía o con `DUENDE_MAX_CONSULTAS=0`, Gemini contesta solo con los resúmenes.
 - **Claves**: copia `.env.example` a `.env`. `GOOGLE_API_KEY` activa Gemini en el chat; `FACEIT_API_KEY` y las de
@@ -92,9 +96,9 @@ Web en http://localhost:4200, con Postgres y datos de ejemplo (`TTCL_DEMO=true`;
 
 | Parte | Comando | Qué cubre |
 |---|---|---|
-| Duende | `cd duende && .venv/Scripts/python -m pytest` | Reglas de recomendación (también por rol, por compañero, tilt, hora del día, seguimiento de consejos y frente a su nivel de FACEIT), chat por reglas (también "esta semana", "este mes" y "para mi nivel") y de qué iba cada pregunta, uso y caché de Gemini, consultas a la API (herramientas, tope y caché), API |
-| API | `cd api && ./mvnw test` | Estadísticas (también sinergias, dúos y tríos, sesiones y franjas horarias, seguimiento de consejos, comparación con su nivel, filtro de partidas), periodos, memoria de consejos, valoraciones, mapeo de FACEIT (también niveles) y Hi-Rez, sincronización con muestras sin identificar, carga del equipo con roles, API completa contra H2 con datos de ejemplo |
-| Web | `cd frontend && npm test` | Texto del Duende, i18n y formatos, estado del chat, rol, nivel y ELO, "Con quién", "Cuándo juegas mejor" y el periodo en el perfil, el periodo en el ranking, dúos y tríos en el equipo, valorar recomendaciones y respuestas |
+| Duende | `cd duende && .venv/Scripts/python -m pytest` | Reglas de recomendación (también por rol, por compañero, tilt, hora del día, seguimiento de consejos y frente a su nivel de FACEIT), chat por reglas (también "esta semana", "este mes" y "para mi nivel") y de qué iba cada pregunta, uso y caché de Gemini, consultas a la API (herramientas, tope y caché), comentario de cada partida y de la semana, API |
+| API | `cd api && ./mvnw test` | Estadísticas (también sinergias, dúos y tríos, sesiones y franjas horarias, seguimiento de consejos, comparación con su nivel, filtro de partidas, lo especial de cada partida, la semana), periodos, memoria de consejos, valoraciones, novedades y Discord, mapeo de FACEIT (también niveles) y Hi-Rez, sincronización con muestras sin identificar, carga del equipo con roles, API completa contra H2 con datos de ejemplo |
+| Web | `cd frontend && npm test` | Texto del Duende, i18n y formatos, estado del chat, rol, nivel y ELO, "Con quién", "Cuándo juegas mejor" y el periodo en el perfil, el periodo en el ranking, dúos y tríos en el equipo, valorar recomendaciones y respuestas, comentario de cada partida |
 
 ## El Duende
 
@@ -181,6 +185,18 @@ Gemini o las reglas.
 sinergias por periodo. Hasta `DUENDE_MAX_CONSULTAS` consultas por respuesta (4) y caché de un minuto; las herramientas
 devuelven datos, nunca texto. Se configura con `API_URL` (vacía: sin consultas). Sin Gemini, las reglas no consultan.
 
+**Cada partida** (P10): la API mira qué tiene de especial cada partida frente a las de antes del mismo jugador (rachas
+de 3 o más y su final, rachas en un mapa o dios, estrenos, su mejor o su peor del mes con 10 partidas o más en esos 30
+días, si se va un 30 % de su media) y el Duende lo cuenta en una o dos frases, siempre por reglas: "Quinta victoria
+seguida. Y encima, tu mejor ADR del mes: 122 (lo mejor de antes, 116)". Sale en el historial (`comentario` en
+`GET /api/jugadores/{slug}/partidas`). Se calcula al vuelo: solo mira las partidas de antes, así que no cambia.
+
+**Discord** (P11): `GET /api/novedades?desde=` da las partidas guardadas desde ese momento (sin él, el último día),
+con su comentario, y `hasta` para la siguiente consulta; `GET /api/novedades/semana`, el mejor y el peor de los
+últimos 7 días de cada juego (3 partidas o más) con lo que dice el Duende. Así el bot del grupo puede publicarlo. Sin
+tocar el bot, con `DISCORD_WEBHOOK_URL` la API lo publica ella misma en un canal, firmado como "El Duende" y sin
+menciones: las partidas nuevas tras cada sincronización y el resumen de la semana.
+
 **Valoraciones** (P7): bajo cada recomendación del perfil y cada respuesta del chat hay un 👍 y un 👎 (pulsar el marcado
 quita el voto). Cada navegador vota con un id al azar, sin datos personales: un voto por cosa valorada, que se puede
 cambiar. La API guarda el voto con lo que se vio (tabla `valoraciones`): de las recomendaciones, su id, el jugador, el
@@ -212,9 +228,9 @@ Parte del prototipo `TTCL Stats.html` y lo lleva a una web de estadísticas comp
 - **Accesibilidad**: foco visible, etiquetas para lectores de pantalla, `prefers-reduced-motion` y textos del Duende
   pintados como texto (nunca como HTML).
 
-Siguientes pasos: la hoja de ruta está en [docs/propuestas.md](docs/propuestas.md) (objetivos, informe de cada partida,
-Duende en Discord, análisis de demos…). Lo ya entregado, con lo que cambia en cada servicio y cómo actualizar, está en
-[CHANGELOG.md](CHANGELOG.md).
+Siguientes pasos: la hoja de ruta está en [docs/propuestas.md](docs/propuestas.md) (objetivos personales y análisis de
+demos, y lo que ha quedado pendiente de cada propuesta). Lo ya entregado, con lo que cambia en cada servicio y cómo
+actualizar, está en [CHANGELOG.md](CHANGELOG.md).
 
 ## Fuentes de datos: estado
 
