@@ -6,6 +6,7 @@ un entrenador que mira los números de cada uno, dice en qué mejorar y contesta
 - **Equipo**: una tarjeta por jugador con winrate, K/D, partidas, forma reciente y lo primero que diría el Duende.
 - **Perfil** (estilo csstats): cifras clave con la tendencia de las últimas 10 partidas, gráfica de kills y muertes,
   rendimiento por mapa (CS2) o por dios (SMITE 2), historial paginado y el panel del Duende con sus recomendaciones.
+  En CS2, el nivel y el ELO de FACEIT, y el Duende compara con lo normal en ese nivel.
 - **Comparar**: dos jugadores cara a cara, métrica a métrica.
 - **Ranking**: el equipo ordenado por la métrica que elijas.
 - **Buscador** de jugadores y nicks en la barra superior.
@@ -88,14 +89,15 @@ Web en http://localhost:4200, con Postgres y datos de ejemplo (`TTCL_DEMO=true`;
 
 | Parte | Comando | Qué cubre |
 |---|---|---|
-| Duende | `cd duende && .venv/Scripts/python -m pytest` | Reglas de recomendación (también por rol, por compañero, tilt, hora del día y seguimiento de consejos), chat por reglas (también "esta semana" o "este mes") y de qué iba cada pregunta, uso y caché de Gemini, API |
-| API | `cd api && ./mvnw test` | Estadísticas (también sinergias, dúos y tríos, sesiones y franjas horarias, seguimiento de consejos), periodos, memoria de consejos, valoraciones, mapeo de FACEIT y Hi-Rez, carga del equipo con roles, API completa contra H2 con datos de ejemplo |
-| Web | `cd frontend && npm test` | Texto del Duende, i18n y formatos, estado del chat, rol, "Con quién", "Cuándo juegas mejor" y el periodo en el perfil, el periodo en el ranking, dúos y tríos en el equipo, valorar recomendaciones y respuestas |
+| Duende | `cd duende && .venv/Scripts/python -m pytest` | Reglas de recomendación (también por rol, por compañero, tilt, hora del día, seguimiento de consejos y frente a su nivel de FACEIT), chat por reglas (también "esta semana", "este mes" y "para mi nivel") y de qué iba cada pregunta, uso y caché de Gemini, API |
+| API | `cd api && ./mvnw test` | Estadísticas (también sinergias, dúos y tríos, sesiones y franjas horarias, seguimiento de consejos, comparación con su nivel), periodos, memoria de consejos, valoraciones, mapeo de FACEIT (también niveles) y Hi-Rez, sincronización con muestras sin identificar, carga del equipo con roles, API completa contra H2 con datos de ejemplo |
+| Web | `cd frontend && npm test` | Texto del Duende, i18n y formatos, estado del chat, rol, nivel y ELO, "Con quién", "Cuándo juegas mejor" y el periodo en el perfil, el periodo en el ranking, dúos y tríos en el equipo, valorar recomendaciones y respuestas |
 
 ## El Duende
 
 **Recomendaciones** (`duende/app/insights.py`): un motor de reglas, sin IA, que compara cada métrica con la media del
-resto del equipo y con una referencia de jugador medio (`metricas.py`). Además tiene reglas con más miga: kills que
+resto del equipo y con lo normal en su nivel de FACEIT o, si no se sabe, con una referencia fija de jugador medio
+(`metricas.py`). Además tiene reglas con más miga: kills que
 no se convierten en victorias, rachas, tendencia de las últimas partidas, mapas o dioses que se atragantan, compañeros
 con los que se gana más o menos, tilt en las sesiones largas y la mejor hora del día. Cada
 recomendación lleva nivel (*mejorar ya*, *a vigilar*, *lo haces bien*), los números comparados en barras y un consejo
@@ -144,6 +146,14 @@ ido cada uno: el valor de entonces y el de las partidas jugadas desde entonces. 
 Duende dice si ha funcionado ("Mejora en ADR. Hace 12 días te avisé: «Poco daño por ronda». Entonces tenías 78; en las
 11 partidas desde entonces, 103") o si sigue sin mejorar (y repite el consejo).
 
+**Nivel** (P8, CS2): al sincronizar, la API guarda de cada partida nueva lo que hicieron los jugadores que no son del
+equipo y su nivel de FACEIT en esa partida (tabla `muestras`, sin nick ni id de nadie ni de la partida), y el nivel y el
+ELO de cada cuenta del equipo. Con 50 partidas o más de su nivel, el Duende compara cada métrica con lo normal en ese
+nivel (la mediana; en entradas y clutches, el total) en vez de con la referencia fija, y dice su percentil ("Tienes
+35,0 %; el resto del equipo, 49,2 %, y un jugador de nivel 5 de FACEIT anda por 42,9 %. Lo haces mejor que en el 21 % de
+las partidas de ese nivel"). Si en su nivel va en lo normal, lo que le separe del equipo se queda en *a vigilar*. En el
+chat, "¿Cómo voy para mi nivel?" y "¿Quién tiene más nivel?". La web enseña el nivel y el ELO junto al nick de CS2.
+
 **Periodo**: el perfil, el cara a cara y el ranking tienen un selector de *7 días · 30 días · Todo* (en la URL,
 `?periodo=7d`). Todo lo de la página cuenta solo esas partidas, también la media del equipo con la que se compara y las
 recomendaciones del Duende. En la API, `?periodo=7d|30d|todo` en el perfil, el detalle, el historial, con quién,
@@ -151,11 +161,12 @@ cuándo, los consejos, el cara a cara y el ranking (por defecto, todo). Sin part
 vacíos; el 404 es solo para quien nunca ha jugado a ese juego.
 
 **Chat** (`chat.py`): con `GOOGLE_API_KEY` contesta Gemini, que recibe los resúmenes del equipo (con el rol de cada uno),
-las sinergias, las sesiones, los últimos 7 y 30 días, el seguimiento de sus consejos y las recomendaciones ya
-calculadas. Caché por petición, límite diario (`DUENDE_DAILY_LIMIT`) y modelos de respaldo si el principal ya no
+las sinergias, las sesiones, los últimos 7 y 30 días, el seguimiento de sus consejos, su nivel de FACEIT y las
+recomendaciones ya calculadas. Caché por petición, límite diario (`DUENDE_DAILY_LIMIT`) y modelos de respaldo si el
+principal ya no
 existe. Sin clave, sin cuota o si Gemini falla, contestan las reglas (`reglas_chat.py`): en qué mejorar, qué haces bien,
 cómo vas últimamente, peor mapa o dios, con quién juegas mejor, cuándo juegas mejor (tilt y hora), si ha funcionado lo
-que te dijo, el mejor dúo, comparar a dos, quién es el mejor del equipo.
+que te dijo, cómo vas para tu nivel de FACEIT, el mejor dúo, comparar a dos, quién es el mejor del equipo.
 Si la pregunta dice "esta semana" o "este mes" (o la página tiene un periodo elegido), los números son los de esos
 días, y "¿cómo voy esta semana?" los compara con los de siempre. La web indica bajo cada respuesta si la escribió
 Gemini o las reglas.
@@ -191,15 +202,15 @@ Parte del prototipo `TTCL Stats.html` y lo lleva a una web de estadísticas comp
 - **Accesibilidad**: foco visible, etiquetas para lectores de pantalla, `prefers-reduced-motion` y textos del Duende
   pintados como texto (nunca como HTML).
 
-Siguientes pasos: la hoja de ruta está en [docs/propuestas.md](docs/propuestas.md) (objetivos, percentiles por nivel de
-FACEIT, chat que consulta la API, Duende en Discord, análisis de demos…). Lo ya entregado, con lo que cambia en cada
-servicio y cómo actualizar, está en [CHANGELOG.md](CHANGELOG.md).
+Siguientes pasos: la hoja de ruta está en [docs/propuestas.md](docs/propuestas.md) (objetivos, chat que consulta la API,
+informe de cada partida, Duende en Discord, análisis de demos…). Lo ya entregado, con lo que cambia en cada servicio y
+cómo actualizar, está en [CHANGELOG.md](CHANGELOG.md).
 
 ## Fuentes de datos: estado
 
 | Juego | Fuente | Estado |
 |---|---|---|
-| CS2 | FACEIT Data API (`api/.../sync/FaceitFuente.java`) | Implementada. Solo para jugadores con cuenta de FACEIT (la API de Steam no da partidas de CS2). Los campos (ADR, HS %, Entry, 1vX, Utility Damage…) siguen la documentación: **hay que validarlos con una partida real**. |
+| CS2 | FACEIT Data API (`api/.../sync/FaceitFuente.java`) | Implementada. Solo para jugadores con cuenta de FACEIT (la API de Steam no da partidas de CS2). Los campos (ADR, HS %, Entry, 1vX, Utility Damage…) siguen la documentación: **hay que validarlos con una partida real**. Los del nivel (`skill_level`, `faceit_elo`, `game_skill_level`) están comprobados con el swagger oficial, aún no con una respuesta real. |
 | SMITE 2 | Hi-Rez API (`HirezFuente.java`) | Implementada **sin verificar**: confirmar la URL base de SMITE 2 (`SMITE2_API_BASE`), los métodos y los campos de `getmatchhistory`. La firma sí está probada. |
 
 La sincronización va en dos pasadas: primero resuelve los IDs de todas las cuentas y después pide partidas, así una

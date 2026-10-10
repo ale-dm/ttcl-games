@@ -3,6 +3,59 @@
 Lo que se ha entregado, de lo más reciente a lo más antiguo. Lo que falta por hacer está en
 [docs/propuestas.md](docs/propuestas.md) (P1–P12); al terminar una propuesta se marca allí y se anota aquí.
 
+## 2026-10-10 · P8: comparar con jugadores de tu nivel (FACEIT)
+
+Commit `e401cf9`. En CS2, el Duende ya no compara con números inventados: compara con lo que hacen los jugadores de tu
+nivel de FACEIT, sacado de las partidas que se sincronizan.
+
+**Qué se nota**
+- En el perfil, junto al nick de CS2: "Nivel 5 · 1164 ELO".
+- Las recomendaciones de CS2 comparan con tu nivel y dicen tu percentil. Con los datos de ejemplo, a Jugador 3: "Pocos
+  headshots. Tienes 35,0 %; el resto del equipo, 49,2 %, y un jugador de nivel 5 de FACEIT anda por 42,9 %. Lo haces
+  mejor que en el 21 % de las partidas de ese nivel". La barra pasa de "Referencia" a "Nivel 5".
+- Si en tu nivel vas en lo normal, lo que te separe del equipo se queda en *a vigilar*. A Jugador 3 la utilidad le
+  salía como *mejorar ya* por la media del equipo (el soporte la sube mucho), aunque en su nivel es justo lo normal.
+- En el chat: "¿Cómo voy para mi nivel?" (cada métrica con lo normal en tu nivel y tu percentil, dónde más destacas y
+  dónde más te queda) y "¿Quién tiene más nivel?". La primera sale entre las preguntas sugeridas si se sabe tu nivel.
+
+**Cómo funciona**
+- Al sincronizar con FACEIT, de cada partida nueva se guarda lo que hicieron los jugadores que no son del equipo, con
+  su nivel en esa partida. Sin nick ni id (ni de ellos ni de la partida) y sin el marcador. Y de cada cuenta del
+  equipo, su nivel y su ELO.
+- Lo normal en un nivel es la mediana de sus partidas (en entradas y clutches, el total), con 50 partidas o más con
+  dato. Se compara con los umbrales de siempre (como con la referencia fija); el percentil se enseña. El winrate no se
+  compara con el nivel (en tu nivel es un 50 % por cómo se emparejan las partidas).
+- Sin nivel o sin partidas suficientes, siguen las referencias fijas de antes. SMITE 2, igual que antes.
+
+**Cambios por servicio**
+- **Base de datos**: migración `V5__nivel_y_muestras.sql` (columnas `nivel` y `elo` en `cuentas`, tabla `muestras`).
+  Flyway la aplica sola.
+- **API**: `FuenteJuego.nivel` y el nivel de cada participación externa; `FaceitFuente` lee el nivel y el ELO del
+  jugador (`/players/{id}`) y el de cada uno en la partida (`/matches/{id}`, una petición más por partida nueva);
+  `Sincronizador` guarda las muestras y el nivel; entidad `Muestra` y su repositorio;
+  `Estadisticas.comparativaNivel` (función pura); `EquipoServicio` la pasa al Duende. `DemoSeeder` da nivel a las
+  cuentas de CS2 de ejemplo y genera 180 partidas de otros jugadores de cada nivel del 4 al 8, con su propio
+  generador (los demás números de ejemplo no cambian).
+- **Contrato compartido**: `ComparativaNivel` y `MetricaNivel`, en `PeticionInsights` y `JuegoContexto` (`nivel`);
+  `nivel` y `elo` en `CuentaVista` (API → web).
+- **Duende**: `Referencia` en `insights.py` (lo normal en su nivel o la fija) en textos y barras; intención `nivel` en
+  `reglas_chat.py`; textos nuevos en `textos.py`; el nivel explicado en el prompt de Gemini.
+- **Web**: nivel y ELO junto al nick (textos `jugador.nivel` y `jugador.nivelFaceit`).
+
+**Tests**: Duende 87 → 99, API 52 → 57, web 29 → 30, todos en verde.
+- API: lo normal en un nivel y el percentil (empates, K/D sin muertes, entradas del total, sin winrate, pocas
+  partidas); el nivel del jugador y del roster de FACEIT; la sincronización (muestras sin identificar, solo de partidas
+  nuevas y de los que no son del equipo, nivel de cada cuenta) con su propia base; lo que recibe el Duende con los
+  datos de ejemplo (perfil, consejos, periodo, SMITE 2 sin nivel, chat y tarjetas).
+- Duende: comparar con el nivel en vez de con la fija (texto, percentil, barras, inglés), el nivel cambia lo que se
+  pide, métricas sin referencia fija y las que es mejor tener bajas, entradas sin percentil, el tope de *a vigilar*,
+  el chat (intención, "para mi nivel", el equipo, sin nivel, SMITE 2, periodo, sugerencias, Gemini) y la API HTTP.
+- Web: nivel y ELO en el perfil, en los dos idiomas.
+
+**Para actualizar una instalación**: parar la API, `./mvnw package -DskipTests` y arrancar (Flyway añade las columnas
+y la tabla); reiniciar el Duende y la web. Con FACEIT configurado, nivel y muestras llegan en la siguiente
+sincronización; las partidas ya guardadas no traen muestras.
+
 ## 2026-10-10 · P7: valoración de las respuestas
 
 Commit `8282302`. Ya se puede decir si lo que dice el Duende sirve o no, y quien lo mantiene sabe qué revisar.

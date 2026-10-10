@@ -8,7 +8,7 @@ Tres servicios; el navegador solo habla con la API Java y la API pasa resúmenes
 - `duende/` — Python, FastAPI. Recomendaciones por reglas (`app/insights.py`) y chat con Gemini o, sin clave, con reglas.
 
 **Hoja de ruta**: `docs/propuestas.md` (P1–P12) — lo siguiente que hay que construir para dar mejores datos al Duende.
-Al terminar una propuesta, marcarla allí (con lo aprendido) y anotar la entrega en `CHANGELOG.md`. Hechas: P1, P2, P3, P4, P6, P7.
+Al terminar una propuesta, marcarla allí (con lo aprendido) y anotar la entrega en `CHANGELOG.md`. Hechas: P1, P2, P3, P4, P6, P7, P8.
 
 ## Comandos
 
@@ -39,8 +39,12 @@ funciona con la API arrancada).
   periodo va en la URL y en el contexto del chat.
 - Valoraciones (P7): `GET /api/duende/valoraciones` da lo peor valorado (recomendaciones por id; respuestas por origen e
   `intencion`, que es el `Intencion` de `reglas_chat.py`). Mirarlo antes de retocar reglas, textos o el prompt.
+- Nivel (P8): la tabla `muestras` guarda a los que no son del equipo sin nick ni id (ni de la partida); que siga así.
+  El Duende compara con `ComparativaNivel` (lo normal en su nivel de FACEIT) si llega y, si no, con las referencias
+  fijas de `metricas.py`.
 - `DemoSeeder` es determinista (semilla fija, horas en la zona del equipo): tocarlo cambia todos los números de ejemplo
   y lo que dice el Duende. `ApiTest` comprueba que sigan saliendo los patrones (tilt, hora buena, rachas, compañeros).
+  Las muestras de otros jugadores (P8) van al final y con su propio generador, para no mover lo demás.
 - Todo texto visible, en los dos idiomas (web y `duende/app/textos.py`).
 - El Duende no inventa números: todo dato sale de la API.
 - Migraciones nuevas como `V{n}__*.sql`, válidas en PostgreSQL y en H2 (modo PostgreSQL).

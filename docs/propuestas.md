@@ -15,7 +15,7 @@ lo que se aprendió en su apartado y apuntar la entrega en [CHANGELOG.md](../CHA
 | P5 | Objetivos personales | 2 | Medio | Nuevos (los da el jugador) | Pendiente |
 | P6 | Memoria de consejos | 2 | Medio | Se generan | Hecho |
 | P7 | Valoración de las respuestas | 2 | Bajo | Se generan | Hecho |
-| P8 | Comparar con jugadores de tu nivel (FACEIT) | 3 | Medio | Ya llegan, se tiran | Pendiente |
+| P8 | Comparar con jugadores de tu nivel (FACEIT) | 3 | Medio | Ya llegan, se tiran | Hecho |
 | P9 | Chat que consulta la API (function calling) | 3 | Medio | Ya guardados | Pendiente |
 | P10 | Informe de cada partida | 3 | Bajo | Ya guardados | Pendiente |
 | P11 | El Duende en Discord | 4 | Medio | — | Pendiente |
@@ -40,7 +40,7 @@ y conviene hacerlo cuando lo demás esté estable.
 **Limitaciones que motivan esta hoja de ruta**
 
 1. No sabe el rol de cada uno: puede regañar a un soporte por hacer pocas kills. (Resuelto en P1.)
-2. Las referencias de "jugador medio" son números fijos, no gente de tu nivel.
+2. Las referencias de "jugador medio" son números fijos, no gente de tu nivel. (Resuelto en P8 para CS2.)
 3. No sabe con quién juegas, cuándo ni cuántas seguidas, aunque esos datos ya están en la base. (Resuelto en P2 y P3.)
 4. No recuerda qué te dijo ni si sirvió. (Resuelto en P6.)
 5. Solo ve medias por partida: nada de rondas, posiciones, trades o economía.
@@ -298,6 +298,47 @@ pero `Sincronizador.guardar` se queda solo con las del equipo.
 - Duende: en `insights.py`, comparar con el percentil (debilidad si < 30, fortaleza si > 70). Las referencias fijas se
   quedan solo como respaldo cuando no hay muestra suficiente.
 - SMITE 2: lo mismo si `getmatchdetails` de Hi-Rez da los 10 jugadores (por verificar).
+
+**Hecho** (10 de octubre de 2026), en CS2. Con los datos de ejemplo, a Jugador 3 (nivel 5): "Pocos headshots. Tienes
+35,0 %; el resto del equipo, 49,2 %, y un jugador de nivel 5 de FACEIT anda por 42,9 %. Lo haces mejor que en el 21 % de
+las partidas de ese nivel", con la barra "Nivel 5" en vez de "Referencia". Lo que quedó y lo que se aprendió:
+- **Campos de FACEIT**: comprobados con el swagger oficial de la Data API v4 (`Roster.game_skill_level` en los detalles
+  de la partida; `GameDetail.skill_level` y `faceit_elo` en `games.cs2` del jugador), **aún no con una respuesta
+  real**: aquí no hay clave de FACEIT.
+- **Qué se guarda**: de cada partida nueva, los que no son del equipo y de los que se sabe el nivel (tabla `muestras`):
+  nivel en esa partida, mapa, día, resultado, kills, muertes, asistencias y lo específico del juego. Sin nick, sin id
+  del jugador ni de la partida y sin el marcador. Tampoco el hash del id que sugería la propuesta: no hace falta, y el
+  hash de un id público se deshace probando ids conocidos. Cuesta una petición más por partida (`/matches/{id}`); si
+  falla, la partida se guarda igual, sin muestras.
+- **Nivel y ELO de cada cuenta**: se leen en cada sincronización (`/players/{id}`); si falla, se quedan los de antes. Las
+  muestras llevan el nivel que tenía cada uno en esa partida; el jugador, el de ahora.
+- **Cambio sobre lo previsto: se compara con lo normal en su nivel (la mediana), no se decide por el percentil.** Las
+  muestras son partidas sueltas, no medias de jugadores: la media de 30 partidas varía mucho menos que una partida, así
+  que su percentil frente a partidas sueltas se queda cerca del 50 y "por debajo del 30" casi solo saltaría con lo
+  exagerado (un ADR un 12 % por debajo de lo normal queda en el percentil 32). La mediana es lo que hace un jugador
+  típico de ese nivel y sustituye a la referencia fija con los mismos umbrales de siempre (10 y 20 %, o 5 y 10 puntos
+  en porcentajes). El percentil se enseña ("Lo haces mejor que en el 21 % de las partidas de ese nivel"), va al chat y
+  a Gemini.
+- **Qué se compara**: todo menos el winrate (en tu nivel es un 50 % por cómo se emparejan las partidas). Entradas y
+  clutches, con el total del nivel y sin percentil (un 1 de 1 o un 0 de 2 no se pueden ordenar). En el K/D de cada
+  partida, sin muertes cuenta como una. Hacen falta 50 partidas de su nivel con dato (`MIN_MUESTRAS_NIVEL`); si no,
+  la referencia fija de `metricas.py` (que se queda como respaldo, y para SMITE 2). Las métricas sin referencia fija
+  (kills, muertes, asistencias, utilidad) ahora también se comparan.
+- **Si va en lo normal de su nivel, lo que le separe del equipo es para vigilar**: con los datos de ejemplo, a Jugador
+  3 le salía "La utilidad se queda en el bolsillo" como *mejorar ya* con 81 de utilidad, justo lo normal en su nivel
+  (82): el soporte del equipo sube mucho la media. Si frente a su nivel no hay aviso, el del equipo baja a *a vigilar*.
+- **Chat**: "¿Cómo voy para mi nivel?" (cada métrica con lo normal en su nivel y su percentil, donde más destaca y donde
+  más le queda) y, sin nadie en el foco o con "quién", "¿Quién tiene más nivel?". Está entre las preguntas sugeridas
+  si se sabe su nivel. Con un periodo avisa de que es con todas las partidas. Gemini recibe la comparación de los del
+  foco y el nivel y el ELO del resto.
+- **Web**: nivel y ELO junto al nick de CS2 ("Nivel 5 · 1164 ELO"), sin los colores de FACEIT: el verde y el rojo son
+  de victoria y derrota.
+- **Datos de ejemplo**: Jugador 1 nivel 7 (1438), Jugador 2 nivel 6 (1287) y Jugador 3 nivel 5 (1164), y 180 partidas de
+  otros jugadores de cada nivel del 4 al 8, con su propio generador: no cambia ningún otro número de ejemplo.
+- Migración `V5__nivel_y_muestras.sql`. Sin endpoints nuevos: el perfil trae `nivel` y `elo` en cada cuenta.
+- **Queda pendiente**: comprobar los campos con una respuesta real; descartar las muestras viejas (se guarda el día
+  para eso); usar también los niveles vecinos si en el suyo hay pocas partidas, o comparar por mapa (se guarda el
+  mapa); SMITE 2, si `getmatchdetails` de Hi-Rez da los diez jugadores y algo parecido a un nivel.
 
 ### P9 · Chat que consulta la API (function calling)
 
