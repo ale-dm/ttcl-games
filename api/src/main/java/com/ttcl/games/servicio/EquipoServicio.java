@@ -18,6 +18,7 @@ import com.ttcl.games.duende.DuendeModelos.PeticionInsights;
 import com.ttcl.games.juego.Juego;
 import com.ttcl.games.servicio.Vistas.BusquedaVista;
 import com.ttcl.games.servicio.Vistas.Comparacion;
+import com.ttcl.games.servicio.Vistas.ConsultaPartidas;
 import com.ttcl.games.servicio.Vistas.CuentaVista;
 import com.ttcl.games.servicio.Vistas.DetalleJuego;
 import com.ttcl.games.servicio.Vistas.FilaRanking;
@@ -27,6 +28,7 @@ import com.ttcl.games.servicio.Vistas.PaginaPartidas;
 import com.ttcl.games.servicio.Vistas.PartidaVista;
 import com.ttcl.games.servicio.Vistas.Ranking;
 import com.ttcl.games.stats.Estadisticas;
+import com.ttcl.games.stats.FiltroPartidas;
 import com.ttcl.games.stats.Modelos.ConsejoAnterior;
 import com.ttcl.games.stats.Modelos.FilaParticipacion;
 import com.ttcl.games.stats.Modelos.MediasEquipo;
@@ -38,6 +40,7 @@ import com.ttcl.games.stats.Modelos.Sinergias;
 import com.ttcl.games.stats.Periodo;
 import java.text.Normalizer;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -383,15 +386,47 @@ public class EquipoServicio {
         List<PartidaVista> items = filas.stream()
                 .skip(Math.max(0, offset))
                 .limit(Math.clamp(limite, 1, 100))
-                .map(f -> new PartidaVista(
-                        f.partidaId(), f.juego(), f.jugadaEn(), f.modo(), f.gano(), f.kills(), f.muertes(),
-                        f.asistencias(), f.datos(),
-                        foto.presencias(f.juego()).getOrDefault(f.partidaId(), List.of()).stream()
-                                .filter(p -> !p.slug().equals(j.getSlug()))
-                                .map(Presencia::nombre)
-                                .toList()))
+                .map(f -> partidaVista(foto, j, f))
                 .toList();
         return new PaginaPartidas(items, filas.size());
+    }
+
+    /** Una partida con los compañeros del equipo que estaban. */
+    private static PartidaVista partidaVista(Instantanea foto, Jugador j, FilaParticipacion f) {
+        return new PartidaVista(
+                f.partidaId(), f.juego(), f.jugadaEn(), f.modo(), f.gano(), f.kills(), f.muertes(), f.asistencias(),
+                f.datos(),
+                foto.presencias(f.juego()).getOrDefault(f.partidaId(), List.of()).stream()
+                        .filter(p -> !p.slug().equals(j.getSlug()))
+                        .map(Presencia::nombre)
+                        .toList());
+    }
+
+    /**
+     * Las partidas de un jugador en un juego que pasan el filtro: su resumen, la media del resto del equipo con el
+     * mismo filtro y las {@code limite} más recientes (P9). Sin ninguna, el resumen va con 0 partidas.
+     */
+    public ConsultaPartidas consulta(String slug, Juego juego, FiltroPartidas filtro, int limite) {
+        Instantanea foto = instantanea();
+        Jugador j = foto.porSlug(slug);
+        foto.exigirPartidas(j, juego);
+        List<FilaParticipacion> filas = filtro.aplicar(juego, foto.filas(j, juego), zona);
+        List<ResumenJuego> otros = foto.jugadores().stream()
+                .filter(o -> !o.getId().equals(j.getId()))
+                .map(o -> filtro.aplicar(juego, foto.filas(o, juego), zona))
+                .filter(f -> !f.isEmpty())
+                .map(f -> Estadisticas.resumir(juego, f))
+                .toList();
+        return new ConsultaPartidas(
+                juego,
+                Estadisticas.resumir(juego, filas),
+                Estadisticas.mediasEquipo(otros),
+                filas.stream().limit(Math.clamp(limite, 1, 20)).map(f -> partidaVista(foto, j, f)).toList());
+    }
+
+    /** Hoy en la zona del equipo ("2026-10-10"), para que el chat sepa a qué días se refiere "ayer" o "este mes". */
+    public String hoy() {
+        return LocalDate.now(zona).toString();
     }
 
     // ─── Comparación y ranking ──────────────────────────────────────────────

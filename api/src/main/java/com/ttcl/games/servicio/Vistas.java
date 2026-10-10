@@ -69,6 +69,16 @@ public final class Vistas {
 
     public record PaginaPartidas(List<PartidaVista> items, int total) {}
 
+    /**
+     * Partidas que pasan un filtro (P9: lo que consulta el chat cuando pregunta algo que no está en los resúmenes).
+     *
+     * @param resumen de todas las que pasan el filtro (0 partidas si no hay ninguna)
+     * @param equipo media del resto del equipo con el mismo filtro (null si nadie más tiene partidas así)
+     * @param partidas las más recientes, hasta el límite pedido
+     */
+    public record ConsultaPartidas(
+            Juego juego, ResumenJuego resumen, MediasEquipo equipo, List<PartidaVista> partidas) {}
+
     /** Si alguno no tiene partidas del juego, su resumen es null y {@code filas} está vacía. */
     public record Comparacion(
             JugadorRef a, JugadorRef b, Juego juego, ResumenJuego resumenA, ResumenJuego resumenB,

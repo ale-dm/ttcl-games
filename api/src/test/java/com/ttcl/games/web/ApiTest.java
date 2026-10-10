@@ -35,6 +35,8 @@ import com.ttcl.games.stats.Periodo;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -687,6 +689,60 @@ class ApiTest {
         assertThat(juegoDe(duende.ultimaChat, "j2", Juego.CS2).nivel().metricas()).isNotEmpty();
         mvc.perform(get("/api/equipo?juego=cs2")).andExpect(status().isOk());
         assertThat(duende.ultimoLote).allSatisfy(p -> assertThat(p.nivel()).isNotNull());
+    }
+
+    // ─── Consultas del chat (P9) ────────────────────────────────────────────
+
+    @Test
+    void consultaDePartidasFiltradasConSuResumenYElDelEquipo() throws Exception {
+        // Jugador 1 en Nuke: todas sus partidas en ese mapa, y la media del resto del equipo en Nuke.
+        JsonNode nuke = json("/api/jugadores/j1/consulta?juego=cs2&clave=Nuke&limite=50");
+        int partidas = nuke.get("resumen").get("partidas").asInt();
+        assertThat(partidas).isPositive();
+        assertThat(nuke.get("partidas")).hasSize(partidas);
+        nuke.get("partidas").forEach(p -> assertThat(p.get("datos").get("mapa").asString()).isEqualTo("de_nuke"));
+        assertThat(nuke.get("equipo").get("jugadores").asInt()).isPositive();
+        long enElDesglose = 0;
+        for (JsonNode fila : json("/api/jugadores/j1/juegos/cs2").get("desglose")) {
+            if (fila.get("clave").asString().equals("de_nuke")) {
+                enElDesglose = fila.get("partidas").asLong();
+            }
+        }
+        assertThat(partidas).isEqualTo(enElDesglose);
+
+        // Sus dos últimas derrotas, la más reciente primero.
+        JsonNode derrotas = json("/api/jugadores/j1/consulta?juego=cs2&resultado=derrota&ultimas=2");
+        assertThat(derrotas.get("resumen").get("partidas").asInt()).isEqualTo(2);
+        assertThat(derrotas.get("resumen").get("victorias").asInt()).isZero();
+        assertThat(derrotas.get("partidas")).hasSize(2);
+        assertThat(Instant.parse(derrotas.get("partidas").get(0).get("jugadaEn").asString()))
+                .isAfter(Instant.parse(derrotas.get("partidas").get(1).get("jugadaEn").asString()));
+
+        // Unos días sin partidas: resumen con 0, sin partidas.
+        JsonNode nada = json("/api/jugadores/j1/consulta?juego=cs2&desde=2020-01-01&hasta=2020-01-31");
+        assertThat(nada.get("resumen").get("partidas").asInt()).isZero();
+        assertThat(nada.get("partidas")).isEmpty();
+    }
+
+    @Test
+    void consultaValidaLaEntrada() throws Exception {
+        mvc.perform(get("/api/jugadores/j1/consulta?juego=cs2&resultado=empate")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/jugadores/j1/consulta?juego=cs2&desde=2026-10-05&hasta=2026-10-01"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/jugadores/j1/consulta?juego=cs2&desde=ayer")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/jugadores/j1/consulta?juego=cs2&ultimas=0")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/jugadores/j4/consulta?juego=cs2")).andExpect(status().isNotFound()); // no juega a CS2
+        mvc.perform(get("/api/jugadores/nadie/consulta?juego=cs2")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void elChatSabeQueDiaEsHoyEnLaZonaDelEquipo() throws Exception {
+        duende.respuesta = new RespuestaChat("Hola", "reglas", null, null, List.of());
+        mvc.perform(post("/api/duende/chat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mensajes\": [{\"rol\": \"usuario\", \"texto\": \"¿Cómo voy en Mirage?\"}]}"))
+                .andExpect(status().isOk());
+        assertThat(duende.ultimaChat.hoy()).isEqualTo(LocalDate.now(ZoneId.of("Europe/Madrid")).toString());
     }
 
     @Test

@@ -23,6 +23,9 @@ services:
       GEMINI_TIMEOUT_MS: ${GEMINI_TIMEOUT_MS:-20000}
       DUENDE_MAX_TOKENS: ${DUENDE_MAX_TOKENS:-1024}
       DUENDE_DAILY_LIMIT: ${DUENDE_DAILY_LIMIT:-200}
+      # Con Gemini, el chat puede consultar a la API lo que no está en los resúmenes (P9).
+      API_URL: http://api:8080
+      DUENDE_MAX_CONSULTAS: ${DUENDE_MAX_CONSULTAS:-4}
 
   api:
     build: ./api

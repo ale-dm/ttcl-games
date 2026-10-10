@@ -90,10 +90,14 @@ public final class DuendeModelos {
 
     public record JugadorContexto(String slug, String nombre, List<JuegoContexto> juegos) {}
 
-    /** @param periodo el que se está viendo en la página (null o "todo": todas las partidas) */
+    /**
+     * @param periodo el que se está viendo en la página (null o "todo": todas las partidas)
+     * @param hoy fecha de hoy en la zona del equipo ("2026-10-10"): con ella el chat sabe qué días son "ayer" o
+     *     "este mes" cuando consulta la API (P9)
+     */
     public record PeticionChat(
             String lang, List<Mensaje> mensajes, List<String> foco, List<JugadorContexto> equipo, Juego juego,
-            Periodo periodo) {}
+            Periodo periodo, String hoy) {}
 
     /**
      * @param origen "gemini" o "reglas" (sin clave, sin cuota o si Gemini falla)

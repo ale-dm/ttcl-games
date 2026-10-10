@@ -1,5 +1,6 @@
 import pytest
 
+from app import api_ttcl
 from app.config import get_config
 from app.modelos import (
     ComparativaNivel,
@@ -20,9 +21,11 @@ from app.modelos import (
 
 @pytest.fixture(autouse=True)
 def sin_gemini(monkeypatch):
-    """Los tests nunca llaman a Gemini: sin clave, el chat contesta por reglas."""
+    """Los tests nunca llaman a Gemini (sin clave, el chat contesta por reglas) ni a la API de verdad."""
     monkeypatch.setenv("GOOGLE_API_KEY", "")
     get_config.cache_clear()
+    api_ttcl.cache.limpiar()
+    monkeypatch.setattr(api_ttcl, "_cliente", None)
     yield
     get_config.cache_clear()
 

@@ -111,6 +111,7 @@ public class DuendeServicio {
      */
     public RespuestaChat chat(String lang, List<Mensaje> mensajes, List<String> foco, Juego juego, Periodo periodo) {
         return cliente.chat(new PeticionChat(
-                idioma(lang), mensajes, equipo.slugsValidos(foco), equipo.contextoEquipo(), juego, periodo));
+                idioma(lang), mensajes, equipo.slugsValidos(foco), equipo.contextoEquipo(), juego, periodo,
+                equipo.hoy()));
     }
 }

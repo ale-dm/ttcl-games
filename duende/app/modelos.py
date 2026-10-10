@@ -241,6 +241,8 @@ class PeticionChat(Base):
     juego: Juego | None = None
     # El periodo que se ve en la página: se usa si la pregunta no dice otro ("esta semana", "este mes"...).
     periodo: Periodo | None = None
+    # Hoy en la zona del equipo ("2026-10-10"), para que Gemini sepa qué días pedir al consultar la API (P9).
+    hoy: str | None = None
 
 
 class RespuestaChat(Base):

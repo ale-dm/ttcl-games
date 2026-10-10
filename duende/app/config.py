@@ -14,6 +14,15 @@ class Config:
     max_tokens: int
     # Respuestas nuevas de Gemini en 24 h (las de reglas y las cacheadas no cuentan).
     daily_limit: int
+    # API Java a la que Gemini puede consultar lo que no está en los resúmenes (P9). Vacía: sin consultas.
+    api_url: str
+    api_timeout_ms: int
+    # Consultas a la API que puede hacer Gemini en cada respuesta (0: ninguna).
+    max_consultas: int
+
+    @property
+    def consultas_activas(self) -> bool:
+        return bool(self.api_url) and self.max_consultas > 0
 
     @property
     def gemini_configurado(self) -> bool:
@@ -46,4 +55,7 @@ def get_config() -> Config:
         gemini_timeout_ms=_entero("GEMINI_TIMEOUT_MS", 20000),
         max_tokens=_entero("DUENDE_MAX_TOKENS", 1024),
         daily_limit=_entero("DUENDE_DAILY_LIMIT", 200),
+        api_url=os.environ.get("API_URL", "http://localhost:8080").strip().rstrip("/"),
+        api_timeout_ms=_entero("API_TIMEOUT_MS", 5000),
+        max_consultas=_entero("DUENDE_MAX_CONSULTAS", 4),
     )

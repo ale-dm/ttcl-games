@@ -263,7 +263,7 @@ def test_las_sesiones_llegan_a_gemini(monkeypatch):
     get_config.cache_clear()
     sistemas = []
 
-    def falso(sistema, contenidos, temperatura=0.8):
+    def falso(sistema, contenidos, temperatura=0.8, herramientas=None):
         sistemas.append(sistema)
         return "Respuesta de Gemini", "gemini-falso"
 
@@ -382,7 +382,7 @@ def test_los_ultimos_dias_llegan_a_gemini(monkeypatch):
     get_config.cache_clear()
     sistemas = []
 
-    def falso(sistema, contenidos, temperatura=0.8):
+    def falso(sistema, contenidos, temperatura=0.8, herramientas=None):
         sistemas.append(sistema)
         return "Respuesta de Gemini", "gemini-falso"
 
@@ -458,7 +458,7 @@ def test_el_seguimiento_llega_a_gemini(monkeypatch):
     get_config.cache_clear()
     sistemas = []
 
-    def falso(sistema, contenidos, temperatura=0.8):
+    def falso(sistema, contenidos, temperatura=0.8, herramientas=None):
         sistemas.append(sistema)
         return "Respuesta de Gemini", "gemini-falso"
 
@@ -546,7 +546,7 @@ def test_nivel_con_periodo_sugerencias_y_gemini(monkeypatch):
     get_config.cache_clear()
     sistemas = []
 
-    def falso(sistema, contenidos, temperatura=0.8):
+    def falso(sistema, contenidos, temperatura=0.8, herramientas=None):
         sistemas.append(sistema)
         return "Respuesta de Gemini", "gemini-falso"
 
@@ -556,6 +556,38 @@ def test_nivel_con_periodo_sugerencias_y_gemini(monkeypatch):
     assert "«nivel» es su nivel de FACEIT" in sistema
     assert '"metrica":"adr","referencia":82.0,"percentil":38.0' in sistema
     assert '"nivel":{"nivel":8,"elo":1802}' in sistema  # del resto, solo el nivel y el ELO
+
+
+# ─── Consultas a la API (P9) ─────────────────────────────────────────────────
+
+
+def test_con_gemini_y_la_api_configurada_puede_consultar(monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "clave-de-prueba")
+    monkeypatch.setenv("API_URL", "http://api:8080")
+    monkeypatch.setenv("DUENDE_MAX_CONSULTAS", "3")
+    get_config.cache_clear()
+    recibido = {}
+
+    def falso(sistema, contenidos, temperatura=0.8, herramientas=None):
+        recibido.update(sistema=sistema, herramientas=herramientas)
+        return "Respuesta de Gemini", "gemini-falso"
+
+    monkeypatch.setattr(gemini, "generar", falso)
+    peticion = PeticionChat(lang="es", mensajes=[Mensaje(rol="usuario", texto="¿Cómo voy en Mirage? (P9)")],
+                            foco=["j1"], equipo=equipo(), hoy="2026-10-10")
+    assert chat.responder(peticion).origen == "gemini"
+    h = recibido["herramientas"]
+    assert h.maximo == 3
+    assert h.tool.function_declarations[0].parameters_json_schema["properties"]["jugador"]["enum"] == ["Ana", "Bea"]
+    assert "usa las herramientas: consultan la API del equipo" in recibido["sistema"]
+    assert '"hoy":"2026-10-10"' in recibido["sistema"]
+
+    # Sin API_URL (o con 0 consultas), Gemini contesta solo con los resúmenes.
+    monkeypatch.setenv("API_URL", "")
+    get_config.cache_clear()
+    chat.responder(peticion.model_copy(update={"mensajes": [Mensaje(rol="usuario", texto="¿Y en Nuke? (P9)")]}))
+    assert recibido["herramientas"] is None
+    assert "usa las herramientas" not in recibido["sistema"]
 
 
 def test_mejorar_tiene_en_cuenta_el_rol():
@@ -578,7 +610,7 @@ def test_el_rol_llega_a_gemini(monkeypatch):
     get_config.cache_clear()
     sistemas = []
 
-    def falso(sistema, contenidos, temperatura=0.8):
+    def falso(sistema, contenidos, temperatura=0.8, herramientas=None):
         sistemas.append(sistema)
         return "Respuesta de Gemini", "gemini-falso"
 
@@ -599,7 +631,7 @@ def test_las_sinergias_llegan_a_gemini(monkeypatch):
     get_config.cache_clear()
     sistemas = []
 
-    def falso(sistema, contenidos, temperatura=0.8):
+    def falso(sistema, contenidos, temperatura=0.8, herramientas=None):
         sistemas.append(sistema)
         return "Respuesta de Gemini", "gemini-falso"
 
@@ -619,7 +651,7 @@ def test_con_gemini_usa_gemini_y_cachea(monkeypatch):
     get_config.cache_clear()
     llamadas = []
 
-    def falso(sistema, contenidos, temperatura=0.8):
+    def falso(sistema, contenidos, temperatura=0.8, herramientas=None):
         llamadas.append((sistema, contenidos))
         return "Respuesta de Gemini", "gemini-falso"
 

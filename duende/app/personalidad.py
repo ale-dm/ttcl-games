@@ -80,11 +80,33 @@ _CABECERA_DATOS: dict[Idioma, str] = {
 }
 
 
-def prompt_sistema(lang: Idioma, datos: dict) -> str:
+_CONSULTAS: dict[Idioma, str] = {
+    "es": (
+        "Si con esos datos no basta (un mapa o dios concreto, unas fechas, solo las victorias o las derrotas, "
+        "partidas concretas como «mis dos últimas derrotas», o el desglose, el cara a cara o con quién juega mejor en "
+        "los últimos 7 o 30 días), usa las herramientas: consultan la API del equipo. No calcules nada tú: usa los "
+        "números que devuelven tal cual y, si una consulta da error o no trae partidas, dilo. «hoy» es la fecha de hoy "
+        "en la zona del equipo: con ella sabes qué días son «ayer», «esta semana» o «septiembre». Si ya puedes "
+        "responder con lo que tienes, no consultes."
+    ),
+    "en": (
+        "If that data isn't enough (a specific map or god, certain dates, only wins or only losses, specific matches "
+        "like 'my last two losses', or the breakdown, the head-to-head or who they play best with over the last 7 or "
+        "30 days), use the tools: they query the team's API. Don't compute anything yourself: use the numbers they "
+        "return as they are and, if a query fails or brings no matches, say so. 'hoy' is today's date in the team's "
+        "time zone: use it to work out which days 'yesterday', 'this week' or 'September' are. If you can already "
+        "answer with what you have, don't query."
+    ),
+}
+
+
+def prompt_sistema(lang: Idioma, datos: dict, consultas: bool = False) -> str:
+    """El prompt de sistema; con `consultas`, también cuándo usar las herramientas que consultan la API (P9)."""
     return "\n\n".join(
         [
             _PERSONALIDAD[lang],
             _CABECERA_DATOS[lang],
+            *([_CONSULTAS[lang]] if consultas else []),
             json.dumps(datos, ensure_ascii=False, separators=(",", ":")),
         ]
     )

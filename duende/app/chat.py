@@ -1,6 +1,7 @@
 """Chat del Duende. Con GOOGLE_API_KEY contesta Gemini; sin clave, sin cuota o si Gemini falla, contestan las reglas.
 
-Gemini recibe los datos ya resumidos y las recomendaciones calculadas por el motor, y la conversación tal cual.
+Gemini recibe los datos ya resumidos y las recomendaciones calculadas por el motor, y la conversación tal cual. Para
+lo que no está ahí (un mapa, unas fechas, partidas concretas) puede consultar la API Java (herramientas.py, P9).
 Las respuestas se cachean por hash de la petición y hay un límite diario de llamadas nuevas.
 """
 
@@ -14,6 +15,7 @@ from google.genai import types
 
 from . import gemini, reglas_chat
 from .config import get_config
+from .herramientas import Herramientas
 from .modelos import JugadorContexto, PeticionChat, RespuestaChat
 from .personalidad import prompt_sistema
 
@@ -99,6 +101,7 @@ def _datos_para_prompt(p: PeticionChat) -> dict:
     foco = [j for s in p.foco for j in p.equipo if j.slug == s]
     return {
         "idioma": p.lang,
+        "hoy": p.hoy,
         "juego_seleccionado": p.juego,
         "periodo_seleccionado": p.periodo,
         "foco": [jugador_completo(j) for j in foco],
@@ -140,8 +143,12 @@ def responder(p: PeticionChat) -> RespuestaChat:
             return RespuestaChat(respuesta=texto, origen="gemini", modelo=modelo, **extra)
         contenidos = _contenidos(p)
         if contenidos and limite.disponible(cfg.daily_limit):
+            herramientas = Herramientas(p, cfg.max_consultas) if cfg.consultas_activas else None
             try:
-                texto, modelo = gemini.generar(prompt_sistema(p.lang, _datos_para_prompt(p)), contenidos)
+                sistema = prompt_sistema(p.lang, _datos_para_prompt(p), consultas=herramientas is not None)
+                texto, modelo = gemini.generar(sistema, contenidos, herramientas=herramientas)
+                if herramientas and herramientas.usadas:
+                    log.info("Gemini consultó la API: %s", ", ".join(herramientas.usadas))
                 limite.registrar()
                 cache.set(clave, (texto, modelo))
                 return RespuestaChat(respuesta=texto, origen="gemini", modelo=modelo, **extra)
