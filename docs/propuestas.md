@@ -20,6 +20,7 @@ lo que se aprendió en su apartado y apuntar la entrega en [CHANGELOG.md](../CHA
 | P10 | Informe de cada partida | 3 | Bajo | Ya guardados | Hecho |
 | P11 | El Duende en Discord | 4 | Medio | — | Hecho |
 | P12 | Análisis de demos de CS2 | 5 | Alto | Nuevos (demos) | Hecho |
+| P13 | Capturas de csstats y evolución por fechas | 5 | Medio | Nuevos (los sube el jugador) | Hecho |
 
 **Orden recomendado**: P1 → P2 → P3 (corrigen lo que el Duende dice mal hoy y usan lo que ya hay), luego P8 (cambia
 referencias inventadas por datos reales), luego P5/P6 y P11 (seguimiento y que la gente vuelva). P12 es el gran salto
@@ -548,6 +549,67 @@ equipo, 0,37). Lo que quedó y lo que se aprendió:
   muertes de `muertes_mapa` viejas; comparar las métricas de las demos con su nivel (P8: las muestras no tienen rondas);
   que el informe de cada partida (P10) use su rating; y quien no juega en FACEIT (los códigos para compartir partidas
   de Valve necesitan un cliente de Steam).
+
+### P13 · Capturas de csstats y evolución por fechas
+
+**Por qué**: FACEIT solo da las partidas de FACEIT, y csstats.gg ya tiene las de matchmaking y Premier, con sus
+clutches, entradas y rango; pero no tiene API. Una captura de pantalla del perfil, subida de vez en cuando, basta para
+ver cómo cambia cada uno con el tiempo.
+
+**Datos**: lo que se ve en el perfil de csstats (filtro CS2 · 5v5): rating, K/D, winrate, % HS, ADR, KAST; los totales
+(partidas, ganadas, perdidas, empatadas, kills, muertes, asistencias, headshots, daño, rondas); los clutches (1vX y cada
+1v1…1v5 ganados y perdidos); las entradas (por ronda, éxito e intentos, también de T y de CT); Premier (actual, mejor y
+victorias de la temporada) y las victorias de competitivo y wingman; y los mapas (partidas y winrate).
+
+**Cambios**
+- Duende: leer la imagen con Gemini y devolver los números, que en la web se revisan antes de guardar.
+- API: guardar cada captura con su fecha de carga y la imagen; comparar dos fechas.
+- Duende: reglas y chat con lo que cambió entre dos capturas.
+- Web: pestaña para subirlas, una gráfica por número y el comparador.
+
+**Hecho** (14 de octubre de 2026). Lo que quedó y lo que se aprendió:
+- **Gemini lee, la persona revisa.** El Duende pasa la imagen a Gemini (`POST /v1/capturas/leer`, `lectura.py`) con
+  una descripción de dónde está cada número en csstats y un esquema JSON con las claves que pide la API; devuelve solo
+  números de esas claves y los mapas. **Nada se guarda sin que alguien lo vea**: la web rellena un formulario con lo
+  leído y se corrige a mano antes de guardar. Sin clave, sin cuota o si Gemini falla, el formulario sale vacío con el
+  motivo y se rellena a mano: siempre se puede subir. Cada lectura cuenta para el límite diario del chat.
+- **Probado con una captura real** (la del perfil de un jugador del equipo) y `gemini-2.5-flash-lite`: leyó los 37
+  números que había, también los clutches ganados y perdidos, las entradas de T y CT y los mapas. Premier sale como
+  «---» en la temporada en curso sin partidas y se queda vacío, como debe.
+- **Lo más barato**: `gemini-2.5-flash-lite` por defecto (respaldo, `gemini-2.5-flash`; nada de Pro), sin
+  razonamiento (`thinking_budget=0`: los tokens de pensar se pagan como respuesta), 2048 tokens de salida como mucho en
+  la lectura y 50 lecturas o respuestas al día (`DUENDE_DAILY_LIMIT`). Las consultas del chat a la API bajan a 2 por
+  respuesta. Se cambió también para el chat.
+- **Qué se guarda** (migración `V8__capturas.sql`): `capturas` (jugador, juego, fuente `csstats`, `cargada_en`, los
+  números en JSON y si los leyó Gemini o se escribieron a mano), `capturas_mapas` y `capturas_imagenes` (la imagen
+  aparte, para no traerla al listar). La fecha es la de carga, no la de la captura: la pone la API. Imágenes PNG, JPEG
+  o WebP (se mira por los primeros bytes, no por el nombre) de 8 MB como mucho. Solo CS2.
+- **Los números se limpian en la API** (`stats/Capturas.java`, la lista de campos en `CAMPOS`): solo claves conocidas,
+  números finitos entre 0 y mil millones, porcentajes hasta 100, los enteros redondeados; mapas sin repetir y como
+  mucho 12. Una captura sin ningún número no se guarda.
+- **Comparar dos fechas**: cada número antes y después, con la diferencia y si es a mejor (las muertes, a peor si
+  suben; partidas o kills, ni mejor ni peor). Y, como csstats da **totales**, la diferencia de los totales dice lo que
+  se jugó **entre medias**: partidas, ganadas y perdidas, winrate, K/D, % HS, ADR, kills y asistencias por partida y
+  1v1 ganados. Eso es más fino que comparar las medias de siempre, que se mueven muy poco cuando ya hay cientos de
+  partidas. Si algún total baja (otra cuenta, otro filtro en csstats), no hay tramo.
+- **El Duende** recibe, con los resúmenes, cómo ha ido entre la última captura y la más reciente que tenga al menos 7
+  días más (si no hay, la primera). Con 10 partidas o más entre medias, si la métrica que más ha cambiado (K/D, ADR,
+  % HS o winrate) se aleja un 10 % de lo que llevaba, lo dice: `evolucion_mejora` (*lo haces bien*) o `evolucion_baja`
+  (*a vigilar*; desde el 20 %, *mejorar ya*). En el chat, "¿He mejorado desde la última captura?" (o "¿Cómo voy desde
+  la captura?") da lo jugado entre medias y cómo cambian el rating y Premier; Gemini recibe lo mismo.
+- **Web**: pestaña *Evolución* en el perfil de CS2 (y, si aún no tiene partidas pero sí cuenta de CS2, debajo del
+  aviso): subir una captura (elegirla o pegarla con Ctrl+V), revisar lo leído por grupos con los mapas, la gráfica de
+  cualquier número a lo largo de las capturas, el comparador entre dos fechas (lo jugado entre medias y la tabla con lo
+  que sube en verde y lo que baja en rojo) y la lista con la imagen y el botón de borrar.
+- **Datos de ejemplo**: cuatro capturas por jugador de CS2 (hace 40, 26, 12 y 1 días), sacadas de sus partidas de
+  ejemplo y sus rondas, con su propio código (`carga/CapturasDemo.java`) al final de `DemoSeeder`: no cambia ningún
+  otro número.
+- Endpoints nuevos: `GET /api/capturas/campos`; `GET` y `POST /api/jugadores/{slug}/capturas` (multipart: `datos` en
+  JSON e `imagen`), `POST /capturas/leer`, `GET /capturas/{id}/imagen`, `DELETE /capturas/{id}` y
+  `GET /capturas/comparar?desde=&hasta=` (sin ellos, la primera con la última).
+- **Queda pendiente**: nadie comprueba que la captura sea de quien la sube (no hay login, como en todo lo demás: P5);
+  avisar de que toca subir otra si la última tiene más de un mes; leer otras páginas de csstats (armas, mapas
+  completos); y que el Duende compare lo de csstats con lo de FACEIT (son partidas distintas, cada una por su lado).
 
 ---
 

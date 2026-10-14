@@ -8,9 +8,10 @@ manda las demos de CS2 al trabajador de análisis y guarda lo que devuelve (P12)
 - `frontend/` — Angular 21 (standalone, signals, sin zone.js). Textos en `src/app/core/textos.ts` (ES y EN).
 - `api/` — Java 21, Spring Boot 4.1, JPA, Flyway. H2 en local con datos de ejemplo; Postgres con el perfil `postgres`.
 - `duende/` — Python, FastAPI. Recomendaciones por reglas (`app/insights.py`) y chat con Gemini o, sin clave, con reglas.
+  También lee con Gemini las capturas de csstats que se suben en la web (`app/lectura.py`, P13).
 - `analisis/` — Python, FastAPI, demoparser2. Lee una demo de CS2 y devuelve cada ronda de los del equipo; no guarda nada.
 
-**Hoja de ruta**: `docs/propuestas.md` (P1–P12) — lo siguiente que hay que construir para dar mejores datos al Duende.
+**Hoja de ruta**: `docs/propuestas.md` (P1–P13) — lo siguiente que hay que construir para dar mejores datos al Duende.
 Al terminar una propuesta, marcarla allí (con lo aprendido) y anotar la entrega en `CHANGELOG.md`. Queda P5.
 
 ## Comandos
@@ -58,6 +59,12 @@ funciona con la API arrancada).
   (sin probar con una demo real: si una columna se llama de otra forma, se arregla ahí). La API calcula lo demás
   (`stats/Rondas.java`). `muertes_mapa` guarda dónde murió la gente sin decir quién ni en qué partida; que siga así. El
   Duende solo juzga de las demos lo que FACEIT no da (`METRICAS_DEMO`); el ADR, la utilidad y las entradas, no.
+- Capturas de csstats (P13): las claves de `CAMPOS` en `stats/Capturas.java` ↔ `DESCRIPCIONES` en
+  `duende/app/lectura.py` (hay test que lo vigila) ↔ `capt.campo.*` en `textos.ts`. Lo que lee Gemini nunca se guarda
+  sin pasar por el formulario de la web, y la fecha es la de carga (la pone la API). Las capturas de ejemplo
+  (`CapturasDemo`) van al final de `DemoSeeder`, como las rondas.
+- Gemini, lo más barato: `gemini-2.5-flash-lite` sin razonar (`_sin_razonar` en `gemini.py`), de respaldo
+  `gemini-2.5-flash` (nada de Pro) y 50 llamadas al día. Las claves, solo en el `.env` local: nunca en el repositorio.
 - `DemoSeeder` es determinista (semilla fija, horas en la zona del equipo): tocarlo cambia todos los números de ejemplo
   y lo que dice el Duende. `ApiTest` comprueba que sigan saliendo los patrones (tilt, hora buena, rachas, compañeros).
   Las muestras de otros jugadores (P8) y las rondas de las demos (P12, `RondasDemo`) van al final y con su propio

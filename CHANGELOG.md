@@ -1,7 +1,61 @@
 # Registro de cambios
 
 Lo que se ha entregado, de lo más reciente a lo más antiguo. Lo que falta por hacer está en
-[docs/propuestas.md](docs/propuestas.md) (P1–P12); al terminar una propuesta se marca allí y se anota aquí.
+[docs/propuestas.md](docs/propuestas.md) (P1–P13); al terminar una propuesta se marca allí y se anota aquí.
+
+## 2026-10-14 · P13: capturas de csstats y evolución por fechas
+
+Commit `98ac74b`. csstats.gg no tiene API, pero su perfil lo dice casi todo: con una captura de pantalla subida de vez en
+cuando, la web guarda los números con la fecha de carga y enseña cómo cambia cada uno entre dos fechas.
+
+**Qué se nota**
+- En el perfil de CS2, la pestaña **Evolución**: se elige la captura (o se pega con Ctrl+V), Gemini lee los números y
+  se revisan en un formulario antes de guardar (sin Gemini, se escriben a mano). Se guarda con la fecha de carga y la
+  imagen.
+- Una **gráfica** de cualquier número a lo largo de las capturas y un **comparador** entre dos fechas: cada número
+  antes y después (lo que mejora en verde, lo que empeora en rojo) y **lo que se jugó entre medias**, sacado de la
+  diferencia de los totales: partidas, ganadas y perdidas, winrate, K/D, % HS, ADR, kills por partida y 1v1 ganados.
+- El Duende lo tiene en cuenta: "Vas a más desde el 4 de octubre. En las 24 partidas desde tu captura del 4 de octubre:
+  K/D 0,72; antes llevabas 0,60" (o "Bajón desde…"). En el chat, "¿He mejorado desde la última captura?".
+- Quien tiene cuenta de CS2 pero aún no tiene partidas guardadas también puede subir sus capturas.
+
+**Coste de Gemini, a lo mínimo** (también para el chat)
+- Modelo `gemini-2.5-flash-lite` por defecto y, de respaldo, `gemini-2.5-flash` (antes `gemini-2.5-flash` y
+  `gemini-2.5-pro`), **sin razonamiento** (`thinking_budget=0` en los que no son Pro: pensar se paga como respuesta).
+- `DUENDE_DAILY_LIMIT` 200 → **50** (cada lectura de una captura cuenta) y `DUENDE_MAX_CONSULTAS` 4 → **2**.
+- La clave de Gemini va solo en el `.env` local, que git ignora.
+
+**Cambios por servicio**
+- **Base de datos**: migración `V8__capturas.sql` (tablas `capturas`, `capturas_mapas` y `capturas_imagenes`). Flyway
+  la aplica sola.
+- **API**: `stats/Capturas` (los 39 campos, la limpieza de lo leído, la comparación y el tramo; funciones puras),
+  `CapturasServicio`, `CapturasController` (`GET /api/capturas/campos`; en `/api/jugadores/{slug}/capturas`: listar,
+  `leer`, guardar en multipart, la imagen, borrar y `comparar`), errores 413 y 400 para imágenes demasiado grandes o
+  que faltan (`spring.servlet.multipart`, 8 MB) y la evolución en lo que se manda al Duende. `DemoSeeder` añade cuatro
+  capturas por jugador de CS2 (`CapturasDemo`, sin cambiar ningún otro número).
+- **Contrato compartido**: `Evolucion` (con `FilaEvolucion` y `Tramo`) en `PeticionInsights` y `JuegoContexto` (API →
+  Duende); `PeticionLectura` y `RespuestaLectura` (API ↔ Duende); las vistas de las capturas (API → web).
+- **Duende**: `lectura.py` y `POST /v1/capturas/leer` (`gemini.leer_imagen`, con salida en JSON), reglas
+  `evolucion_mejora` y `evolucion_baja` en `insights.py`, la intención `evolucion` en el chat y el prompt de Gemini.
+  Modelo, respaldo, límites y `_sin_razonar` en `config.py` y `gemini.py`.
+- **Web**: pestaña Evolución (`panel-evolucion.ts`), sus llamadas en `api.ts` y sus textos en los dos idiomas.
+- **Docker** y `.env.example`: los valores nuevos de Gemini.
+
+**Tests**: Duende 136 → 149, API 92 → 101, web 35 → 40, análisis 21; todos en verde.
+- Duende: la lectura (sin clave, con números y mapas, una imagen que no vale, Gemini que falla, el límite diario), el
+  endpoint, que haya descripción para cada campo de la API, las reglas de la evolución (mejor, peor y en inglés, pocas
+  partidas) y el chat.
+- API: la limpieza de los números y los mapas, la comparación y el tramo (también sin partidas nuevas o con totales que
+  bajan), la captura de referencia y, contra H2, subir, leer, guardar, ver la imagen, comparar y borrar, la validación
+  (algo que no es una imagen, sin números, sin datos, un jugador que no existe), la lectura sin Duende y lo que recibe
+  el Duende.
+- Web: subir una captura leída por Gemini y guardarla con lo corregido a mano, sin clave, una imagen que no vale, la
+  gráfica, el comparador y la lista; y el panel para quien aún no tiene partidas.
+
+**Para actualizar una instalación**: `./mvnw package -DskipTests` y arrancar (Flyway crea las tablas). Para que Gemini
+lea las capturas, `GOOGLE_API_KEY` en el `.env` (y `--env-file ../.env` al arrancar el Duende). Si el `.env` tenía
+`GEMINI_MODEL`, `GEMINI_FALLBACK_MODELS`, `DUENDE_DAILY_LIMIT` o `DUENDE_MAX_CONSULTAS` con los valores de antes, ponerles
+los nuevos.
 
 ## 2026-10-11 · Sin la API de descargas de FACEIT (de pago)
 
