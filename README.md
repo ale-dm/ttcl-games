@@ -328,3 +328,7 @@ duende/app/    insights (reglas), chat, reglas del chat, Gemini, lectura de capt
 analisis/app/  lectura de demos (demoparser2), rondas (cuentas puras), descarga y carpeta de demos
 config/        equipo.example.json
 ```
+
+## Colaboración
+
+Para contribuir al desarrollo de TTCL Games, consulta la [Guía de colaboración (CONTRIBUTING.md)](CONTRIBUTING.md), donde se detallan los requisitos de entorno, la ejecución de pruebas y las normas de arquitectura.
