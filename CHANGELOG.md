@@ -41,7 +41,7 @@ cuando, la web guarda los números con la fecha de carga y enseña cómo cambia 
 - **Web**: pestaña Evolución (`panel-evolucion.ts`), sus llamadas en `api.ts` y sus textos en los dos idiomas.
 - **Docker** y `.env.example`: los valores nuevos de Gemini.
 
-**Tests**: Duende 136 → 149, API 92 → 101, web 35 → 40, análisis 21; todos en verde.
+**Tests**: Duende 136 → 149, API 92 → 101, web 35 → 45, análisis 21; todos en verde.
 - Duende: la lectura (sin clave, con números y mapas, una imagen que no vale, Gemini que falla, el límite diario), el
   endpoint, que haya descripción para cada campo de la API, las reglas de la evolución (mejor, peor y en inglés, pocas
   partidas) y el chat.
@@ -49,8 +49,9 @@ cuando, la web guarda los números con la fecha de carga y enseña cómo cambia 
   bajan), la captura de referencia y, contra H2, subir, leer, guardar, ver la imagen, comparar y borrar, la validación
   (algo que no es una imagen, sin números, sin datos, un jugador que no existe), la lectura sin Duende y lo que recibe
   el Duende.
-- Web: subir una captura leída por Gemini y guardarla con lo corregido a mano, sin clave, una imagen que no vale, la
-  gráfica, el comparador y la lista; y el panel para quien aún no tiene partidas.
+- Web: subir una captura leída por Gemini y guardarla con lo corregido a mano, sin clave, una imagen que no vale,
+  pegarla con Ctrl+V (y no pegar texto), la gráfica y su métrica, el comparador con sus dos fechas, la lista con la
+  imagen y el borrado con confirmación; y el panel para quien aún no tiene partidas.
 
 **Para actualizar una instalación**: `./mvnw package -DskipTests` y arrancar (Flyway crea las tablas). Para que Gemini
 lea las capturas, `GOOGLE_API_KEY` en el `.env` (y `--env-file ../.env` al arrancar el Duende). Si el `.env` tenía
