@@ -596,6 +596,31 @@ ESPECIALES: dict[str, dict[Idioma, T]] = {
             "consejo": "If you can't full-buy, save properly: a lost force buy leaves you with nothing for two rounds.",
         },
     },
+    # ─── Capturas de csstats (P13) ──
+    "evolucion_mejora": {
+        "es": {
+            "titulo": "Vas a más desde el {fecha}",
+            "frase": "En las {partidas} partidas desde tu captura del {fecha}: {metrica} {tramo}; antes llevabas {antes}.",
+            "consejo": "Lo que hayas cambiado funciona. Sube otra captura dentro de unas semanas y lo volvemos a mirar.",
+        },
+        "en": {
+            "titulo": "You're improving since {fecha}",
+            "frase": "In the {partidas} matches since your {fecha} snapshot: {metrica} {tramo}; before, you were at {antes}.",
+            "consejo": "Whatever you changed is working. Upload another snapshot in a few weeks and we'll check again.",
+        },
+    },
+    "evolucion_baja": {
+        "es": {
+            "titulo": "Bajón desde el {fecha}",
+            "frase": "En las {partidas} partidas desde tu captura del {fecha}: {metrica} {tramo}; antes llevabas {antes}.",
+            "consejo": "Algo ha cambiado desde entonces (rol, horas, sensibilidad, cansancio): vuelve a lo que te funcionaba.",
+        },
+        "en": {
+            "titulo": "A dip since {fecha}",
+            "frase": "In the {partidas} matches since your {fecha} snapshot: {metrica} {tramo}; before, you were at {antes}.",
+            "consejo": "Something changed since then (role, hours, sensitivity, fatigue): go back to what worked.",
+        },
+    },
     "desglose_bueno": {
         "es": {
             "titulo": "{clave} es tu casa",
@@ -650,6 +675,8 @@ FRASES: dict[Idioma, dict[str, str]] = {
         "de_lado": "De {lado}",
         "forzadas": "Forzadas",
         "completas": "Completas",
+        "desde_captura": "Desde el {fecha}",
+        "antes": "Antes",
     },
     "en": {
         "tu": "You",
@@ -682,6 +709,8 @@ FRASES: dict[Idioma, dict[str, str]] = {
         "de_lado": "On {lado}",
         "forzadas": "Force buys",
         "completas": "Full buys",
+        "desde_captura": "Since {fecha}",
+        "antes": "Before",
     },
 }
 

@@ -4,7 +4,7 @@ import logging
 
 from fastapi import FastAPI
 
-from . import chat
+from . import chat, lectura
 from .config import get_config
 from .informes import texto_informe, texto_semana
 from .insights import generar_insights
@@ -14,11 +14,13 @@ from .modelos import (
     PeticionInformes,
     PeticionInsights,
     PeticionInsightsLote,
+    PeticionLectura,
     PeticionSemana,
     RespuestaChat,
     RespuestaInformes,
     RespuestaInsights,
     RespuestaInsightsLote,
+    RespuestaLectura,
     RespuestaSemana,
     TextoInforme,
 )
@@ -67,3 +69,9 @@ def informes(peticion: PeticionInformes) -> RespuestaInformes:
 def semana(peticion: PeticionSemana) -> RespuestaSemana:
     """Lo que dice el Duende de la semana (P11): el mejor y el peor de cada juego."""
     return RespuestaSemana(texto=texto_semana(peticion.juegos, peticion.lang))
+
+
+@app.post("/v1/capturas/leer", response_model=RespuestaLectura)
+def leer_captura(peticion: PeticionLectura) -> RespuestaLectura:
+    """Los números de una captura de csstats (P13), leídos con Gemini; sin Gemini, vacía y con el motivo."""
+    return lectura.leer(peticion)

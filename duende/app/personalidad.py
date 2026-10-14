@@ -59,7 +59,10 @@ _CABECERA_DATOS: dict[Idioma, str] = {
         "(% de sus muertes que un compañero vengó en menos de 5 segundos) y «flashPartida» (asistencias de flash por "
         "partida); «equipo» es la media del resto; «lados», CT y T; «economia», el % de rondas ganadas según la "
         "compra; «mapas», sus muertes por mapa y por zona («sinTrade»: sin que nadie le vengase). Con menos de 5 "
-        "partidas analizadas no saques conclusiones."
+        "partidas analizadas no saques conclusiones. «capturas» compara su última captura de su perfil de csstats con "
+        "otra de al menos 7 días antes: en «filas», cada número antes y después; en «tramo», cómo jugó entre medias "
+        "(partidas, winrate, K/D, HS, ADR... sacados de la diferencia de los totales). Úsalo si preguntan si han "
+        "mejorado; con menos de 10 partidas en el tramo, di que aún es pronto."
     ),
     "en": (
         "Available data (JSON). 'foco' are the players this conversation is about; 'equipo' is the whole group. "
@@ -88,7 +91,11 @@ _CABECERA_DATOS: dict[Idioma, str] = {
         "'tradesPartida' (times per match they avenge a teammate), 'tradeadasPct' (% of their deaths a teammate "
         "avenged within 5 seconds) and 'flashPartida' (flash assists per match); 'equipo' is the rest of the team's "
         "average; 'lados', CT and T; 'economia', the % of rounds won by buy type; 'mapas', their deaths per map and "
-        "zone ('sinTrade': with no one avenging them). With fewer than 5 analysed matches, draw no conclusions."
+        "zone ('sinTrade': with no one avenging them). With fewer than 5 analysed matches, draw no conclusions. "
+        "'capturas' compares their latest csstats profile snapshot with one at least 7 days older: in 'filas', each "
+        "number before and after; in 'tramo', how they played in between (matches, win rate, K/D, HS, ADR... from the "
+        "difference in totals). Use it when they ask if they've improved; with fewer than 10 matches in between, say "
+        "it's too early to tell."
     ),
 }
 

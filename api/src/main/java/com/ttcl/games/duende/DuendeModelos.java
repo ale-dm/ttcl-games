@@ -2,6 +2,8 @@ package com.ttcl.games.duende;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.ttcl.games.juego.Juego;
+import com.ttcl.games.stats.Capturas.Evolucion;
+import com.ttcl.games.stats.Capturas.MapaLeido;
 import com.ttcl.games.stats.Modelos.ComparativaNivel;
 import com.ttcl.games.stats.Modelos.FilaDesglose;
 import com.ttcl.games.stats.Modelos.Hecho;
@@ -15,6 +17,7 @@ import com.ttcl.games.stats.Modelos.Sesiones;
 import com.ttcl.games.stats.Modelos.Sinergias;
 import com.ttcl.games.stats.Periodo;
 import java.util.List;
+import java.util.Map;
 
 /** Contrato con el servicio Python del Duende (duende/app/modelos.py). Mismos nombres de campo, en camelCase. */
 public final class DuendeModelos {
@@ -52,6 +55,8 @@ public final class DuendeModelos {
      *     Duende compara con lo normal en su nivel en vez de con las referencias fijas
      * @param demos lo que dicen las rondas de sus demos analizadas (P12: KAST, trades, aperturas, CT y T, economía,
      *     dónde muere), o null si no tiene ninguna (o no es CS2)
+     * @param capturas su última captura de csstats comparada con una de al menos 7 días antes (P13), o null si tiene
+     *     menos de dos
      */
     public record PeticionInsights(
             String lang,
@@ -66,7 +71,8 @@ public final class DuendeModelos {
             Sesiones sesiones,
             List<SeguimientoConsejo> seguimiento,
             ComparativaNivel nivel,
-            ResumenDemos demos) {}
+            ResumenDemos demos,
+            Evolucion capturas) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record RespuestaInsights(List<Insight> insights) {}
@@ -89,11 +95,12 @@ public final class DuendeModelos {
      * @param seguimiento cómo han ido los consejos que se le dieron ("¿ha funcionado lo que me dijiste?")
      * @param nivel cómo queda frente a jugadores de su nivel de FACEIT ("¿cómo voy para mi nivel?"), o null
      * @param demos lo que dicen las rondas de sus demos analizadas ("¿dónde muero?", "¿cómo voy de CT?"), o null
+     * @param capturas cómo ha ido entre sus capturas de csstats ("¿he mejorado?"), o null
      */
     public record JuegoContexto(
             Juego juego, String rol, ResumenJuego resumen, ResumenJuego reciente, MediasEquipo equipo,
             List<FilaDesglose> desglose, Sinergias sinergias, Sesiones sesiones, List<ResumenPeriodo> periodos,
-            List<SeguimientoConsejo> seguimiento, ComparativaNivel nivel, ResumenDemos demos) {}
+            List<SeguimientoConsejo> seguimiento, ComparativaNivel nivel, ResumenDemos demos, Evolucion capturas) {}
 
     public record JugadorContexto(String slug, String nombre, List<JuegoContexto> juegos) {}
 
@@ -138,4 +145,23 @@ public final class DuendeModelos {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record RespuestaSemana(String texto) {}
+
+    /**
+     * Una captura para que el Duende la lea con Gemini (P13).
+     *
+     * @param imagen la imagen en base64
+     * @param tipo image/png, image/jpeg o image/webp
+     * @param campos las claves que se quieren (las de {@code Capturas.CAMPOS})
+     */
+    public record PeticionLectura(String imagen, String tipo, List<String> campos) {}
+
+    /**
+     * Lo que leyó el Duende de una captura.
+     *
+     * @param origen "gemini" o "ninguno" (sin clave, sin cuota o si Gemini falla: se rellena a mano)
+     * @param motivo por qué no se leyó: sin_clave, cuota, error... (null si se leyó)
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record RespuestaLectura(
+            String origen, String modelo, String motivo, Map<String, Double> campos, List<MapaLeido> mapas) {}
 }

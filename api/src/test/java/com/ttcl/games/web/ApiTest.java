@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.hasSize;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -25,11 +27,15 @@ import com.ttcl.games.duende.DuendeModelos.JuegoContexto;
 import com.ttcl.games.duende.DuendeModelos.JugadorContexto;
 import com.ttcl.games.duende.DuendeModelos.PeticionChat;
 import com.ttcl.games.duende.DuendeModelos.PeticionInsights;
+import com.ttcl.games.duende.DuendeModelos.PeticionLectura;
+import com.ttcl.games.duende.DuendeModelos.RespuestaLectura;
 import com.ttcl.games.duende.DuendeModelos.RespuestaChat;
 import com.ttcl.games.duende.DuendeModelos.Salud;
 import com.ttcl.games.duende.DuendeModelos.TextoInforme;
 import com.ttcl.games.duende.DuendeNoDisponibleException;
 import com.ttcl.games.juego.Juego;
+import com.ttcl.games.stats.Capturas.Evolucion;
+import com.ttcl.games.stats.Capturas.MapaLeido;
 import com.ttcl.games.stats.Modelos.ComparativaNivel;
 import com.ttcl.games.stats.Modelos.FilaMomento;
 import com.ttcl.games.stats.Modelos.FilaSinergia;
@@ -58,6 +64,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
@@ -102,6 +109,8 @@ class ApiTest {
         List<PeticionInsights> ultimoLote;
         List<ItemInforme> ultimosInformes;
         List<SemanaJuego> ultimaSemana;
+        RespuestaLectura lectura;
+        PeticionLectura ultimaLectura;
 
         DuendeFalso(TtclProperties props) {
             super(props);
@@ -156,6 +165,15 @@ class ApiTest {
         }
 
         @Override
+        public RespuestaLectura leerCaptura(PeticionLectura peticion) {
+            ultimaLectura = peticion;
+            if (fallo != null) {
+                throw fallo;
+            }
+            return lectura;
+        }
+
+        @Override
         public Optional<Salud> salud() {
             return Optional.empty();
         }
@@ -207,6 +225,8 @@ class ApiTest {
         duende.ultimoLote = null;
         duende.ultimosInformes = null;
         duende.ultimaSemana = null;
+        duende.lectura = null;
+        duende.ultimaLectura = null;
         discord.mensajes.clear();
         valoraciones.deleteAll();
     }
@@ -1110,5 +1130,141 @@ class ApiTest {
         assertThat(juegoDe(duende.ultimaChat, "j1", Juego.SMITE2).demos()).isNull();
         mvc.perform(get("/api/equipo?juego=cs2")).andExpect(status().isOk());
         assertThat(duende.ultimoLote).allSatisfy(p -> assertThat(p.demos()).isNotNull());
+    }
+
+    // ─── Capturas de csstats (P13) ──────────────────────────────────────────
+
+    /** Una imagen PNG de mentira: lo justo para que se reconozca por sus primeros bytes. */
+    private static final byte[] PNG = {
+        (byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 0, 0, 13, 'I', 'H', 'D', 'R', 0, 0, 0, 1
+    };
+
+    @Test
+    void lasCapturasDeEjemploSeComparanConLoQueSeJugoEntreMedias() throws Exception {
+        assertThat(json("/api/capturas/campos").get(0).get("clave").asString()).isEqualTo("rating");
+
+        // Cuatro capturas de Jugador 1, la primera primero, sin imagen; los totales solo suben.
+        JsonNode lista = json("/api/jugadores/j1/capturas");
+        assertThat(lista).hasSize(4);
+        assertThat(lista.get(0).get("imagen").asBoolean()).isFalse();
+        int primeras = lista.get(0).get("datos").get("partidas").asInt();
+        int ultimas = lista.get(3).get("datos").get("partidas").asInt();
+        assertThat(ultimas).isGreaterThan(primeras);
+
+        // Por defecto, la primera con la última; el tramo sale de la diferencia de los totales.
+        JsonNode e = json("/api/jugadores/j1/capturas/comparar");
+        assertThat(e.get("dias").asInt()).isBetween(38, 39); // 39 días (38 si entre medias se cambia la hora)
+        JsonNode tramo = e.get("tramo");
+        assertThat(tramo.get("partidas").asInt()).isEqualTo(ultimas - primeras);
+        double kills = lista.get(3).get("datos").get("kills").asDouble() - lista.get(0).get("datos").get("kills").asDouble();
+        double muertes = lista.get(3).get("datos").get("muertes").asDouble()
+                - lista.get(0).get("datos").get("muertes").asDouble();
+        assertThat(tramo.get("kd").asDouble()).isCloseTo(kills / muertes, org.assertj.core.data.Offset.offset(0.01));
+
+        // Dos en concreto (da igual el orden), una que no es suya, quien no tiene dos y SMITE 2.
+        long id1 = lista.get(1).get("id").asLong();
+        long id2 = lista.get(2).get("id").asLong();
+        assertThat(json("/api/jugadores/j1/capturas/comparar?desde=" + id2 + "&hasta=" + id1).get("desdeId").asLong())
+                .isEqualTo(id1);
+        long deOtro = json("/api/jugadores/j2/capturas").get(0).get("id").asLong();
+        mvc.perform(get("/api/jugadores/j1/capturas/comparar?desde=" + deOtro)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/jugadores/j4/capturas/comparar")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/jugadores/j4/capturas?juego=smite2")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void subirLeerGuardarYBorrarUnaCaptura() throws Exception {
+        Map<String, Double> leido = new LinkedHashMap<>();
+        leido.put("kd", 0.6);
+        leido.put("partidas", 344.0);
+        leido.put("winrate", 430.0); // mal leído
+        leido.put("inventado", 1.0);
+        duende.lectura = new RespuestaLectura("gemini", "gemini-2.5-flash", null, leido,
+                List.of(new MapaLeido("de_inferno", 109, null)));
+
+        // Leer: la API limpia lo que lee el Duende y no guarda nada.
+        mvc.perform(multipart("/api/jugadores/j2/capturas/leer")
+                        .file(new MockMultipartFile("imagen", "csstats.png", "image/png", PNG)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.origen").value("gemini"))
+                .andExpect(jsonPath("$.datos.kd").value(0.6))
+                .andExpect(jsonPath("$.datos.winrate").doesNotExist())
+                .andExpect(jsonPath("$.datos.inventado").doesNotExist())
+                .andExpect(jsonPath("$.mapas[0].mapa").value("de_inferno"));
+        assertThat(duende.ultimaLectura.tipo()).isEqualTo("image/png");
+        assertThat(duende.ultimaLectura.campos()).contains("rating", "clutch_1v1_ganados", "wingman_victorias");
+        int antes = json("/api/jugadores/j2/capturas").size();
+
+        // Guardar lo revisado, con la imagen y la fecha de ahora.
+        String datos = """
+                {"leidaPor": "gemini", "datos": {"kd": 0.6, "partidas": 344, "rating": 0.74},
+                 "mapas": [{"mapa": "de_inferno", "partidas": 109}]}
+                """;
+        String cuerpo = mvc.perform(multipart("/api/jugadores/j2/capturas")
+                        .file(new MockMultipartFile("datos", "", "application/json", datos.getBytes(StandardCharsets.UTF_8)))
+                        .file(new MockMultipartFile("imagen", "csstats.png", "image/png", PNG)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.leidaPor").value("gemini"))
+                .andExpect(jsonPath("$.fuente").value("csstats"))
+                .andExpect(jsonPath("$.imagen").value(true))
+                .andExpect(jsonPath("$.datos.partidas").value(344.0))
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        long id = JsonMapper.builder().build().readTree(cuerpo).get("id").asLong();
+        assertThat(Instant.parse(JsonMapper.builder().build().readTree(cuerpo).get("cargadaEn").asString()))
+                .isAfter(Instant.now().minusSeconds(60));
+        assertThat(json("/api/jugadores/j2/capturas")).hasSize(antes + 1);
+        byte[] imagen = mvc.perform(get("/api/jugadores/j2/capturas/" + id + "/imagen"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .contentType("image/png"))
+                .andReturn().getResponse().getContentAsByteArray();
+        assertThat(imagen).isEqualTo(PNG);
+
+        // Borrarla (de otro jugador, no).
+        mvc.perform(delete("/api/jugadores/j1/capturas/" + id)).andExpect(status().isNotFound());
+        mvc.perform(delete("/api/jugadores/j2/capturas/" + id)).andExpect(status().isNoContent());
+        assertThat(json("/api/jugadores/j2/capturas")).hasSize(antes);
+        mvc.perform(get("/api/jugadores/j2/capturas/" + id + "/imagen")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void lasCapturasValidanLaEntrada() throws Exception {
+        // Algo que no es una imagen, una captura sin números, sin datos y un jugador que no existe.
+        mvc.perform(multipart("/api/jugadores/j2/capturas/leer")
+                        .file(new MockMultipartFile("imagen", "x.png", "image/png", "no soy una imagen".getBytes())))
+                .andExpect(status().isBadRequest());
+        mvc.perform(multipart("/api/jugadores/j2/capturas")
+                        .file(new MockMultipartFile("datos", "", "application/json", "{\"datos\": {\"inventado\": 3}}".getBytes())))
+                .andExpect(status().isBadRequest());
+        mvc.perform(multipart("/api/jugadores/j2/capturas")).andExpect(status().isBadRequest());
+        mvc.perform(multipart("/api/jugadores/nadie/capturas/leer")
+                        .file(new MockMultipartFile("imagen", "c.png", "image/png", PNG)))
+                .andExpect(status().isNotFound());
+
+        // Sin Duende, la captura se lee vacía y se rellena a mano.
+        duende.fallo = new DuendeNoDisponibleException("caído", null);
+        mvc.perform(multipart("/api/jugadores/j2/capturas/leer")
+                        .file(new MockMultipartFile("imagen", "c.png", "image/png", PNG)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.origen").value("ninguno"))
+                .andExpect(jsonPath("$.motivo").value("duende"));
+    }
+
+    @Test
+    void elDuendeRecibeComoHaIdoEntreLasCapturas() throws Exception {
+        mvc.perform(get("/api/jugadores/j1/consejos?juego=cs2")).andExpect(status().isOk());
+        Evolucion e = duende.ultimaInsights.capturas();
+        // La última (hace 1 día) frente a la última con una semana más (hace 12 días).
+        assertThat(e.dias()).isBetween(10, 11);
+        assertThat(e.tramo().partidas()).isPositive();
+        mvc.perform(get("/api/jugadores/j4/consejos?juego=smite2")).andExpect(status().isOk());
+        assertThat(duende.ultimaInsights.capturas()).isNull();
+
+        duende.respuesta = new RespuestaChat("Hola", "reglas", null, "evolucion", List.of());
+        mvc.perform(post("/api/duende/chat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mensajes\": [{\"rol\": \"usuario\", \"texto\": \"¿He mejorado?\"}]}"))
+                .andExpect(status().isOk());
+        assertThat(juegoDe(duende.ultimaChat, "j3", Juego.CS2).capturas()).isNotNull();
     }
 }

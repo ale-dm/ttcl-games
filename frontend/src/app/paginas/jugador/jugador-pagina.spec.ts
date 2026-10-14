@@ -67,9 +67,19 @@ describe('JugadorPagina', () => {
     await pagina.whenStable();
     http.expectOne('/api/jugadores/j2').flush(BEA);
     await pagina.whenStable();
+    // Tiene cuenta de CS2: aunque no haya partidas, puede subir sus capturas de csstats (P13).
+    http.expectOne('/api/capturas/campos').flush([]);
+    http.expectOne('/api/jugadores/j2/capturas').flush([]);
+    await pagina.whenStable();
   });
 
   afterEach(() => http.verify());
+
+  it('sin partidas pero con cuenta de CS2, deja subir capturas de csstats', () => {
+    const el = pagina.nativeElement as HTMLElement;
+    expect(el.querySelector('.sin-partidas-evo app-panel-evolucion')).not.toBeNull();
+    expect(el.querySelector('.evo-vacio')!.textContent).toContain('Aún no hay ninguna captura de Bea.');
+  });
 
   const texto = (el: Element | null) => el?.textContent!.replace(/\s+/g, ' ').trim() ?? null;
   const cuentas = () =>

@@ -355,6 +355,82 @@ export interface CalorMapa {
   zonas: EtiquetaZona[];
 }
 
+// ─── Capturas de csstats (P13) ─────────────────────────────────────────────
+
+/** Un número que se guarda de cada captura: "total" si se acumula (partidas, kills…), "valor" si es del momento. */
+export interface CampoCaptura {
+  clave: string;
+  grupo: 'general' | 'totales' | 'clutch' | 'entradas' | 'rango';
+  tipo: 'total' | 'valor';
+  formato: FormatoValor;
+  mejor: 'alto' | 'bajo' | 'neutral';
+}
+
+/** Un mapa de la captura: sus partidas o su winrate, lo que se vea. */
+export interface MapaLeido {
+  mapa: string;
+  partidas: number | null;
+  winrate: number | null;
+}
+
+export interface CapturaVista {
+  id: number;
+  juego: Juego;
+  fuente: string;
+  cargadaEn: string;
+  leidaPor: 'gemini' | 'mano';
+  datos: Record<string, number>;
+  mapas: MapaLeido[];
+  /** Si se guardó la imagen (se pide aparte). */
+  imagen: boolean;
+}
+
+/** Lo leído de una captura antes de guardarla. `origen` "ninguno": se rellena a mano (`motivo` dice por qué). */
+export interface LecturaCaptura {
+  origen: 'gemini' | 'ninguno';
+  modelo: string | null;
+  motivo: string | null;
+  datos: Record<string, number>;
+  mapas: MapaLeido[];
+}
+
+export interface FilaEvolucion {
+  clave: string;
+  grupo: string;
+  tipo: 'total' | 'valor';
+  formato: FormatoValor;
+  antes: number | null;
+  despues: number | null;
+  diferencia: number | null;
+  /** 1 a mejor, -1 a peor, 0 igual o da igual. */
+  mejora: number;
+}
+
+/** Cómo jugó entre dos capturas, sacado de la diferencia de los totales. */
+export interface TramoCapturas {
+  partidas: number;
+  victorias: number | null;
+  derrotas: number | null;
+  empates: number | null;
+  winrate: number | null;
+  kd: number | null;
+  hsPct: number | null;
+  adr: number | null;
+  killsPartida: number | null;
+  asistenciasPartida: number | null;
+  clutch1v1: number | null;
+}
+
+export interface EvolucionCapturas {
+  desdeId: number;
+  desde: string;
+  hastaId: number;
+  hasta: string;
+  dias: number;
+  filas: FilaEvolucion[];
+  tramo: TramoCapturas | null;
+}
+
 /** Las rondas de una partida analizada, con su resumen. */
 export interface RondasPartida {
   partidaId: number;

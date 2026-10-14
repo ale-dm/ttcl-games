@@ -4,13 +4,18 @@ import { Observable } from 'rxjs';
 import {
   BusquedaVista,
   CalorMapa,
+  CampoCaptura,
+  CapturaVista,
   Comparacion,
   ConsejosVista,
   DetalleJuego,
   Estado,
+  EvolucionCapturas,
   GruposJuego,
   Juego,
   JugadorVista,
+  LecturaCaptura,
+  MapaLeido,
   MensajeChat,
   PaginaPartidas,
   Periodo,
@@ -108,6 +113,56 @@ export class Api {
   /** Lo que hizo en cada ronda de una partida con la demo analizada. */
   rondas(slug: string, partidaId: number): Observable<RondasPartida> {
     return this.http.get<RondasPartida>(`/api/jugadores/${encodeURIComponent(slug)}/partidas/${partidaId}/rondas`);
+  }
+
+  // ─── Capturas de csstats (P13) ───────────────────────────────────────────
+
+  /** Lo que se guarda de cada captura, en orden y con su grupo. */
+  camposCaptura(): Observable<CampoCaptura[]> {
+    return this.http.get<CampoCaptura[]>('/api/capturas/campos');
+  }
+
+  /** Sus capturas, la primera cargada primero. */
+  capturas(slug: string): Observable<CapturaVista[]> {
+    return this.http.get<CapturaVista[]>(`/api/jugadores/${encodeURIComponent(slug)}/capturas`);
+  }
+
+  /** Lee una captura (con Gemini, si hay clave) para revisarla. No guarda nada. */
+  leerCaptura(slug: string, imagen: Blob): Observable<LecturaCaptura> {
+    const datos = new FormData();
+    datos.append('imagen', imagen, 'captura');
+    return this.http.post<LecturaCaptura>(`/api/jugadores/${encodeURIComponent(slug)}/capturas/leer`, datos);
+  }
+
+  /** Guarda una captura revisada, con su imagen: la fecha la pone la API. */
+  guardarCaptura(
+    slug: string,
+    captura: { datos: Record<string, number>; mapas: MapaLeido[]; leidaPor: 'gemini' | 'mano' },
+    imagen: Blob | null,
+  ): Observable<CapturaVista> {
+    const datos = new FormData();
+    datos.append('datos', new Blob([JSON.stringify(captura)], { type: 'application/json' }));
+    if (imagen) datos.append('imagen', imagen, 'captura');
+    return this.http.post<CapturaVista>(`/api/jugadores/${encodeURIComponent(slug)}/capturas`, datos);
+  }
+
+  borrarCaptura(slug: string, id: number): Observable<void> {
+    return this.http.delete<void>(`/api/jugadores/${encodeURIComponent(slug)}/capturas/${id}`);
+  }
+
+  /** Dos capturas comparadas (sin decir cuáles, la primera y la última). */
+  compararCapturas(slug: string, desde: number | null, hasta: number | null): Observable<EvolucionCapturas> {
+    let params = new HttpParams();
+    if (desde !== null) params = params.set('desde', desde);
+    if (hasta !== null) params = params.set('hasta', hasta);
+    return this.http.get<EvolucionCapturas>(`/api/jugadores/${encodeURIComponent(slug)}/capturas/comparar`, {
+      params,
+    });
+  }
+
+  /** Dónde se ve la imagen de una captura. */
+  imagenCaptura(slug: string, id: number): string {
+    return `/api/jugadores/${encodeURIComponent(slug)}/capturas/${id}/imagen`;
   }
 
   grupos(juego: Juego | null): Observable<GruposJuego[]> {

@@ -7,11 +7,13 @@ import com.ttcl.games.duende.DuendeModelos.ItemLote;
 import com.ttcl.games.duende.DuendeModelos.PeticionChat;
 import com.ttcl.games.duende.DuendeModelos.PeticionInformes;
 import com.ttcl.games.duende.DuendeModelos.PeticionInsights;
+import com.ttcl.games.duende.DuendeModelos.PeticionLectura;
 import com.ttcl.games.duende.DuendeModelos.PeticionLote;
 import com.ttcl.games.duende.DuendeModelos.PeticionSemana;
 import com.ttcl.games.duende.DuendeModelos.RespuestaChat;
 import com.ttcl.games.duende.DuendeModelos.RespuestaInformes;
 import com.ttcl.games.duende.DuendeModelos.RespuestaInsights;
+import com.ttcl.games.duende.DuendeModelos.RespuestaLectura;
 import com.ttcl.games.duende.DuendeModelos.RespuestaLote;
 import com.ttcl.games.duende.DuendeModelos.RespuestaSemana;
 import com.ttcl.games.duende.DuendeModelos.Salud;
@@ -74,6 +76,11 @@ public class DuendeCliente {
     /** Lo que dice el Duende de la semana (P11). */
     public String semana(String lang, List<SemanaJuego> juegos) {
         return post("/v1/semana", new PeticionSemana(lang, juegos), RespuestaSemana.class).texto();
+    }
+
+    /** Lo que lee el Duende (con Gemini) de una captura de csstats (P13). */
+    public RespuestaLectura leerCaptura(PeticionLectura peticion) {
+        return post("/v1/capturas/leer", peticion, RespuestaLectura.class);
     }
 
     /** Estado del servicio, o vacío si no responde en 2 s. */

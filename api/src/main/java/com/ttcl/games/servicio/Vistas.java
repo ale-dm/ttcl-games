@@ -3,6 +3,7 @@ package com.ttcl.games.servicio;
 import com.ttcl.games.duende.DuendeModelos.Insight;
 import com.ttcl.games.duende.DuendeModelos.JugadorRef;
 import com.ttcl.games.juego.Juego;
+import com.ttcl.games.stats.Capturas.MapaLeido;
 import com.ttcl.games.stats.Modelos.FilaComparacion;
 import com.ttcl.games.stats.Modelos.FilaDesglose;
 import com.ttcl.games.stats.Modelos.FilaRonda;
@@ -157,4 +158,23 @@ public final class Vistas {
     public record ResumenValoraciones(
             int positivos, int negativos, List<GrupoValoraciones> consejos, List<GrupoValoraciones> respuestas,
             List<ValoracionVista> negativas) {}
+
+    /**
+     * Una captura de csstats guardada (P13).
+     *
+     * @param leidaPor "gemini" (y se revisó antes de guardar) o "mano"
+     * @param imagen si se guardó la imagen (se pide aparte)
+     */
+    public record CapturaVista(
+            long id, Juego juego, String fuente, Instant cargadaEn, String leidaPor, Map<String, Double> datos,
+            List<MapaLeido> mapas, boolean imagen) {}
+
+    /**
+     * Lo que se ha leído de una captura antes de guardarla, para revisarlo.
+     *
+     * @param origen "gemini" o "ninguno" (entonces se rellena a mano)
+     * @param motivo por qué no se leyó (sin_clave, cuota, error, duende...), o null
+     */
+    public record LecturaCaptura(
+            String origen, String modelo, String motivo, Map<String, Double> datos, List<MapaLeido> mapas) {}
 }

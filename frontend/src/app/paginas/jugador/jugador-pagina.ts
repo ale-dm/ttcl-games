@@ -16,9 +16,10 @@ import { TituloTraducido } from '../../core/titulo';
 import { DuendeEstado } from '../../duende/duende-estado';
 import { PanelConsejos } from '../../duende/panel-consejos';
 import { PanelDemos } from './panel-demos';
+import { PanelEvolucion } from './panel-evolucion';
 import { TablaPartidas } from './tabla-partidas';
 
-type Pestana = 'resumen' | 'partidas' | 'desglose' | 'demos';
+type Pestana = 'resumen' | 'partidas' | 'desglose' | 'demos' | 'evolucion';
 const POR_PAGINA = 15;
 /** Con menos partidas, el desglose no marca mejor ni peor. */
 const MIN_DESGLOSE = 3;
@@ -34,6 +35,7 @@ const MIN_DESGLOSE = 3;
     MarcaDuende,
     PanelConsejos,
     PanelDemos,
+    PanelEvolucion,
     SelectorPeriodo,
     TablaPartidas,
   ],
@@ -62,6 +64,8 @@ export class JugadorPagina {
   );
 
   protected readonly juegos = computed<Juego[]>(() => this.perfil.estado().datos?.resumenes.map((r) => r.juego) ?? []);
+  /** Si tiene cuenta de CS2: sus capturas de csstats (P13) se pueden subir aunque aún no haya partidas guardadas. */
+  protected readonly tieneCs2 = computed(() => this.perfil.estado().datos?.cuentas.some((c) => c.juego === 'cs2') ?? false);
   protected readonly juegoActivo = computed<Juego | null>(() => {
     const disponibles = this.juegos();
     const pedido = this.juego();
@@ -69,8 +73,8 @@ export class JugadorPagina {
   });
   protected readonly pestana = computed<Pestana>(() => {
     const t = this.tab();
-    // Las demos solo son de CS2.
-    if (t === 'demos') return this.juegoActivo() === 'cs2' ? 'demos' : 'resumen';
+    // Las demos y las capturas de csstats solo son de CS2.
+    if (t === 'demos' || t === 'evolucion') return this.juegoActivo() === 'cs2' ? t : 'resumen';
     return t === 'partidas' || t === 'desglose' ? t : 'resumen';
   });
 

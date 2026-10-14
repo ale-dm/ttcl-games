@@ -48,14 +48,15 @@ def _entero(nombre: str, defecto: int) -> int:
 def get_config() -> Config:
     return Config(
         google_api_key=os.environ.get("GOOGLE_API_KEY", "").strip(),
-        gemini_model=os.environ.get("GEMINI_MODEL", "gemini-2.5-flash").strip(),
+        # Lo más barato por defecto: flash-lite, y de respaldo (solo si ya no existe) flash. Nada de Pro.
+        gemini_model=os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite").strip(),
         gemini_fallback_models=tuple(
-            m.strip() for m in os.environ.get("GEMINI_FALLBACK_MODELS", "gemini-2.5-pro").split(",") if m.strip()
+            m.strip() for m in os.environ.get("GEMINI_FALLBACK_MODELS", "gemini-2.5-flash").split(",") if m.strip()
         ),
         gemini_timeout_ms=_entero("GEMINI_TIMEOUT_MS", 20000),
         max_tokens=_entero("DUENDE_MAX_TOKENS", 1024),
-        daily_limit=_entero("DUENDE_DAILY_LIMIT", 200),
+        daily_limit=_entero("DUENDE_DAILY_LIMIT", 50),
         api_url=os.environ.get("API_URL", "http://localhost:8080").strip().rstrip("/"),
         api_timeout_ms=_entero("API_TIMEOUT_MS", 5000),
-        max_consultas=_entero("DUENDE_MAX_CONSULTAS", 4),
+        max_consultas=_entero("DUENDE_MAX_CONSULTAS", 2),
     )

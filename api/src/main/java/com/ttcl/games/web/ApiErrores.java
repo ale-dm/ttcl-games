@@ -12,6 +12,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 /** Errores de la API como {@code {"error": "mensaje"}} con el código HTTP que toca. */
 @RestControllerAdvice
@@ -32,10 +34,17 @@ public class ApiErrores {
         IllegalArgumentException.class,
         MethodArgumentTypeMismatchException.class,
         MethodArgumentNotValidException.class,
-        HttpMessageNotReadableException.class
+        HttpMessageNotReadableException.class,
+        MissingServletRequestPartException.class
     })
     ResponseEntity<Map<String, String>> peticionMala(Exception e) {
         return error(HttpStatus.BAD_REQUEST, "Petición no válida.");
+    }
+
+    /** Una captura demasiado grande (P13). */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    ResponseEntity<Map<String, String>> demasiadoGrande(MaxUploadSizeExceededException e) {
+        return error(HttpStatus.CONTENT_TOO_LARGE, "La imagen es demasiado grande (como mucho 8 MB).");
     }
 
     @ExceptionHandler(DuendeNoDisponibleException.class)

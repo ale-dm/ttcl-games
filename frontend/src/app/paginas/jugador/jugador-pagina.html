@@ -59,6 +59,12 @@
 
     @if (!juegos().length) {
       <div class="aviso" style="margin-top: 24px">{{ t('jugador.sinPartidas', { nombre: p.nombre }) }}</div>
+      <!-- Sin partidas guardadas, sus capturas de csstats (P13) se pueden subir igual: no dependen de FACEIT. -->
+      @if (tieneCs2()) {
+        <div class="sin-partidas-evo">
+          <app-panel-evolucion [slug]="slug()" [nombre]="p.nombre" />
+        </div>
+      }
     } @else {
       @let j = juegoActivo()!;
       <!-- Pestañas y juego -->
@@ -75,6 +81,9 @@
         @if (j === 'cs2') {
           <button class="tab" role="tab" type="button" [class.on]="pestana() === 'demos'" (click)="irA({ tab: 'demos' })">
             {{ t('jugador.tabDemos') }}
+          </button>
+          <button class="tab" role="tab" type="button" [class.on]="pestana() === 'evolucion'" (click)="irA({ tab: 'evolucion' })">
+            {{ t('jugador.tabEvolucion') }}
           </button>
         }
         <div class="tabs-ctrl">
@@ -364,6 +373,11 @@
             } @else {
               <app-panel-demos [slug]="slug()" [periodo]="periodoActivo()" [datos]="dd.datos" />
             }
+          }
+
+          @case ('evolucion') {
+            <!-- ─── Capturas de csstats (P13) ─────────────────────────── -->
+            <app-panel-evolucion [slug]="slug()" [nombre]="p.nombre" />
           }
 
           @case ('desglose') {

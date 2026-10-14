@@ -130,7 +130,7 @@ describe('JugadorPagina · demos (P12)', () => {
   it('en el resumen, lo breve de sus demos y la pestaña para verlo todo', async () => {
     const { el } = await abrir(undefined, DEMOS);
     const tabs = [...el.querySelectorAll('.tab')].map((t) => t.textContent!.trim());
-    expect(tabs).toEqual(['Resumen', 'Partidas', 'Mapas', 'Demos']);
+    expect(tabs).toEqual(['Resumen', 'Partidas', 'Mapas', 'Demos', 'Evolución']);
     const breve = el.querySelector('.demos-breve')!;
     expect(texto(breve.querySelector('.card-t'))).toBe('Lo que dicen tus demos');
     expect([...breve.querySelectorAll('.stat .v')].map((v) => texto(v))).toEqual(['1,12', '74 %', '3,25', '21 %']);

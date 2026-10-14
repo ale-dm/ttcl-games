@@ -6,6 +6,7 @@ Es determinista y no necesita Gemini: compara cada métrica con la media del res
 largas, la mejor hora del día y si los consejos de antes han funcionado).
 Con demos de CS2 analizadas (P12), también lo que dicen sus rondas: rating, KAST, trades, asistencias de flash, la
 zona de cada mapa donde muere sin que le tradeen, el lado (CT o T) en el que rinde mucho menos y las rondas forzadas.
+Con capturas de csstats (P13), si desde una captura de hace días juega claramente mejor o peor que antes.
 Si se conoce el rol del jugador, cada métrica pesa lo que pide ese rol (metricas.AJUSTES_ROL).
 """
 
@@ -16,6 +17,7 @@ from .metricas import METRICAS, METRICAS_DEMO, NOMBRE_JUEGO, Metrica, MetricaDem
 from .metricas import metrica as metrica_de
 from .modelos import (
     Barra,
+    Evolucion,
     FilaMomento,
     FilaSinergia,
     Idioma,
@@ -61,6 +63,16 @@ DIFERENCIA_LADO_GRAVE = 0.4
 # Rondas forzadas: cuántas hacen falta y por debajo de qué % de rondas ganadas se avisa.
 MIN_RONDAS_FORZADA = 30
 FORZADAS_MALAS = 30
+# Capturas de csstats (P13): partidas entre las dos capturas para decir si juega mejor o peor que antes.
+MIN_PARTIDAS_TRAMO = 10
+# Lo que se mira del tramo frente a lo que llevaba antes (el número de la captura de entonces), por orden.
+METRICAS_TRAMO = (("kd", "kd"), ("adr", "adr"), ("hs_pct", "hs_pct"), ("winrate", "winrate"))
+MESES: dict[Idioma, list[str]] = {
+    "es": ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
+           "noviembre", "diciembre"],
+    "en": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+           "November", "December"],
+}
 
 ORDEN_NIVEL: dict[Nivel, int] = {"info": 0, "alto": 1, "medio": 2, "bien": 3}
 
@@ -742,6 +754,71 @@ def demos_destacadas(p: PeticionInsights) -> list[Insight]:
     return [c.insight for c in especiales + _por_metrica_demo(p, ocupadas)]
 
 
+# ─── Capturas de csstats (P13) ───────────────────────────────────────────────
+
+
+def fecha_corta(iso: str, lang: Idioma) -> str:
+    """"2026-10-04T20:30:00Z" → "4 de octubre" / "October 4". Si no se entiende, tal cual."""
+    try:
+        anio, mes, dia = (int(x) for x in iso[:10].split("-"))
+        nombre = MESES[lang][mes - 1]
+    except (ValueError, IndexError):
+        return iso
+    return f"{dia} de {nombre}" if lang == "es" else f"{nombre} {dia}"
+
+
+def cambio_tramo(e: Evolucion, juego: str) -> tuple[Metrica, float, float, float] | None:
+    """La métrica que más ha cambiado entre medias de las dos capturas frente a lo que llevaba antes: (métrica, en el
+    tramo, antes, desviación). None si no hay tramo o tiene pocas partidas."""
+    t = e.tramo
+    if not t or t.partidas < MIN_PARTIDAS_TRAMO:
+        return None
+    antes = {f.clave: f.antes for f in e.filas}
+    candidatos = []
+    for clave_tramo, clave in METRICAS_TRAMO:
+        m = metrica_de(juego, clave)
+        ahora = getattr(t, clave_tramo)
+        previo = antes.get(clave)
+        if m is None or ahora is None or previo is None:
+            continue
+        if (d := _desviacion(m, ahora, previo)) is not None:
+            candidatos.append((m, ahora, previo, d))
+    return max(candidatos, key=lambda x: abs(x[3]), default=None)
+
+
+def evolucion(p: PeticionInsights) -> Insight | None:
+    """Si desde su captura de csstats de hace días juega claramente mejor o peor que lo que llevaba (P13)."""
+    e = p.capturas
+    if not e or not (cambio := cambio_tramo(e, p.juego)):
+        return None
+    m, ahora, antes, d = cambio
+    if abs(d) < 0.1:
+        return None
+    lang = p.lang
+    fecha = fecha_corta(e.desde, lang)
+    regla, nivel = ("evolucion_mejora", "bien") if d > 0 else ("evolucion_baja", "alto" if d <= -0.2 else "medio")
+    assert e.tramo is not None
+    insight = _especial(
+        regla,
+        lang,
+        p.juego,
+        nivel,
+        fecha=fecha,
+        partidas=e.tramo.partidas,
+        metrica=m.nombre(lang),
+        tramo=formatear(ahora, m.formato, lang),
+        antes=formatear(antes, m.formato, lang),
+    )
+    f = FRASES[lang]
+    insight.metrica = m.clave
+    insight.formato = m.formato
+    insight.barras = [
+        Barra(etiqueta=f["desde_captura"].format(fecha=fecha), valor=round(ahora, 2), tuyo=True),
+        Barra(etiqueta=f["antes"], valor=round(antes, 2)),
+    ]
+    return insight
+
+
 def generar_insights(p: PeticionInsights) -> list[Insight]:
     """Recomendaciones ordenadas: aviso de muestra, debilidades graves, medias y, al final, lo que hace bien."""
     if p.resumen.partidas == 0:
@@ -762,6 +839,8 @@ def generar_insights(p: PeticionInsights) -> list[Insight]:
         + _sesiones(p)
         + _seguimiento(p)
         + _demos(p)
+        + [Candidato(e, 1 + abs(e.barras[0].valor - e.barras[1].valor) / max(abs(e.barras[1].valor), 1))
+           for e in [evolucion(p)] if e]
     )
     # Si una regla especial ya habla de una métrica (el winrate, un consejo que no ha funcionado, la zona donde muere
     # sin trade), la genérica sobra.

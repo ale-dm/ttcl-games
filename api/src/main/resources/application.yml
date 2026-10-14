@@ -10,6 +10,11 @@ spring:
     url: jdbc:h2:mem:ttcl;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
     username: sa
     password: ""
+  # Capturas de csstats (P13): como mucho 8 MB cada imagen.
+  servlet:
+    multipart:
+      max-file-size: 8MB
+      max-request-size: 10MB
   jpa:
     open-in-view: false
     hibernate:

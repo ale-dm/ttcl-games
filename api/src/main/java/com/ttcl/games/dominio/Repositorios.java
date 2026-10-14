@@ -104,6 +104,17 @@ public final class Repositorios {
         List<MuerteMapa> findByMapa(String mapa);
     }
 
+    public interface CapturaRepo extends JpaRepository<Captura, Long> {
+        /** Las de un jugador en un juego, la primera cargada primero (P13). */
+        List<Captura> findByJugadorAndJuegoOrderByCargadaEnAscIdAsc(Jugador jugador, Juego juego);
+
+        /** Todas las de un juego con su jugador, para el contexto del Duende. */
+        @Query("select c from Captura c join fetch c.jugador where c.juego = ?1 order by c.cargadaEn, c.id")
+        List<Captura> findDeJuego(Juego juego);
+    }
+
+    public interface CapturaImagenRepo extends JpaRepository<CapturaImagen, Long> {}
+
     public interface ValoracionRepo extends JpaRepository<Valoracion, Long> {
         /** Todas, con su jugador si lo hay, la más reciente primero (para el resumen, en memoria). */
         @Query("select v from Valoracion v left join fetch v.jugador order by v.votadaEn desc, v.id desc")

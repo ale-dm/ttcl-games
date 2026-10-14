@@ -214,6 +214,75 @@ class ResumenDemos(Base):
     mapas: list[MapaMuertes] = Field(default_factory=list)
 
 
+# ─── Capturas de csstats (P13) ───────────────────────────────────────────────
+
+
+class FilaEvolucion(Base):
+    """Un número de dos capturas de csstats: antes, después y la diferencia. «tipo» es "total" (se acumula: partidas,
+    kills...) o "valor" (lo del momento: K/D, rating...); «mejora», 1 si ha ido a mejor, -1 si a peor y 0 si da igual."""
+
+    clave: str
+    grupo: str = ""
+    tipo: str = "valor"
+    formato: Formato = "dec"
+    antes: float | None = None
+    despues: float | None = None
+    diferencia: float | None = None
+    mejora: int = 0
+
+
+class Tramo(Base):
+    """Cómo jugó entre dos capturas, sacado de la diferencia de los totales (lo calcula la API)."""
+
+    partidas: int
+    victorias: int | None = None
+    derrotas: int | None = None
+    empates: int | None = None
+    winrate: float | None = None
+    kd: float | None = None
+    hs_pct: float | None = None
+    adr: float | None = None
+    kills_partida: float | None = None
+    asistencias_partida: float | None = None
+    clutch1v1: float | None = None
+
+
+class Evolucion(Base):
+    """Dos capturas de csstats comparadas: la última y otra de al menos 7 días antes (o la primera)."""
+
+    desde_id: int = 0
+    desde: str
+    hasta_id: int = 0
+    hasta: str
+    dias: int = 0
+    filas: list[FilaEvolucion] = Field(default_factory=list)
+    tramo: Tramo | None = None
+
+
+class MapaLeido(Base):
+    mapa: str
+    partidas: int | None = None
+    winrate: float | None = None
+
+
+class PeticionLectura(Base):
+    """Una captura para leer con Gemini: la imagen en base64, su tipo y las claves que se quieren."""
+
+    imagen: str = Field(min_length=1, max_length=12_000_000)
+    tipo: str
+    campos: list[str] = Field(default_factory=list, max_length=80)
+
+
+class RespuestaLectura(Base):
+    # "gemini" o "ninguno" (sin clave, sin cuota o si falla: se rellena a mano en la web).
+    origen: Literal["gemini", "ninguno"]
+    modelo: str | None = None
+    # Por qué no se leyó: sin_clave, cuota, imagen, bloqueado, timeout, vacio, error...
+    motivo: str | None = None
+    campos: dict[str, float] = Field(default_factory=dict)
+    mapas: list[MapaLeido] = Field(default_factory=list)
+
+
 class ResumenPeriodo(Base):
     """Resumen de los últimos días (7 o 30), con la media del resto del equipo en esos mismos días."""
 
@@ -262,6 +331,8 @@ class PeticionInsights(Base):
     nivel: ComparativaNivel | None = None
     # Lo que dicen las rondas de sus demos de CS2 analizadas (P12), si tiene alguna.
     demos: ResumenDemos | None = None
+    # Su última captura de csstats comparada con una de al menos 7 días antes (P13), si tiene dos o más.
+    capturas: Evolucion | None = None
 
 
 class RespuestaInsights(Base):
@@ -367,6 +438,7 @@ class JuegoContexto(Base):
     seguimiento: list[SeguimientoConsejo] = Field(default_factory=list)
     nivel: ComparativaNivel | None = None
     demos: ResumenDemos | None = None
+    capturas: Evolucion | None = None
 
 
 class JugadorContexto(Base):

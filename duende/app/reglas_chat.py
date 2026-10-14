@@ -17,6 +17,8 @@ from .insights import (
     companeros_destacados,
     demos_destacadas,
     efecto,
+    evolucion,
+    fecha_corta,
     generar_insights,
     seguimiento_destacado,
     sesiones_destacadas,
@@ -37,8 +39,14 @@ from .modelos import (
 from .textos import NOMBRES_MOMENTO, NOMBRES_ROL
 
 Intencion = Literal[
-    "hola", "seguimiento", "companeros", "sesiones", "demos", "nivel", "ranking", "comparar", "racha", "desglose",
-    "fuerte", "mejorar", "stats", "ayuda",
+    "hola", "seguimiento", "evolucion", "companeros", "sesiones", "demos", "nivel", "ranking", "comparar", "racha",
+    "desglose", "fuerte", "mejorar", "stats", "ayuda",
+]
+
+# Lo de las capturas de csstats (P13): "¿he mejorado?", "¿cómo he evolucionado?".
+PALABRAS_EVOLUCION = [
+    "evoluci", "he mejorado", "has mejorado", "ha mejorado", "hemos mejorado", "progres", "captura", "csstats",
+    "desde la ultima", "improved", "improving", "progress", "screenshot", "snapshot",
 ]
 
 # Lo que solo sale de las demos (P12): las rondas, CT y T, la economía, dónde muere.
@@ -89,6 +97,9 @@ def detectar_intencion(pregunta: str, num_foco: int) -> Intencion:
          "has it worked", "is it working", "your advice", "you told me", "your tips"],
     ):
         return "seguimiento"
+    # Antes que "mejor" (mejorar): "¿he mejorado desde la última captura?" va de las capturas de csstats.
+    if _contiene(t, PALABRAS_EVOLUCION):
+        return "evolucion"
     # Antes que "quién" (ranking y comparar): "¿con quién juego mejor?" va de compañeros.
     if _contiene(t, ["con quien", "companer", "duo", "trio", "sinergi", "synerg", "teammate", "partner"]) or re.search(
         r"\bwho\b.*\bwith\b", t
@@ -185,6 +196,7 @@ def _peticion(j: JugadorContexto, g: JuegoContexto, lang: Idioma) -> PeticionIns
         seguimiento=g.seguimiento,
         nivel=g.nivel,
         demos=g.demos,
+        capturas=g.capturas,
     )
 
 
@@ -651,6 +663,59 @@ def _demos(f: Foco, lang: Idioma) -> str:
     return texto
 
 
+def _evolucion(f: Foco, lang: Idioma) -> str:
+    """Cómo ha ido entre sus dos capturas de csstats (P13): lo que jugó entre medias y cómo cambian sus números."""
+    nombre, e = f.jugador.nombre, f.juego.capturas
+    if f.juego.juego != "cs2":
+        return _t(lang, "Las capturas de csstats son de CS2.", "csstats snapshots are for CS2.")
+    if not e:
+        return _t(
+            lang,
+            f"Aún no hay dos capturas de csstats de {nombre}. Sube una en la pestaña Evolución de su perfil y otra "
+            "dentro de unos días, y te digo cómo ha ido entre medias.",
+            f"There aren't two csstats snapshots from {nombre} yet. Upload one in the Progress tab of their profile and "
+            "another a few days later, and I'll tell you how it went in between.",
+        )
+    desde, hasta = fecha_corta(e.desde, lang), fecha_corta(e.hasta, lang)
+    texto = f"**{nombre} · " + _t(lang, f"del {desde} al {hasta}", f"{desde} to {hasta}") + "**"
+    t = e.tramo
+    antes = {fila.clave: fila for fila in e.filas}
+    lineas: list[str] = []
+    if t:
+        resultado = ""
+        if t.victorias is not None and t.derrotas is not None:
+            resultado = _t(lang, f" ({t.victorias} ganadas y {t.derrotas} perdidas)", f" ({t.victorias} won, {t.derrotas} lost)")
+        lineas.append(_t(lang, f"- Partidas entre medias: **{t.partidas}**", f"- Matches in between: **{t.partidas}**") + resultado)
+        for clave, valor in (("winrate", t.winrate), ("kd", t.kd), ("hs_pct", t.hs_pct), ("adr", t.adr)):
+            m = metrica("cs2", clave)
+            previo = antes.get(clave)
+            if m is None or valor is None:
+                continue
+            linea = f"- {m.nombre(lang)}: **{formatear(valor, m.formato, lang)}**"
+            if previo and previo.antes is not None:
+                linea += _t(lang, f" (antes llevabas {formatear(previo.antes, m.formato, lang)})",
+                            f" (you were at {formatear(previo.antes, m.formato, lang)} before)")
+            lineas.append(linea)
+    else:
+        lineas.append(
+            _t(lang, "- Entre las dos capturas no hay partidas nuevas.", "- There are no new matches between the two snapshots.")
+        )
+    for clave in ("rating", "premier_actual"):
+        fila = antes.get(clave)
+        if fila and fila.antes is not None and fila.despues is not None:
+            formato = "dec" if clave == "rating" else "int"
+            nombre_m = "Rating" if clave == "rating" else "Premier"
+            lineas.append(
+                f"- {nombre_m}: {formatear(fila.antes, formato, lang)} → **{formatear(fila.despues, formato, lang)}**"
+            )
+    texto += "\n\n" + _t(lang, "Lo que jugaste entre medias:", "What you played in between:") + "\n" + "\n".join(lineas)
+    if i := evolucion(_peticion(f.jugador, f.juego, lang)):
+        texto += f"\n\n**{i.titulo}.** {i.texto} {i.consejo or ''}".rstrip()
+    elif t and t.partidas:
+        texto += "\n\n" + _t(lang, "En tu línea: ni mejor ni peor que antes.", "Right at your usual level: no better, no worse.")
+    return texto
+
+
 def _demos_equipo(equipo: list[JugadorContexto], lang: Idioma) -> str:
     """El rating de las demos de cada uno, el más alto primero."""
     filas = [(j.nombre, g.demos) for j in equipo for g in j.juegos if g.demos and g.demos.metricas.partidas]
@@ -795,12 +860,12 @@ def _equipo_mejorar(equipo: list[JugadorContexto], juego: Juego | None, lang: Id
 AYUDA = {
     "es": "Puedo decirte en qué mejorar, qué haces bien, cómo vas últimamente, qué mapa o dios se te da peor, "
     "con quién juegas mejor, cuándo juegas mejor (si te tilteas, a qué hora rindes más), si ha funcionado lo que te "
-    "dije, cómo vas para tu nivel de FACEIT, qué dicen tus demos de CS2 (rating, KAST, trades, CT y T, dónde mueres) "
-    "o comparar a dos del equipo. Y si dices «esta semana» o «este mes», miro solo esos días. Pregúntame algo de eso.",
+    "dije, cómo vas para tu nivel de FACEIT, qué dicen tus demos de CS2 (rating, KAST, trades, CT y T, dónde mueres), "
+    "si has mejorado desde tu última captura de csstats o comparar a dos del equipo. Y si dices «esta semana» o «este mes», miro solo esos días. Pregúntame algo de eso.",
     "en": "I can tell you what to improve, what you do well, how you've been doing lately, your worst map or god, "
     "who you play best with, when you play best (whether you tilt, what time suits you), whether my advice worked, "
-    "how you're doing for your FACEIT level, what your CS2 demos say (rating, KAST, trades, CT and T, where you die) "
-    "or compare two teammates. And if you say 'this week' or 'this month', I'll look at just those days. Ask me any "
+    "how you're doing for your FACEIT level, what your CS2 demos say (rating, KAST, trades, CT and T, where you die), "
+    "whether you've improved since your last csstats snapshot or compare two teammates. And if you say 'this week' or 'this month', I'll look at just those days. Ask me any "
     "of that.",
 }
 
@@ -811,7 +876,7 @@ ETIQUETA_PERIODO: dict[str, dict[Idioma, str]] = {
     "30d": {"es": "Últimos 30 días", "en": "Last 30 days"},
 }
 # Esto solo se calcula con todas las partidas: con unos pocos días no hay muestra.
-SOLO_CON_TODAS = ("companeros", "desglose", "sesiones", "seguimiento", "nivel", "demos")
+SOLO_CON_TODAS = ("companeros", "desglose", "sesiones", "seguimiento", "nivel", "demos", "evolucion")
 
 
 def detectar_periodo(pregunta: str, por_defecto: Periodo | None) -> Periodo | None:
@@ -992,7 +1057,7 @@ def _responder(p: PeticionChat, pregunta: str) -> str:
     if not foco:
         if intencion == "mejorar":
             return _equipo_mejorar(p.equipo, juego, lang)
-        if intencion in ("racha", "desglose", "sesiones", "seguimiento"):
+        if intencion in ("racha", "desglose", "sesiones", "seguimiento", "evolucion"):
             return _t(
                 lang,
                 "Dime de quién: abre su perfil o pon su nombre en la pregunta.",
@@ -1004,7 +1069,7 @@ def _responder(p: PeticionChat, pregunta: str) -> str:
     if intencion == "nivel" and not juego:
         # El nivel es de FACEIT: si la página no dice juego, el que lo tenga.
         juego = next((g.juego for g in principal.juegos if g.nivel), None)
-    if intencion == "demos" and not juego:
+    if intencion in ("demos", "evolucion") and not juego:
         # Las demos son de CS2.
         juego = "cs2" if any(g.juego == "cs2" for g in principal.juegos) else None
     g = _juego_de(principal, juego)
@@ -1029,6 +1094,8 @@ def _responder(p: PeticionChat, pregunta: str) -> str:
         return _nivel(f, lang)
     if intencion == "demos":
         return _demos(f, lang)
+    if intencion == "evolucion":
+        return _evolucion(f, lang)
     if intencion == "fuerte":
         return _fuerte(f, lang)
     if intencion == "racha":
@@ -1065,9 +1132,15 @@ def sugerencias(p: PeticionChat) -> list[str]:
             if g and g.demos and g.demos.metricas.partidas
             else []
         )
+        evolucion_sug = (
+            [_t(lang, "¿He mejorado desde la última captura?", "Have I improved since my last snapshot?")]
+            if g and g.capturas
+            else []
+        )
         return [
             _t(lang, "¿En qué tengo que mejorar?", "What should I improve?"),
             *seguimiento,
+            *evolucion_sug,
             _t(lang, "¿Qué hago bien?", "What am I good at?"),
             _t(lang, "¿Cómo voy últimamente?", "How have I been doing lately?"),
             _t(lang, "¿Con quién juego mejor?", "Who do I play best with?"),

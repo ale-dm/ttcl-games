@@ -32,6 +32,7 @@ import com.ttcl.games.servicio.Vistas.PaginaPartidas;
 import com.ttcl.games.servicio.Vistas.PartidaVista;
 import com.ttcl.games.servicio.Vistas.Ranking;
 import com.ttcl.games.servicio.Vistas.RondasPartida;
+import com.ttcl.games.stats.Capturas.Evolucion;
 import com.ttcl.games.stats.Estadisticas;
 import com.ttcl.games.stats.FiltroPartidas;
 import com.ttcl.games.stats.Informes;
@@ -95,13 +96,14 @@ public class EquipoServicio {
     private final MuestraRepo muestras;
     private final RondaRepo rondas;
     private final MuerteMapaRepo muertesMapa;
+    private final CapturasServicio capturas;
     /** Zona del equipo: con ella se sabe a qué hora del día se jugó cada partida. */
     private final ZoneId zona;
 
     public EquipoServicio(
             JugadorRepo jugadores, CuentaRepo cuentas, ParticipacionRepo participaciones,
             ConsejoDadoRepo consejosDados, MuestraRepo muestras, RondaRepo rondas, MuerteMapaRepo muertesMapa,
-            TtclProperties props) {
+            CapturasServicio capturas, TtclProperties props) {
         this.jugadores = jugadores;
         this.cuentas = cuentas;
         this.participaciones = participaciones;
@@ -109,6 +111,7 @@ public class EquipoServicio {
         this.muestras = muestras;
         this.rondas = rondas;
         this.muertesMapa = muertesMapa;
+        this.capturas = capturas;
         this.zona = props.zona();
     }
 
@@ -309,12 +312,13 @@ public class EquipoServicio {
 
     /**
      * Todo lo de un jugador en un juego. {@code muestras} son las partidas de jugadores de cada nivel (P8), para
-     * compararle con los de su nivel, y {@code rondas}, las de las demos analizadas (P12);
-     * {@link MuestrasPorNivel#NINGUNA} y {@link RondasEquipo#NINGUNA} si no hacen falta.
+     * compararle con los de su nivel, {@code rondas}, las de las demos analizadas (P12), y {@code evoluciones}, cómo
+     * ha ido cada uno entre sus capturas de csstats (P13, por id de jugador); {@link MuestrasPorNivel#NINGUNA},
+     * {@link RondasEquipo#NINGUNA} y un mapa vacío si no hacen falta.
      */
     private JuegoContexto contexto(
             Instantanea foto, Jugador j, Juego juego, List<ResumenPeriodo> periodos, MuestrasPorNivel muestras,
-            RondasEquipo rondas) {
+            RondasEquipo rondas, Map<Long, Evolucion> evoluciones) {
         List<FilaParticipacion> filas = foto.filas(j, juego);
         ResumenJuego resumen = Estadisticas.resumir(juego, filas);
         Integer nivel = foto.nivel(j, juego);
@@ -331,7 +335,8 @@ public class EquipoServicio {
                 periodos,
                 Estadisticas.seguimiento(juego, filas, foto.consejos(j, juego), Instant.now()),
                 Estadisticas.comparativaNivel(juego, nivel, elo, resumen, muestras.de(juego, nivel)),
-                juego == Juego.CS2 ? rondas.resumen(foto, j) : null);
+                juego == Juego.CS2 ? rondas.resumen(foto, j) : null,
+                juego == Juego.CS2 ? evoluciones.get(j.getId()) : null);
     }
 
     /** Las rondas de las demos analizadas de cada jugador del equipo, por id de jugador (P12). */
@@ -431,7 +436,8 @@ public class EquipoServicio {
         Instantanea foto = instantanea(periodo);
         Jugador j = foto.porSlug(slug);
         foto.exigirPartidas(j, juego);
-        JuegoContexto c = contexto(foto, j, juego, List.of(), MuestrasPorNivel.NINGUNA, RondasEquipo.NINGUNA);
+        JuegoContexto c =
+                contexto(foto, j, juego, List.of(), MuestrasPorNivel.NINGUNA, RondasEquipo.NINGUNA, Map.of());
         return new DetalleJuego(juego, c.resumen(), c.reciente(), c.equipo(), c.desglose(),
                 Estadisticas.serie(juego, foto.filas(j, juego), PUNTOS_GRAFICA));
     }
@@ -660,27 +666,31 @@ public class EquipoServicio {
         Jugador j = foto.porSlug(slug);
         foto.exigirPartidas(j, juego);
         RondasEquipo rondasPeriodo = juego == Juego.CS2 ? rondas(inicio) : RondasEquipo.NINGUNA;
-        return peticion(foto, j, juego, lang, muestras(foto), rondasPeriodo);
+        Map<Long, Evolucion> evoluciones = juego == Juego.CS2 ? capturas.evoluciones(Juego.CS2) : Map.of();
+        return peticion(foto, j, juego, lang, muestras(foto), rondasPeriodo, evoluciones);
     }
 
     private PeticionInsights peticion(
-            Instantanea foto, Jugador j, Juego juego, String lang, MuestrasPorNivel muestras, RondasEquipo rondas) {
-        JuegoContexto c = contexto(foto, j, juego, List.of(), muestras, rondas);
+            Instantanea foto, Jugador j, Juego juego, String lang, MuestrasPorNivel muestras, RondasEquipo rondas,
+            Map<Long, Evolucion> evoluciones) {
+        JuegoContexto c = contexto(foto, j, juego, List.of(), muestras, rondas, evoluciones);
         return new PeticionInsights(lang, new JugadorRef(j.getSlug(), j.getNombre()), juego, c.rol(), c.resumen(),
                 c.reciente(), c.equipo(), c.desglose(), c.sinergias(), c.sesiones(), c.seguimiento(), c.nivel(),
-                c.demos());
+                c.demos(), c.capturas());
     }
 
     /** Peticiones de recomendaciones de todo el equipo (una por jugador y juego), para las tarjetas. */
     public List<PeticionInsights> peticionesEquipo(Juego soloJuego, String lang) {
         Instantanea foto = instantanea();
         MuestrasPorNivel muestras = muestras(foto);
-        RondasEquipo todas = soloJuego == null || soloJuego == Juego.CS2 ? rondas(null) : RondasEquipo.NINGUNA;
+        boolean cs2 = soloJuego == null || soloJuego == Juego.CS2;
+        RondasEquipo todas = cs2 ? rondas(null) : RondasEquipo.NINGUNA;
+        Map<Long, Evolucion> evoluciones = cs2 ? capturas.evoluciones(Juego.CS2) : Map.of();
         List<PeticionInsights> lista = new ArrayList<>();
         for (Jugador j : foto.jugadores()) {
             for (Juego juego : Juego.values()) {
                 if ((soloJuego == null || soloJuego == juego) && !foto.filas(j, juego).isEmpty()) {
-                    lista.add(peticion(foto, j, juego, lang, muestras, todas));
+                    lista.add(peticion(foto, j, juego, lang, muestras, todas, evoluciones));
                 }
             }
         }
@@ -695,6 +705,7 @@ public class EquipoServicio {
         Instantanea foto = instantanea();
         MuestrasPorNivel muestras = muestras(foto);
         RondasEquipo todas = rondas(null);
+        Map<Long, Evolucion> evoluciones = capturas.evoluciones(Juego.CS2);
         Instant ahora = Instant.now();
         Map<Periodo, Instantanea> recortes = new EnumMap<>(Periodo.class);
         Periodo.RECORTADOS.forEach(p -> recortes.put(p, foto.desde(p.inicio(ahora))));
@@ -704,7 +715,8 @@ public class EquipoServicio {
                         j.getNombre(),
                         Arrays.stream(Juego.values())
                                 .filter(juego -> !foto.filas(j, juego).isEmpty())
-                                .map(juego -> contexto(foto, j, juego, periodos(recortes, j, juego), muestras, todas))
+                                .map(juego -> contexto(
+                                        foto, j, juego, periodos(recortes, j, juego), muestras, todas, evoluciones))
                                 .toList()))
                 .toList();
     }

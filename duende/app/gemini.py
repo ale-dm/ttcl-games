@@ -7,6 +7,7 @@ Con herramientas (P9), Gemini puede pedir datos a la API antes de contestar: se 
 intentarlo, con un tope de consultas y de vueltas. Al llegar al tope se le obliga a contestar con lo que tiene.
 """
 
+import json
 import logging
 from typing import Literal, Protocol
 
@@ -68,6 +69,11 @@ _SEGURIDAD = [
 ]
 
 
+def _sin_razonar(modelo: str) -> types.ThinkingConfig | None:
+    """Sin razonamiento (los tokens de pensar se pagan como respuesta): los flash lo permiten; los pro, no."""
+    return None if "pro" in modelo else types.ThinkingConfig(thinking_budget=0)
+
+
 def _traducir_error(err: Exception, modelo: str) -> GeminiError:
     if isinstance(err, errors.APIError):
         codigo = getattr(err, "code", None)
@@ -114,6 +120,7 @@ def _conversar(
             max_output_tokens=cfg.max_tokens,
             temperature=temperatura,
             safety_settings=_SEGURIDAD,
+            thinking_config=_sin_razonar(modelo),
         )
         puede_consultar = herramientas is not None and vuelta < MAX_VUELTAS and consultas < herramientas.maximo
         if herramientas is not None:
@@ -170,3 +177,39 @@ def _texto(respuesta: types.GenerateContentResponse) -> str:
     if not texto:
         raise GeminiError("vacio", "Gemini devolvió una respuesta vacía")
     return texto
+
+
+def leer_imagen(imagen: bytes, tipo: str, instrucciones: str, esquema: dict) -> tuple[dict, str]:
+    """Lee una imagen y devuelve lo que pide el esquema JSON (P13: los números de una captura) y el modelo usado.
+    Sin imaginación (temperatura 0). Lanza GeminiError si no se puede."""
+    cfg = get_config()
+    contenidos = [
+        types.Content(role="user", parts=[types.Part.from_bytes(data=imagen, mime_type=tipo), types.Part(text=instrucciones)])
+    ]
+    ultimo: GeminiError | None = None
+    for modelo in cfg.modelos():
+        # Sin razonar y con la respuesta justa: un JSON de unos 40 números cabe de sobra en 2048 tokens.
+        config = types.GenerateContentConfig(
+            temperature=0,
+            max_output_tokens=2048,
+            response_mime_type="application/json",
+            response_json_schema=esquema,
+            safety_settings=_SEGURIDAD,
+            thinking_config=_sin_razonar(modelo),
+        )
+        try:
+            texto = _texto(_llamar(modelo, contenidos, config))
+        except GeminiError as err:
+            if err.codigo != "modelo_no_existe":
+                raise
+            log.warning("%s no disponible, pruebo el siguiente modelo de respaldo", modelo)
+            ultimo = err
+            continue
+        try:
+            datos = json.loads(texto)
+        except ValueError as err:
+            raise GeminiError("vacio", "Gemini no devolvió un JSON") from err
+        if not isinstance(datos, dict):
+            raise GeminiError("vacio", "Gemini no devolvió un objeto")
+        return datos, modelo
+    raise ultimo or GeminiError("error", "No hay ningún modelo de Gemini configurado")

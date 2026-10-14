@@ -7,6 +7,7 @@ import com.ttcl.games.dominio.Jugador;
 import com.ttcl.games.dominio.Muestra;
 import com.ttcl.games.dominio.Participacion;
 import com.ttcl.games.dominio.Partida;
+import com.ttcl.games.dominio.Repositorios.CapturaRepo;
 import com.ttcl.games.dominio.Repositorios.ConsejoDadoRepo;
 import com.ttcl.games.dominio.Repositorios.CuentaRepo;
 import com.ttcl.games.dominio.Repositorios.DemoRepo;
@@ -42,7 +43,8 @@ import org.springframework.transaction.annotation.Transactional;
  * Datos de ejemplo para ver la web sin claves de FACEIT ni de Hi-Rez. Solo actúa con {@code ttcl.demo=true} y la
  * base vacía. Es determinista (semilla fija; las horas, en la zona del equipo) y cada jugador tiene un perfil con algo
  * que mejorar y algo que hace bien, para que el Duende tenga de qué hablar. Se juega por sesiones: el mismo grupo,
- * varias partidas seguidas. Todas las partidas de CS2 tienen su demo analizada (P12, {@link RondasDemo}).
+ * varias partidas seguidas. Todas las partidas de CS2 tienen su demo analizada (P12, {@link RondasDemo}) y cada
+ * jugador de CS2 tiene cuatro capturas de csstats (P13, {@link CapturasDemo}).
  */
 @Component
 @Order(2)
@@ -115,6 +117,7 @@ public class DemoSeeder implements ApplicationRunner {
     private final RondaRepo rondas;
     private final MuerteMapaRepo muertesMapa;
     private final DemoRepo demos;
+    private final CapturaRepo capturas;
     private final Random rnd = new Random(2026);
 
     public DemoSeeder(
@@ -127,7 +130,8 @@ public class DemoSeeder implements ApplicationRunner {
             MuestraRepo muestras,
             RondaRepo rondas,
             MuerteMapaRepo muertesMapa,
-            DemoRepo demos) {
+            DemoRepo demos,
+            CapturaRepo capturas) {
         this.props = props;
         this.jugadores = jugadores;
         this.cuentas = cuentas;
@@ -138,6 +142,7 @@ public class DemoSeeder implements ApplicationRunner {
         this.rondas = rondas;
         this.muertesMapa = muertesMapa;
         this.demos = demos;
+        this.capturas = capturas;
     }
 
     @Override
@@ -169,8 +174,12 @@ public class DemoSeeder implements ApplicationRunner {
         int otros = generarMuestras(hoy);
         // Las rondas de cada demo (P12), con su propio generador: al final, para no mover ningún otro número.
         int analizadas = new RondasDemo(rondas, muertesMapa, demos).generar(participaciones.findAllCompletas());
+        // Y las capturas de csstats (P13), a partir de todo lo anterior: tampoco mueven ningún número.
+        int capturadas = new CapturasDemo(capturas, props.zona())
+                .generar(participaciones.findAllCompletas(), rondas.findDesde(Instant.EPOCH), hoy);
         log.info("Datos de ejemplo creados: {} jugadores, {} partidas de CS2 ({} con la demo analizada) y {} de "
-                + "SMITE 2, y {} partidas de otros jugadores de FACEIT", EQUIPO.size(), cs2, analizadas, smite, otros);
+                + "SMITE 2, {} partidas de otros jugadores de FACEIT y {} capturas de csstats", EQUIPO.size(), cs2,
+                analizadas, smite, otros, capturadas);
     }
 
     private void cuenta(Jugador j, Juego juego, String nick, String rol, NivelDemo faceit, Instant ahora) {
